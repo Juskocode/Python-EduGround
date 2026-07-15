@@ -1,6 +1,7 @@
 import { DatabaseUnavailableError } from "./database.mjs";
 import { getExerciseFile } from "./exercise-manifest.mjs";
 import { HttpError, readJson, requireMethod, sendJson } from "./http.mjs";
+import { mergeLearnerState } from "./learner-state.mjs";
 import {
   createSessionToken,
   createUserId,
@@ -388,14 +389,36 @@ export function createApiHandler({
         if (Buffer.byteLength(serialized) > STATE_MAX_BYTES) {
           throw new HttpError(413, "STATE_TOO_LARGE", "Saved progress is too large.");
         }
-        const result = await database.query(
-          `INSERT INTO user_state (user_id, state, updated_at)
-           VALUES ($1, $2::jsonb, NOW())
-           ON CONFLICT (user_id) DO UPDATE
-             SET state = EXCLUDED.state, updated_at = NOW()
-           RETURNING state, updated_at`,
-          [user.id, serialized]
-        );
+        const result = await database.transaction(async (client) => {
+          // Ensure a row exists before locking so concurrent first saves for one
+          // learner cannot both merge against an empty document.
+          await client.query(
+            `INSERT INTO user_state (user_id, state, updated_at)
+             VALUES ($1, '{}'::jsonb, NOW())
+             ON CONFLICT (user_id) DO NOTHING`,
+            [user.id]
+          );
+          const current = await client.query(
+            `SELECT state
+               FROM user_state
+              WHERE user_id = $1
+              FOR UPDATE`,
+            [user.id]
+          );
+          const mergedState = mergeLearnerState(current.rows[0]?.state, body.state);
+          const mergedSerialized = JSON.stringify(mergedState);
+          if (Buffer.byteLength(mergedSerialized) > STATE_MAX_BYTES) {
+            throw new HttpError(413, "STATE_TOO_LARGE", "Merged saved progress is too large.");
+          }
+          return client.query(
+            `INSERT INTO user_state (user_id, state, updated_at)
+             VALUES ($1, $2::jsonb, NOW())
+             ON CONFLICT (user_id) DO UPDATE
+               SET state = EXCLUDED.state, updated_at = NOW()
+             RETURNING state, updated_at`,
+            [user.id, mergedSerialized]
+          );
+        });
         sendJson(
           response,
           200,

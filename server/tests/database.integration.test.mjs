@@ -69,6 +69,11 @@ test(
       await rm(submissionsDirectory, { recursive: true, force: true });
     });
 
+    const readiness = await request(url, "/readyz");
+    assert.equal(readiness.response.status, 200);
+    assert.equal(readiness.payload.database.available, true);
+    assert.equal(readiness.payload.database.schemaReady, true);
+
     const email = `integration-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
     const cleanupClient = new Client({ connectionString: TEST_DATABASE_URL });
     context.after(async () => {
@@ -99,6 +104,75 @@ test(
     assert.equal(savedState.response.status, 200);
     assert.deepEqual(savedState.payload.state, state);
     assert.deepEqual((await request(url, "/api/state", { token })).payload.state, state);
+
+    const assessmentProgress = {
+      version: 1,
+      blocks: {
+        "py01-py03": {
+          theory: {
+            active: null,
+            bestScore: 80,
+            completed: true,
+            history: [
+              {
+                id: "integration-attempt-1",
+                status: "submitted",
+                score: 80,
+                passed: true,
+              },
+            ],
+          },
+        },
+      },
+    };
+    assert.equal(
+      (
+        await request(url, "/api/state", {
+          method: "PUT",
+          token,
+          body: {
+            state: {
+              assessmentProgress,
+              passedIds: ["py01-first-programs", "py01-fixme"],
+            },
+          },
+        })
+      ).response.status,
+      200
+    );
+
+    const concurrentStateUpdates = await Promise.all([
+      request(url, "/api/state", {
+        method: "PUT",
+        token,
+        body: {
+          state: {
+            passedIds: ["py01-diagram"],
+            learningProgress: { py01: ["tutorial-0"] },
+          },
+        },
+      }),
+      request(url, "/api/state", {
+        method: "PUT",
+        token,
+        body: {
+          state: {
+            passedIds: ["py01-avoid-sums"],
+            learningProgress: { py01: ["runbook"] },
+          },
+        },
+      }),
+    ]);
+    concurrentStateUpdates.forEach(({ response }) => assert.equal(response.status, 200));
+    const mergedState = (await request(url, "/api/state", { token })).payload.state;
+    assert.deepEqual(mergedState.passedIds, [
+      "py01-avoid-sums",
+      "py01-diagram",
+      "py01-first-programs",
+      "py01-fixme",
+    ]);
+    assert.deepEqual(mergedState.learningProgress, { py01: ["runbook", "tutorial-0"] });
+    assert.deepEqual(mergedState.assessmentProgress, assessmentProgress);
 
     const savedFile = await request(url, "/api/files/py01-first-programs", {
       method: "PUT",

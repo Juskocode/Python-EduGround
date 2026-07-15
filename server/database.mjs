@@ -13,6 +13,15 @@ const CONNECTION_ERROR_CODES = new Set([
   "57P03",
   "53300",
 ]);
+const REQUIRED_SCHEMA_RELATIONS = [
+  "schema_migrations",
+  "sessions",
+  "test_runs",
+  "user_files",
+  "user_state",
+  "users",
+];
+const REQUIRED_SCHEMA_MIGRATIONS = ["001_initial.sql"];
 
 export class DatabaseUnavailableError extends Error {
   constructor(message = "Persistent storage is unavailable.", options = {}) {
@@ -48,6 +57,7 @@ function unavailableDatabase() {
       return {
         configured: false,
         available: false,
+        schemaReady: false,
         message: "DATABASE_URL is not configured.",
       };
     },
@@ -121,12 +131,57 @@ export function createDatabase(environment = process.env, logger = console) {
     },
     async health() {
       try {
-        await execute(() => pool.query("SELECT 1"));
-        return { configured: true, available: true, message: "PostgreSQL is ready." };
+        const relationQuery = `SELECT ${REQUIRED_SCHEMA_RELATIONS.map(
+          (name, index) => `to_regclass($${index + 1}) IS NOT NULL AS "${name}"`
+        ).join(", ")}`;
+        const relationResult = await execute(() =>
+          pool.query(
+            relationQuery,
+            REQUIRED_SCHEMA_RELATIONS.map((name) => `public.${name}`)
+          )
+        );
+        const missingRelations = REQUIRED_SCHEMA_RELATIONS.filter(
+          (name) => relationResult.rows[0]?.[name] !== true
+        );
+        if (missingRelations.length > 0) {
+          return {
+            configured: true,
+            available: false,
+            schemaReady: false,
+            message: "PostgreSQL is reachable, but the required schema is incomplete. Run npm run migrate.",
+          };
+        }
+
+        const migrationResult = await execute(() =>
+          pool.query(
+            "SELECT name FROM schema_migrations WHERE name = ANY($1::text[])",
+            [REQUIRED_SCHEMA_MIGRATIONS]
+          )
+        );
+        const appliedMigrations = new Set(migrationResult.rows.map((row) => row.name));
+        const migrationsCurrent = REQUIRED_SCHEMA_MIGRATIONS.every((name) =>
+          appliedMigrations.has(name)
+        );
+        if (!migrationsCurrent) {
+          return {
+            configured: true,
+            available: false,
+            schemaReady: false,
+            message: "PostgreSQL is reachable, but required migrations are missing. Run npm run migrate.",
+          };
+        }
+
+        return {
+          configured: true,
+          available: true,
+          schemaReady: true,
+          message: "PostgreSQL and the required schema are ready.",
+        };
       } catch (error) {
         return {
           configured: true,
           available: false,
+          schemaReady: false,
           message: error instanceof DatabaseUnavailableError ? error.message : "PostgreSQL health check failed.",
         };
       }
