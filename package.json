@@ -5,11 +5,16 @@
   "description": "Interactive, solution-free Python learning path with browser execution.",
   "scripts": {
     "serve": "node scripts/serve.mjs",
+    "migrate": "node scripts/migrate.mjs",
+    "validate:backend": "node --test server/tests/*.test.mjs",
     "vendor:ace": "node scripts/vendor-ace.mjs",
     "build:starters": "node scripts/build-starter-bundle.mjs",
-    "validate": "node --check course-app.js && node --check learning-content.js && node --check audio-feedback.js && node scripts/validate-test-data.mjs && node scripts/validate-starter-data.mjs && node scripts/validate-learning-content.mjs"
+    "validate": "node --check course-app.js && node --check learning-content.js && node --check audio-feedback.js && node scripts/validate-test-data.mjs && node scripts/validate-starter-data.mjs && node scripts/validate-learning-content.mjs && npm run validate:backend"
   },
   "devDependencies": {
     "ace-builds": "1.44.0"
+  },
+  "dependencies": {
+    "pg": "^8.22.0"
   }
 }

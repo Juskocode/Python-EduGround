@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-eduground}
+      POSTGRES_USER: ${POSTGRES_USER:-eduground}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-eduground}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-eduground}
+      DATABASE_SSL: "false"
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8000,http://127.0.0.1:8000}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-2592000}
+      HOST: 0.0.0.0
+      PORT: 8000
+    ports:
+      - "${PORT:-8000}:8000"
+    command: ["sh", "-c", "npm run migrate && npm run serve -- --host 0.0.0.0"]
+
+volumes:
+  postgres_data:
