@@ -2544,6 +2544,152 @@ pre {
   list-style: none;
 }
 
+.runbook-conversation,
+.runbook-documentation {
+  padding: 21px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.runbook-conversation {
+  margin-bottom: 20px;
+  border-color: color-mix(in srgb, var(--info) 28%, var(--border));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--info) 12%, transparent), transparent 15rem),
+    var(--info-soft);
+}
+
+.runbook-conversation .eyebrow,
+.runbook-documentation .eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 0.66rem;
+}
+
+.runbook-conversation h3,
+.runbook-documentation h3 {
+  margin: 0 0 5px;
+  font-size: 1.08rem;
+}
+
+.runbook-conversation__intro,
+.runbook-documentation__intro {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+}
+
+.runbook-dialogue {
+  display: grid;
+  gap: 14px;
+  padding: 0;
+  margin: 18px 0 0;
+  list-style: none;
+}
+
+.runbook-dialogue__exchange {
+  display: grid;
+  gap: 8px;
+}
+
+.runbook-dialogue__message {
+  width: min(88%, 720px);
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.runbook-dialogue__message--learner {
+  justify-self: start;
+  border-bottom-left-radius: 5px;
+}
+
+.runbook-dialogue__message--coach {
+  justify-self: end;
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-bottom-right-radius: 5px;
+  background: var(--primary-softer);
+}
+
+.runbook-dialogue__speaker {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-strong);
+  font-size: 0.67rem;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.runbook-dialogue__message--coach .runbook-dialogue__speaker {
+  color: var(--primary-strong);
+}
+
+.runbook-dialogue__message p {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.77rem;
+}
+
+.runbook-documentation {
+  margin-top: 20px;
+  border-color: color-mix(in srgb, var(--primary) 27%, var(--border));
+  background: var(--primary-softer);
+}
+
+.runbook-documentation__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 17px;
+}
+
+.runbook-documentation__card {
+  display: flex;
+  min-width: 0;
+  min-height: 142px;
+  flex-direction: column;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.runbook-documentation__card:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.runbook-documentation__card:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 42%, transparent);
+  outline-offset: 3px;
+}
+
+.runbook-documentation__card strong {
+  color: var(--text-strong);
+  font-size: 0.84rem;
+}
+
+.runbook-documentation__card p {
+  margin: 6px 0 14px;
+  color: var(--muted-strong);
+  font-size: 0.73rem;
+}
+
+.runbook-documentation__action {
+  margin-top: auto;
+  color: var(--primary-strong);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
 .runbook-step {
   display: grid;
   grid-template-columns: minmax(145px, 0.3fr) minmax(0, 1fr);
@@ -4241,8 +4387,18 @@ pre {
 
   .guided-practice__grid,
   .deep-reference-grid,
-  .knowledge-check__options {
+  .knowledge-check__options,
+  .runbook-documentation__grid {
     grid-template-columns: 1fr;
+  }
+
+  .runbook-conversation,
+  .runbook-documentation {
+    padding: 17px;
+  }
+
+  .runbook-dialogue__message {
+    width: 94%;
   }
 
   .runbook-step__why,

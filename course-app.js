@@ -629,7 +629,7 @@
     if (hasDeepDiveContent(deepDive)) {
       article.append(renderDeepDive(chapter, deepDive));
     }
-    article.append(renderDeepRunbook(chapter, runbook));
+    article.append(renderDeepRunbook(chapter, runbook, content));
     layout.append(toc, article);
     wrapper.append(layout);
 
@@ -891,7 +891,7 @@
     return block;
   }
 
-  function renderDeepRunbook(chapter, steps) {
+  function renderDeepRunbook(chapter, steps, content) {
     var section = el("section", "runbook-section");
     var heading = el("header", "tutorial-section__heading");
     heading.append(el("span", "tutorial-section__number", "RB"), el("h2", null, "Problem-solving runbook"), renderLearningToggle(chapter, "runbook"));
@@ -902,6 +902,11 @@
       heading,
       el("p", "tutorial-section__explanation", "Use this repeatable loop when a problem feels vague or a test fails. Each phase ends with evidence you can inspect.")
     );
+    var coachConversation = content && Array.isArray(content.coachConversation) ? content.coachConversation : [];
+    var conversation = renderCoachConversation(chapter, coachConversation);
+    if (conversation) {
+      section.append(conversation);
+    }
     var list = el("ol", "runbook-steps");
     var sourceSteps = steps.length ? steps : (chapter.runbook || []).map(function (step, index) {
       return { phase: String(index + 1), action: step.body, evidence: "A written trace or testable claim." };
@@ -926,7 +931,110 @@
       list.append(item);
     });
     section.append(list);
+    var documentation = content && Array.isArray(content.documentation) ? content.documentation : [];
+    var documentationPanel = renderPythonDocumentation(chapter, documentation);
+    if (documentationPanel) {
+      section.append(documentationPanel);
+    }
     return section;
+  }
+
+  function renderCoachConversation(chapter, conversation) {
+    var exchanges = conversation.filter(function (exchange) {
+      return exchange && (exchange.learner || exchange.coach);
+    });
+    if (!exchanges.length) {
+      return null;
+    }
+
+    var block = el("section", "runbook-conversation");
+    var headingId = "runbook-conversation-" + domId(chapter.id);
+    var heading = el("h3", null, "Talk it through with your Python coach");
+    var intro = el("p", "runbook-conversation__intro", "A quick question-and-answer exchange to make the idea easier to reuse while you code.");
+    var dialogue = el("ol", "runbook-dialogue");
+    heading.id = headingId;
+    block.setAttribute("aria-labelledby", headingId);
+    dialogue.setAttribute("aria-label", "Learner and Python coach conversation");
+
+    exchanges.forEach(function (exchange) {
+      var turn = el("li", "runbook-dialogue__exchange");
+      if (exchange.learner) {
+        turn.append(renderDialogueMessage("learner", "Learner", exchange.learner));
+      }
+      if (exchange.coach) {
+        turn.append(renderDialogueMessage("coach", "Python coach", exchange.coach));
+      }
+      dialogue.append(turn);
+    });
+
+    block.append(el("span", "eyebrow", "Coach conversation"), heading, intro, dialogue);
+    return block;
+  }
+
+  function renderDialogueMessage(kind, speaker, message) {
+    var bubble = el("div", "runbook-dialogue__message runbook-dialogue__message--" + kind);
+    var label = el("strong", "runbook-dialogue__speaker", speaker);
+    var copy = el("p", null, message);
+    bubble.append(label, copy);
+    return bubble;
+  }
+
+  function renderPythonDocumentation(chapter, documentation) {
+    var resources = documentation.reduce(function (items, resource) {
+      var safeUrl = resource && getOfficialPythonUrl(resource.url);
+      if (!resource || !resource.label || !safeUrl) {
+        return items;
+      }
+      items.push({
+        label: String(resource.label),
+        description: resource.description ? String(resource.description) : "Read the related topic in Python's official documentation.",
+        url: safeUrl
+      });
+      return items;
+    }, []);
+    if (!resources.length) {
+      return null;
+    }
+
+    var block = el("section", "runbook-documentation");
+    var headingId = "runbook-documentation-" + domId(chapter.id);
+    var heading = el("h3", null, "Continue with the official Python docs");
+    var intro = el("p", "runbook-documentation__intro", "These references deepen the chapter without revealing an exercise solution.");
+    var grid = el("div", "runbook-documentation__grid");
+    heading.id = headingId;
+    block.setAttribute("aria-labelledby", headingId);
+
+    resources.forEach(function (resource) {
+      var link = anchor(resource.url, "runbook-documentation__card");
+      var title = el("strong", null, resource.label);
+      var description = el("p", null, resource.description);
+      var action = el("span", "runbook-documentation__action", "Open official docs ↗");
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.setAttribute("aria-label", resource.label + " — open the official Python documentation in a new tab");
+      action.setAttribute("aria-hidden", "true");
+      link.append(title, description, action);
+      grid.append(link);
+    });
+
+    block.append(el("span", "eyebrow", "Official references"), heading, intro, grid);
+    return block;
+  }
+
+  function getOfficialPythonUrl(value) {
+    if (typeof value !== "string") {
+      return null;
+    }
+    try {
+      var url = new URL(value);
+      var isOfficialDocs = url.origin === "https://docs.python.org" && url.pathname.startsWith("/3/");
+      if (!isOfficialDocs || url.username || url.password) {
+        return null;
+      }
+      return url.href;
+    } catch (error) {
+      return null;
+    }
   }
 
   function renderFallbackTutorial(chapter) {

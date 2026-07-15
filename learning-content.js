@@ -205,15 +205,15 @@
           ),
           section(
             "Understand the input boundary",
-            "input pauses the script, waits for one line, removes its trailing newline, and returns the remaining characters as a string. That is true even when the user typed digits. Keep text as text when it represents a name or label; convert once near the boundary when it represents a quantity. A prompt is also printed output, so omit prompts when an exercise expects silent input.",
-            "nickname = input(\"Choose a nickname: \")\nfavourite_colour = input(\"Favourite colour: \")\nprofile = nickname + \" likes \" + favourite_colour\nprint(profile)",
+            "input pauses the script, waits for one line, removes its trailing newline, and always returns the remaining characters as a str—even when the user typed digits. Convert text at the boundary when the domain needs arithmetic: number = int(input()) reads one line and immediately creates an integer, while float(input()) accepts decimal text. The two-line form is easier to debug because it preserves the raw text. int raises ValueError when the text is not a valid whole number, so only add exception handling when the exercise contract allows invalid input. str(value) converts a value back to text, although print and f-strings already format values for display. A prompt passed to input is printed output, so omit prompts when an automated exercise expects silent input.",
+            "number = int(input())\naverage_weight = float(input())\nsummary = str(number) + \" crates\"\nprint(summary)\nprint(number * average_weight)",
             [
               "Decide whether each incoming line means text, an integer, or a decimal measurement.",
               "Convert numeric text once, immediately after reading it.",
               "Check whether prompts are permitted by the output contract.",
             ],
             "Boundary rule: read raw text, validate or convert it, then let the core of the program use stable types.",
-            "Treating all digit-looking input as a number is also wrong: postal codes and identifiers may need their leading zeroes preserved.",
+            "int(input()) fails with ValueError for text such as \"four\" or \"4.5\". Converting every digit-looking value is also wrong: postal codes and identifiers may need their leading zeroes preserved.",
           ),
           section(
             "Use names to explain the transformation",
@@ -299,6 +299,16 @@
             explanation: "input() always returns text. The program must request an explicit conversion when the domain calls for a number.",
           },
         },
+        coachConversation: [
+          { learner: "I typed 12. Why does input() not behave like a number?", coach: "Because keyboard input crosses into Python as text. input() returns the string \"12\"; use number = int(input()) when the contract guarantees a whole number, or keep a raw_text variable first when you want easier debugging." },
+          { learner: "Should I use int(), float(), or str()?", coach: "Use int() for exact whole counts, float() for decimal measurements, and str() when you deliberately need text. Convert once near the input boundary, then keep the stable numeric value for the calculation." },
+          { learner: "My calculation is right, but the test still fails.", coach: "Look at the public boundary. input(\"Number: \") prints a prompt, debug prints add lines, and tiny spacing differences change stdout. Also remember that int() raises ValueError if the supplied text is not a valid integer." },
+        ],
+        documentation: [
+          { label: "Built-in input()", description: "How Python reads one line and returns it as text, including the visible prompt argument.", url: "https://docs.python.org/3/library/functions.html#input" },
+          { label: "Built-in int()", description: "How Python converts valid whole-number text and which forms the integer constructor accepts.", url: "https://docs.python.org/3/library/functions.html#int" },
+          { label: "Input and output", description: "Printing, string formatting, and reading user-entered data.", url: "https://docs.python.org/3/tutorial/inputoutput.html" },
+        ],
         runbook: [
           runStep("1. Read the interface", "Underline what arrives, its order, and exactly what may be printed; prompts count as output.", "A compact input → output sketch with types.", "The input/output contract is the observable behaviour; correct internal arithmetic cannot compensate for reading or printing the wrong shape.", "Replace the story with numbered slots such as input 1, input 2, output 1, then attach meaning and type to each slot."),
           runStep("2. Model the data", "Give each value a meaning and unit, then work through a different sample by hand.", "A table of names, types, units, and predicted values.", "Types prevent invalid operations while units prevent logically invalid ones that Python cannot detect.", "Say each expression aloud with its units; if the sentence sounds impossible, split or convert the quantities before coding."),
@@ -425,6 +435,16 @@
             explanation: "Floor division expresses complete groups. Modulo answers what remains, while ordinary division returns a fractional ratio.",
           },
         },
+        coachConversation: [
+          { learner: "This input looks numeric. Can I calculate with it immediately?", coach: "Not yet: input() returned a str. Parse a whole count with count = int(input()) or a decimal measurement with distance = float(input()), then keep the chosen type consistent through the formula." },
+          { learner: "Which division operator should I choose?", coach: "Ask the domain question aloud. Use / for a fractional ratio, // for complete groups, and % for the remainder. For a sanity check, quotient * divisor + remainder should rebuild the original whole count." },
+          { learner: "Why did a correct-looking decimal fail?", coach: "Separate calculation from presentation. Keep useful precision internally; apply round() or an f-string format only where the contract requests it, and test values just beside the rounding boundary." },
+        ],
+        documentation: [
+          { label: "Numeric types", description: "Integer and floating-point behaviour, operators, and mixed numeric calculations.", url: "https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex" },
+          { label: "Arithmetic expressions", description: "Official precedence and semantics for arithmetic, floor division, remainder, and powers.", url: "https://docs.python.org/3/reference/expressions.html#binary-arithmetic-operations" },
+          { label: "Built-in round()", description: "How rounding precision and tie behaviour work.", url: "https://docs.python.org/3/library/functions.html#round" },
+        ],
         runbook: [
           runStep("1. Classify quantities", "Label each value as a count, measurement, ratio, remainder, or formatted string.", "A justified Python type and unit for every value.", "The representation and operator should follow the domain meaning; choosing them together prevents accidental truncation and meaningless arithmetic.", "Make a two-column list headed exact and approximate, then place every input and result in one column with its unit."),
           runStep("2. Translate the rule", "Preserve grouping with named stages instead of compressing the formula immediately.", "A hand trace from inputs through intermediate values.", "Visible stages let you compare Python with the mathematical relationship one subexpression at a time.", "Replace the formula with placeholder names for its innermost groups, calculate those names first, and rebuild outward."),
@@ -551,6 +571,17 @@
             explanation: "Independent conditions are all evaluated. An if/elif/else chain encodes priority and commits to the first true path.",
           },
         },
+        coachConversation: [
+          { learner: "My conditions all seem true for one value. Which branch wins?", coach: "Write the overlapping cases in a decision table first. An if/elif/else chain chooses the first true branch, so put the most specific or highest-priority rule before a broader one." },
+          { learner: "The loop never stops. Where should I look?", coach: "Name the changing state and a finite measure that moves toward the stop condition. Check every branch, especially continue paths, to prove that the measure still changes." },
+          { learner: "Can I read a number directly in the condition?", coach: "Yes when valid numeric text is guaranteed: age = int(input()) creates an integer before comparison. If invalid text is part of the domain, keep the raw string and handle the possible ValueError deliberately rather than hiding it." },
+        ],
+        documentation: [
+          { label: "if statements", description: "Branch structure, elif ordering, and the optional else branch.", url: "https://docs.python.org/3/tutorial/controlflow.html#if-statements" },
+          { label: "for statements", description: "How Python visits each item from an iterable in sequence.", url: "https://docs.python.org/3/tutorial/controlflow.html#for-statements" },
+          { label: "The range() function", description: "How integer ranges define loop starts, excluded stops, and steps.", url: "https://docs.python.org/3/tutorial/controlflow.html#the-range-function" },
+          { label: "break and continue", description: "Ending a loop early or advancing deliberately to the next iteration.", url: "https://docs.python.org/3/tutorial/controlflow.html#break-and-continue-statements" },
+        ],
         runbook: [
           runStep("1. Enumerate paths", "Build a table of conditions, outcomes, overlaps, and priority before writing branches.", "One representative and one boundary value per row.", "A decision table exposes gaps and overlaps before source order silently assigns them behaviour.", "Draw the number line or input categories first; colour each region with its intended outcome, then convert regions to predicates."),
           runStep("2. Define loop state", "Explain every control variable and accumulator at the top of an iteration.", "A one-sentence invariant for each loop level.", "Without stable meanings, updates become arbitrary and nested loops easily mix responsibilities.", "Pause before the body and finish the sentence: before iteration k, this name equals or contains...."),
@@ -677,6 +708,16 @@
             explanation: "Display and return are separate channels. Without an explicit return value, Python completes the call with None.",
           },
         },
+        coachConversation: [
+          { learner: "Should this function call input() itself?", coach: "Usually keep input and print in a thin outer layer. Parse text there—for example, quantity = int(input())—and pass the integer into a function whose contract is easy to call and test." },
+          { learner: "I can see the right value, so why did the caller receive None?", coach: "print(value) displays a value but returns None. Follow every function path and use return when the contract promises data back to the caller." },
+          { learner: "When is a helper worth creating?", coach: "Extract a helper when you can give one transformation a clear name, parameters, and return type. If the helper only forwards arguments without clarifying an idea, keep the flow together." },
+        ],
+        documentation: [
+          { label: "Defining functions", description: "Parameters, local scope, default values, and function definitions in the Python tutorial.", url: "https://docs.python.org/3/tutorial/controlflow.html#defining-functions" },
+          { label: "return statement", description: "How return exits a function and supplies a value to its caller.", url: "https://docs.python.org/3/reference/simple_stmts.html#the-return-statement" },
+          { label: "Built-in functions", description: "Reference for reusable built-ins and their callable contracts.", url: "https://docs.python.org/3/library/functions.html" },
+        ],
         runbook: [
           runStep("1. Specify the promise", "Write parameter meanings, valid domains, return type, sentinel behaviour, and mutation policy.", "A docstring plus several input → return examples.", "A stable contract lets callers and tests agree on behaviour independently of the chosen implementation.", "Write three calls first—ordinary, boundary, and invalid—and decide their exact returned values and types before the body."),
           runStep("2. Decompose by idea", "Name independently explainable transformations before extracting helpers.", "A dependency sketch with one responsibility per function.", "Concept-based helpers reduce mental load and can be verified without constructing the entire workflow.", "Explain the algorithm aloud; phrases with distinct verbs or domain nouns are candidates for helpers, while arbitrary line ranges are not."),
@@ -803,6 +844,17 @@
             explanation: "Python slices include the start position and exclude the stop position, so the selected indexes are 2 through 4.",
           },
         },
+        coachConversation: [
+          { learner: "I keep missing one character in a slice. How should I picture it?", coach: "Label element indexes, then draw slice boundaries in the gaps. text[start:stop] includes start and excludes stop, so the width of a forward slice is stop - start." },
+          { learner: "When should numeric-looking text stay a string?", coach: "Keep it as str when it is an identifier, code, or formatted token—leading zeroes may matter. Use int(text) only when the meaning is a whole quantity that needs arithmetic." },
+          { learner: "Why can I not change one character or tuple item?", coach: "Strings and tuples are immutable. Build new pieces and join or pack them once; also check length and tuple shape before indexing or unpacking." },
+        ],
+        documentation: [
+          { label: "Text sequence type: str", description: "String construction, immutability, and text operations.", url: "https://docs.python.org/3/library/stdtypes.html#text-sequence-type-str" },
+          { label: "Common sequence operations", description: "Indexing, slicing, membership, concatenation, and sequence length.", url: "https://docs.python.org/3/library/stdtypes.html#common-sequence-operations" },
+          { label: "String methods", description: "Official reference for split, strip, join, replace, case operations, and more.", url: "https://docs.python.org/3/library/stdtypes.html#string-methods" },
+          { label: "Tuples and sequences", description: "Tuple packing, unpacking, and sequence use in the Python tutorial.", url: "https://docs.python.org/3/tutorial/datastructures.html#tuples-and-sequences" },
+        ],
         runbook: [
           runStep("1. Draw the representation", "Mark indexes, slice gaps, delimiters, and nested tuple shape on a non-exercise example.", "An annotated sequence or record diagram.", "A concrete positional model turns off-by-one and shape errors into visible inconsistencies before execution.", "Use a five-character toy string and write indexes above, negative indexes below, and vertical bars at every slice gap."),
           runStep("2. Define edge policy", "Decide behaviour for empty, short, malformed, and delimiter-heavy input before indexing.", "A small edge-case table with stable return types.", "Immutable operations are often permissive—an odd slice may return empty—so domain validation cannot be delegated to Python syntax.", "For each assumption, invent the smallest input that violates it and choose a documented return or exception."),
@@ -929,6 +981,17 @@
             explanation: "Assignment copies the reference. Both names point at the same mutable list object until a new object is explicitly created.",
           },
         },
+        coachConversation: [
+          { learner: "Why did changing my new variable also change the original list?", coach: "Assignment creates another reference to the same list; it does not copy the elements. State the ownership rule first, then use a copy or construct a new result when caller data must stay unchanged." },
+          { learner: "Can I remove items while a for loop walks the list?", coach: "That changes the indexes under the iterator and can skip values. Prefer a new list, a comprehension, or a carefully documented reverse/index-based strategy." },
+          { learner: "I read a row of numbers with input(). What do I have?", coach: "You still have text. split() produces strings too, so convert deliberately—for example, values = [int(piece) for piece in input().split()]—only when the contract guarantees integer fields." },
+        ],
+        documentation: [
+          { label: "More on lists", description: "List methods, stacks, queues, and important mutation behaviour.", url: "https://docs.python.org/3/tutorial/datastructures.html#more-on-lists" },
+          { label: "List comprehensions", description: "Readable construction of new lists from transformations and filters.", url: "https://docs.python.org/3/tutorial/datastructures.html#list-comprehensions" },
+          { label: "Sequence operations", description: "Shared indexing, slicing, concatenation, repetition, and membership rules.", url: "https://docs.python.org/3/library/stdtypes.html#common-sequence-operations" },
+          { label: "Copy operations", description: "The difference between shallow and deep copying for nested mutable data.", url: "https://docs.python.org/3/library/copy.html" },
+        ],
         runbook: [
           runStep("1. Declare ownership", "Decide whether caller input may change and whether nested elements are shared.", "An explicit in-place, shallow-copy, or new-result policy.", "Mutation is caller-visible behaviour, so an unstated ownership choice can make a locally correct result corrupt later work.", "Draw names as arrows to objects; if two arrows reach one list, decide whether that sharing is intentional before any append or assignment."),
           runStep("2. Name the role", "Identify the list as ordered data, builder, stack, queue, or grid.", "A one-sentence invariant for every position used.", "A collection role determines legal operations and gives positions stable meaning beyond convenient syntax.", "Choose one noun for the structure and describe what the first, current, and final positions mean; mixed answers suggest mixed responsibilities."),
@@ -1055,6 +1118,16 @@
             explanation: "A set directly represents distinct membership. Use a dictionary instead when each identifier must carry an associated value.",
           },
         },
+        coachConversation: [
+          { learner: "Should I choose a dictionary or a set?", coach: "Use a set for a membership question such as is this value present? Use a dictionary when a stable key must retrieve associated information." },
+          { learner: "Why does a lookup fail even though the key looks identical?", coach: "Inspect repr(key), then normalize case and surrounding whitespace before storage and lookup. Also distinguish a missing key from a present key whose value is 0, False, or an empty string." },
+          { learner: "Can I rely on the collection's order for printed output?", coach: "Do not treat set iteration as sorted. A dictionary preserves insertion order, but the contract may require a different order, so sort explicitly at the output boundary when order is observable." },
+        ],
+        documentation: [
+          { label: "Mapping type: dict", description: "Dictionary construction, lookup, ordering, views, and methods.", url: "https://docs.python.org/3/library/stdtypes.html#mapping-types-dict" },
+          { label: "Set types", description: "Distinct membership and union, intersection, difference, and symmetric difference.", url: "https://docs.python.org/3/library/stdtypes.html#set-types-set-frozenset" },
+          { label: "Looping techniques", description: "Idiomatic iteration with dictionary items, enumerate, zip, reversed, and sorted.", url: "https://docs.python.org/3/tutorial/datastructures.html#looping-techniques" },
+        ],
         runbook: [
           runStep("1. Model the question", "Write what must be retrieved, grouped, or compared and which facts identify it.", "A key → value schema or labelled membership diagram.", "The access question determines whether identity maps to data, represents membership, or needs ordered repetition.", "Write the desired operation as a sentence beginning find by, group by, count by, or is present; its object suggests the key or member."),
           runStep("2. Normalize identifiers", "Canonicalize case, whitespace, and representation before creating keys or set members.", "Equivalent real-world values become equal Python values.", "Hash collections compare Python values exactly, so inconsistent representation creates silent duplicate identities.", "Place normalization in one small function and print repr of raw → canonical pairs for values that should match."),
@@ -1181,6 +1254,16 @@
             explanation: "A base case is useful only when every recursive path is guaranteed to approach it through strictly smaller valid states.",
           },
         },
+        coachConversation: [
+          { learner: "I wrote a base case. Why can the recursion still continue forever?", coach: "A base case only helps if every recursive path reaches it. Name a bounded progress measure—such as remaining length—and prove that each recursive argument makes it strictly smaller." },
+          { learner: "I understand the calls going down, but not the final result.", coach: "Trace two directions separately. Record arguments and pending work during descent, then substitute each returned value while the call stack unwinds." },
+          { learner: "When should I cache recursive results?", coach: "First identify repeated states with the same inputs. functools.cache can remove repeated computation for suitable pure calls, but it cannot repair a missing base case or a non-shrinking argument. A RecursionError is evidence to inspect progress and depth first; raising the recursion limit is rarely the real algorithmic fix." },
+        ],
+        documentation: [
+          { label: "Defining functions", description: "Function calls, parameters, scope, and return behaviour used by recursive definitions.", url: "https://docs.python.org/3/tutorial/controlflow.html#defining-functions" },
+          { label: "functools.cache", description: "A lightweight memoization decorator for repeated calls with hashable arguments.", url: "https://docs.python.org/3/library/functools.html#functools.cache" },
+          { label: "Recursion limit", description: "How to inspect Python's interpreter recursion-depth safeguard.", url: "https://docs.python.org/3/library/sys.html#sys.getrecursionlimit" },
+        ],
         runbook: [
           runStep("1. Define direct cases", "List every smallest number, empty shape, or leaf that can be answered without another call.", "Base cases with types and expected returns.", "Base cases establish both termination anchors and the values from which larger answers are composed.", "Call the function only with the smallest valid shapes first; if their outputs are ambiguous, the recursive rule is not ready."),
           runStep("2. Prove progress", "Name a bounded measure that strictly shrinks on every recursive path.", "A sentence explaining why the base must be reached.", "Syntactic self-calls do not imply progress; a well-founded decreasing measure supplies the actual termination proof.", "Write measure(current) and measure(next) for every branch; any branch without a strict inequality is the likely infinite path."),
@@ -1307,6 +1390,17 @@
             explanation: "A generator call creates a lazy iterator. Execution advances to each yield on demand and normally supports one traversal.",
           },
         },
+        coachConversation: [
+          { learner: "Should I start with map, filter, or a comprehension?", coach: "Start with the data story: source → select → transform → combine. Choose syntax only after each arrow has a clear input and output type; a comprehension is often easiest to read when the pipeline is short." },
+          { learner: "Why did my callback produce None values?", coach: "A mutating method such as list.append returns None. Keep predicates and transformations focused on returning a result, and test each callback with one tiny value before composing the pipeline." },
+          { learner: "Where did my generator's values go on the second pass?", coach: "Iterators are usually one-use and lazy. For example, map(int, input().split()) converts tokens only as they are consumed. Recreate the iterator after consumption, or materialize it with list(...) when you intentionally need indexing or reuse and can afford the memory." },
+        ],
+        documentation: [
+          { label: "Functional Programming HOWTO", description: "Iterators, generators, built-ins, and composition from Python's official HOWTO.", url: "https://docs.python.org/3/howto/functional.html" },
+          { label: "Built-in map()", description: "Lazy application of a function across one or more iterables.", url: "https://docs.python.org/3/library/functions.html#map" },
+          { label: "Built-in filter()", description: "Lazy selection of iterable values through a predicate.", url: "https://docs.python.org/3/library/functions.html#filter" },
+          { label: "functools.reduce", description: "Cumulative reduction and the role of an initializer.", url: "https://docs.python.org/3/library/functools.html#functools.reduce" },
+        ],
         runbook: [
           runStep("1. Diagram stages", "Write source → select → transform → combine or yield, with a type at each arrow.", "A pipeline sketch plus one traced source item.", "Type-labelled stages reveal semantic mismatches and make changes in order reviewable before compact syntax hides them.", "Expand the pipeline into named intermediate variables and annotate a single item's value and type after each arrow."),
           runStep("2. Isolate callbacks", "Give predicates, mappers, and reducers one responsibility and test them separately.", "Tiny assertions for accepted, rejected, and transformed items.", "Small pure callbacks turn an opaque pipeline into independently verifiable vocabulary.", "Replace the lambda with a named function, call it directly, and inspect both returned value and type for one edge item."),
@@ -1433,6 +1527,17 @@
             explanation: "Explicit arguments expose dependencies, and new return values avoid hidden mutation. Effects can remain in a thin outer shell.",
           },
         },
+        coachConversation: [
+          { learner: "Does pure code mean my program cannot print or read input?", coach: "The whole program still needs effects. Keep them in a thin shell: raw_text = input(); count = int(raw_text); result = pure_core(count); print(result). The core receives an ordinary value, returns a new value, and stays easy to test." },
+          { learner: "Why does the same function call produce a different result later?", coach: "Inventory hidden dependencies: globals, current time, randomness, shared mutable objects, and consumed iterators. Make required facts explicit parameters and avoid changing caller-owned data." },
+          { learner: "Can a closure remember configuration safely?", coach: "Yes—capture normalized immutable configuration when the closure is created. If captured state changes between calls, document that effect instead of presenting the function as repeatable." },
+        ],
+        documentation: [
+          { label: "List comprehensions", description: "Constructing new values declaratively without mutating the source list.", url: "https://docs.python.org/3/tutorial/datastructures.html#list-comprehensions" },
+          { label: "Generators", description: "Lazy functions that preserve local state between yielded values.", url: "https://docs.python.org/3/tutorial/classes.html#generators" },
+          { label: "Binding of names", description: "How local, nonlocal, and global names are resolved in Python execution scopes.", url: "https://docs.python.org/3/reference/executionmodel.html#binding-of-names" },
+          { label: "itertools", description: "Composable iterator building blocks for efficient lazy pipelines.", url: "https://docs.python.org/3/library/itertools.html" },
+        ],
         runbook: [
           runStep("1. Inventory effects", "Mark input, output, files, time, randomness, network use, globals, and mutation.", "A boundary-versus-pure-core diagram.", "You can isolate only the effects you have identified, and overlooked reads are hidden dependencies just like writes.", "Highlight verbs that touch the outside world, then draw a boundary around the smallest shell that can own them."),
           runStep("2. Make dependencies explicit", "Pass environmental facts and configuration through parameters instead of reading hidden state.", "A core whose result is determined by its arguments.", "Explicit dependencies make equal-call reasoning and focused tests possible without arranging global environment state.", "For each global or environmental read, add a parameter representing the needed fact rather than passing a service when a value is enough."),
@@ -1559,6 +1664,16 @@
             explanation: "The ordering promise lets one comparison rule out a whole side while preserving the invariant that every possible answer remains in the candidate region.",
           },
         },
+        coachConversation: [
+          { learner: "Why can binary search discard half the values?", coach: "Only because a sorted or monotone promise lets the midpoint comparison speak for an entire region. Without that promise, the same discard can remove the answer." },
+          { learner: "I keep getting an off-by-one error. What should I write first?", coach: "Choose one interval convention—such as half-open [left, right)—and state which indexes are candidates. Every midpoint update must preserve that invariant and make the interval strictly smaller." },
+          { learner: "How do I know whether divide and conquer is actually faster?", coach: "Count the number of subproblems, the depth of repeated splitting, and the work used to combine results. Include slicing and copying costs; short source code does not guarantee low complexity." },
+        ],
+        documentation: [
+          { label: "bisect", description: "Standard-library binary search for insertion points in sorted sequences.", url: "https://docs.python.org/3/library/bisect.html" },
+          { label: "Sorting HOWTO", description: "Official guidance on sorted data, keys, stability, and ordering techniques.", url: "https://docs.python.org/3/howto/sorting.html" },
+          { label: "timeit", description: "Measuring small Python code snippets when comparing implementations empirically.", url: "https://docs.python.org/3/library/timeit.html" },
+        ],
         runbook: [
           runStep("1. Confirm the promise", "State whether input is sorted, monotone, recursively splittable, or otherwise structured.", "A counterexample showing why the algorithm needs that promise.", "Region elimination is valid only because structure lets local evidence speak for unseen elements.", "Construct the smallest unsorted or non-monotone counterexample and identify the exact discard decision it would invalidate."),
           runStep("2. Define regions", "Choose inclusive or half-open bounds and write exactly which indexes they contain.", "Initialization, size formula, and invariant using one convention.", "Consistent interval mathematics prevents skipped candidates, repeated midpoints, and out-of-range access.", "List candidate indexes explicitly for a four-item example, then check that initialization and every child bound represent the intended subset."),

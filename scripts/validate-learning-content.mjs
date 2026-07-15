@@ -16,6 +16,9 @@ let guidedPracticeCount = 0;
 let glossaryTermCount = 0;
 let debugCheckCount = 0;
 let checkpointCount = 0;
+let coachExchangeCount = 0;
+let documentationLinkCount = 0;
+const isNonEmptyString = (value) => typeof value === "string" && value.trim() !== "";
 const allSolutionLines = new Set(
   Object.values(window.SOLUTION_CODE)
     .flatMap((source) => source.split("\n"))
@@ -41,6 +44,45 @@ for (const chapter of window.COURSE_DATA.chapters) {
   }
   if (!Array.isArray(content.runbook) || content.runbook.length !== 5) {
     errors.push(`${chapter.id}: expected five runbook phases.`);
+  }
+  if (!Array.isArray(content.coachConversation) || content.coachConversation.length < 3) {
+    errors.push(`${chapter.id}: expected at least three learner/coach exchanges.`);
+  } else {
+    coachExchangeCount += content.coachConversation.length;
+    content.coachConversation.forEach((exchange, index) => {
+      if (!isNonEmptyString(exchange?.learner) || !isNonEmptyString(exchange?.coach)) {
+        errors.push(`${chapter.id}/coach-${index + 1}: missing learner question or coaching reply.`);
+      }
+      for (const message of [exchange?.learner, exchange?.coach]) {
+        if (isNonEmptyString(message) && allSolutionLines.has(message.trim())) {
+          errors.push(`${chapter.id}/coach-${index + 1}: coaching text reuses a repository solution line.`);
+        }
+      }
+    });
+  }
+  if (!Array.isArray(content.documentation) || content.documentation.length < 3 || content.documentation.length > 4) {
+    errors.push(`${chapter.id}: expected three or four official Python documentation links.`);
+  } else {
+    const chapterDocumentationUrls = new Set();
+    documentationLinkCount += content.documentation.length;
+    content.documentation.forEach((resource, index) => {
+      if (!isNonEmptyString(resource?.label) || !isNonEmptyString(resource?.description) || !isNonEmptyString(resource?.url)) {
+        errors.push(`${chapter.id}/documentation-${index + 1}: missing label, description, or URL.`);
+      } else {
+        try {
+          const url = new URL(resource.url.trim());
+          if (url.origin !== "https://docs.python.org" || !url.pathname.startsWith("/3/") || url.username || url.password) {
+            errors.push(`${chapter.id}/documentation-${index + 1}: link must use the official HTTPS Python 3 documentation.`);
+          }
+          if (chapterDocumentationUrls.has(url.href)) {
+            errors.push(`${chapter.id}/documentation-${index + 1}: duplicate documentation URL.`);
+          }
+          chapterDocumentationUrls.add(url.href);
+        } catch {
+          errors.push(`${chapter.id}/documentation-${index + 1}: invalid documentation URL.`);
+        }
+      }
+    });
   }
   const deepDive = content.deepDive;
   if (!deepDive || typeof deepDive !== "object") {
@@ -127,6 +169,19 @@ for (const chapter of window.COURSE_DATA.chapters) {
   }
 }
 
+const firstProgramsText = JSON.stringify(window.LEARNING_CONTENT.chapters.py01);
+if (!firstProgramsText.includes("int(input())")) {
+  errors.push("py01: show the direct int(input()) conversion pattern.");
+}
+if (!firstProgramsText.includes("ValueError")) {
+  errors.push("py01: explain that invalid integer text raises ValueError.");
+}
+for (const concept of ["input()", "float", "str", "prompt"]) {
+  if (!firstProgramsText.includes(concept)) {
+    errors.push(`py01: input-boundary teaching must mention ${concept}.`);
+  }
+}
+
 if (errors.length) {
   console.error(errors.map((error) => `- ${error}`).join("\n"));
   process.exitCode = 1;
@@ -135,6 +190,7 @@ if (errors.length) {
     `Validated ${tutorialCount} solution-free tutorials, ${runbookCount} runbook phases, ` +
       `${mentalModelStepCount} mental-model steps, ${guidedPracticeCount} guided practices, ` +
       `${glossaryTermCount} glossary terms, ${debugCheckCount} debugging checks, and ` +
-      `${checkpointCount} checkpoints.`,
+      `${checkpointCount} checkpoints. Checked ${coachExchangeCount} coaching exchanges and ` +
+      `${documentationLinkCount} official Python documentation links.`,
   );
 }

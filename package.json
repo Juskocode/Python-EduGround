@@ -9,6 +9,7 @@
     "validate:backend": "node --test server/tests/*.test.mjs",
     "vendor:ace": "node scripts/vendor-ace.mjs",
     "build:starters": "node scripts/build-starter-bundle.mjs",
+    "validate:links": "node scripts/check-learning-links.mjs",
     "validate": "node --check course-app.js && node --check learning-content.js && node --check audio-feedback.js && node scripts/validate-test-data.mjs && node scripts/validate-starter-data.mjs && node scripts/validate-learning-content.mjs && npm run validate:backend"
   },
   "devDependencies": {
