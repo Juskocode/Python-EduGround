@@ -1,10 +1,11 @@
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 globalThis.window = {};
 
-for (const file of ["exercise-data.js", "solution-code.js", "learning-content.js"]) {
+for (const file of ["exercise-data.js", "solution-code.js", "learning-content.js", "learning-toolbox.js"]) {
   await import(pathToFileURL(path.join(repoRoot, file)));
 }
 
@@ -18,6 +19,7 @@ let debugCheckCount = 0;
 let checkpointCount = 0;
 let coachExchangeCount = 0;
 let documentationLinkCount = 0;
+let toolboxCount = 0;
 const isNonEmptyString = (value) => typeof value === "string" && value.trim() !== "";
 const allSolutionLines = new Set(
   Object.values(window.SOLUTION_CODE)
@@ -44,6 +46,61 @@ for (const chapter of window.COURSE_DATA.chapters) {
   }
   if (!Array.isArray(content.runbook) || content.runbook.length !== 5) {
     errors.push(`${chapter.id}: expected five runbook phases.`);
+  }
+  const toolbox = window.LEARNING_TOOLBOX?.[String(chapter.id)];
+  if (!Array.isArray(toolbox) || toolbox.length < 3 || toolbox.length > 4) {
+    errors.push(`${chapter.id}: expected three or four Python toolbox entries.`);
+  } else {
+    toolboxCount += toolbox.length;
+    const chapterToolSyntax = new Set();
+    toolbox.forEach((tool, index) => {
+      const label = `${chapter.id}/toolbox-${index + 1}`;
+      for (const field of ["kind", "syntax", "description", "useWhen", "result", "caution", "example"]) {
+        if (!isNonEmptyString(tool?.[field])) {
+          errors.push(`${label}: missing ${field}.`);
+        }
+      }
+      if (isNonEmptyString(tool?.syntax)) {
+        if (chapterToolSyntax.has(tool.syntax.trim())) {
+          errors.push(`${label}: duplicate toolbox syntax.`);
+        }
+        chapterToolSyntax.add(tool.syntax.trim());
+      }
+      if (String(tool?.kind || "").startsWith("Standard library")) {
+        const importCode = String(tool?.importCode || "").trim();
+        if (!/^(?:import\s+|from\s+\S+\s+import\s+)/u.test(importCode)) {
+          errors.push(`${label}: standard-library tools need an explicit importCode.`);
+        }
+      }
+      if (String(tool?.importCode || "").includes("import *")) {
+        errors.push(`${label}: wildcard imports are not allowed in teaching examples.`);
+      }
+      if (isNonEmptyString(tool?.example)) {
+        const source = [tool.importCode, tool.example].filter(isNonEmptyString).join("\n\n");
+        const compilation = spawnSync(
+          process.env.PYTHON_BIN || "python3",
+          ["-c", "import sys; compile(sys.stdin.read(), '<toolbox-example>', 'exec')"],
+          { encoding: "utf8", input: source },
+        );
+        if (compilation.error) {
+          errors.push(`${label}: could not start Python to compile the example (${compilation.error.message}).`);
+        } else if (compilation.status !== 0) {
+          const detail = compilation.stderr.trim().split("\n").at(-1) || "Python compilation failed";
+          errors.push(`${label}: example is not valid Python (${detail}).`);
+        }
+      }
+      for (const line of String(tool?.example || "").split("\n").map((value) => value.trim())) {
+        if (
+          line.length >= 18 &&
+          !line.startsWith("import ") &&
+          !line.startsWith("from ") &&
+          !line.startsWith("def ") &&
+          allSolutionLines.has(line)
+        ) {
+          errors.push(`${label}: example reuses a repository solution line (${line}).`);
+        }
+      }
+    });
   }
   if (!Array.isArray(content.coachConversation) || content.coachConversation.length < 3) {
     errors.push(`${chapter.id}: expected at least three learner/coach exchanges.`);
@@ -182,6 +239,26 @@ for (const concept of ["input()", "float", "str", "prompt"]) {
   }
 }
 
+const toolboxText = Object.values(window.LEARNING_TOOLBOX || {})
+  .flat()
+  .flatMap((tool) => Object.values(tool || {}))
+  .join("\n");
+for (const concept of ["casting", "int(text)", "float(text_or_number)", "str(value)", "bool(value)"]) {
+  if (!toolboxText.includes(concept)) {
+    errors.push(`toolbox: conversion teaching must mention ${concept}.`);
+  }
+}
+for (const concept of ["round(number, ndigits=None)", "f\"{value:.2f}\"", "exact ties use the even candidate"]) {
+  if (!toolboxText.includes(concept)) {
+    errors.push(`toolbox: rounding teaching must mention ${concept}.`);
+  }
+}
+for (const concept of ["import module", "standard-library modules", "third-party packages", "Import does not install packages"]) {
+  if (!toolboxText.includes(concept)) {
+    errors.push(`toolbox: import and library teaching must mention ${concept}.`);
+  }
+}
+
 if (errors.length) {
   console.error(errors.map((error) => `- ${error}`).join("\n"));
   process.exitCode = 1;
@@ -191,6 +268,6 @@ if (errors.length) {
       `${mentalModelStepCount} mental-model steps, ${guidedPracticeCount} guided practices, ` +
       `${glossaryTermCount} glossary terms, ${debugCheckCount} debugging checks, and ` +
       `${checkpointCount} checkpoints. Checked ${coachExchangeCount} coaching exchanges and ` +
-      `${documentationLinkCount} official Python documentation links.`,
+      `${documentationLinkCount} official Python documentation links plus ${toolboxCount} Python toolbox cards.`,
   );
 }

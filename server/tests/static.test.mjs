@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,7 @@ test("required playground assets remain public", async () => {
   for (const pathname of [
     "/",
     "/course-app.js",
+    "/learning-toolbox.js",
     "/starter-code.js",
     "/test-data/tests-py01-03.js",
     "/assets/vendor/ace/ace.js",
@@ -25,6 +26,17 @@ test("required playground assets remain public", async () => {
     assert.equal(result.error, undefined, `${pathname} should be public`);
     assert.equal(result.fileStats.isFile(), true);
   }
+});
+
+test("the toolbox data loads before the application reads it", async () => {
+  const index = await readFile(resolve(REPOSITORY_ROOT, "index.html"), "utf8");
+  const learningContentPosition = index.indexOf('src="learning-content.js"');
+  const toolboxPosition = index.indexOf('src="learning-toolbox.js"');
+  const applicationPosition = index.indexOf('src="course-app.js"');
+
+  assert.ok(learningContentPosition >= 0, "index should load learning-content.js");
+  assert.ok(toolboxPosition > learningContentPosition, "toolbox data should load after the core learning content");
+  assert.ok(applicationPosition > toolboxPosition, "toolbox data should load before course-app.js");
 });
 
 test("solutions and backend or deployment files are not served", async () => {

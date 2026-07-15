@@ -10,6 +10,7 @@ export const PUBLIC_ROOT_FILES = new Set([
   "favicon.svg",
   "index.html",
   "learning-content.js",
+  "learning-toolbox.js",
   "python-runner-worker.mjs",
   "starter-code.js",
 ]);

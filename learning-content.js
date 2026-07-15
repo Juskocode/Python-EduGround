@@ -302,11 +302,13 @@
         coachConversation: [
           { learner: "I typed 12. Why does input() not behave like a number?", coach: "Because keyboard input crosses into Python as text. input() returns the string \"12\"; use number = int(input()) when the contract guarantees a whole number, or keep a raw_text variable first when you want easier debugging." },
           { learner: "Should I use int(), float(), or str()?", coach: "Use int() for exact whole counts, float() for decimal measurements, and str() when you deliberately need text. Convert once near the input boundary, then keep the stable numeric value for the calculation." },
+          { learner: "Is type casting different from type conversion?", coach: "People often say casting, but explicit type conversion is the clearer Python term here: int(text), float(text), str(value), and bool(value) create new values of the requested type. They do not change the original object, and each conversion has its own acceptance rules." },
           { learner: "My calculation is right, but the test still fails.", coach: "Look at the public boundary. input(\"Number: \") prints a prompt, debug prints add lines, and tiny spacing differences change stdout. Also remember that int() raises ValueError if the supplied text is not a valid integer." },
         ],
         documentation: [
           { label: "Built-in input()", description: "How Python reads one line and returns it as text, including the visible prompt argument.", url: "https://docs.python.org/3/library/functions.html#input" },
           { label: "Built-in int()", description: "How Python converts valid whole-number text and which forms the integer constructor accepts.", url: "https://docs.python.org/3/library/functions.html#int" },
+          { label: "Built-in float()", description: "How decimal text and compatible numeric values become floating-point approximations.", url: "https://docs.python.org/3/library/functions.html#float" },
           { label: "Input and output", description: "Printing, string formatting, and reading user-entered data.", url: "https://docs.python.org/3/tutorial/inputoutput.html" },
         ],
         runbook: [
@@ -353,7 +355,7 @@
           ),
           section(
             "Separate precision from presentation",
-            "round returns a numeric value rounded to a requested precision, while an f-string format controls the characters displayed. Keep full internal precision through the calculation unless the rules explicitly require staged rounding. At the boundary, decide whether tests expect a number-like representation or a fixed-width piece of text.",
+            "round returns a numeric value rounded to a requested precision, while an f-string format controls the characters displayed. Python resolves exact halfway ties toward the even candidate, so round(2.5) is 2 while round(3.5) is 4. Because most decimal fractions are only approximated by binary floats, a value that looks like a tie may not be stored as one. Keep full internal precision through the calculation unless the rules explicitly require staged rounding. At the boundary, decide whether tests expect a number-like representation or a fixed-width piece of text.",
             "litres_shared = 7 / 9\nrounded_litres = round(litres_shared, 3)\nlabel = f\"{litres_shared:.3f} L\"\nprint(rounded_litres)\nprint(label)",
             [
               "Locate the exact stage where the contract asks for rounding.",
@@ -439,11 +441,14 @@
           { learner: "This input looks numeric. Can I calculate with it immediately?", coach: "Not yet: input() returned a str. Parse a whole count with count = int(input()) or a decimal measurement with distance = float(input()), then keep the chosen type consistent through the formula." },
           { learner: "Which division operator should I choose?", coach: "Ask the domain question aloud. Use / for a fractional ratio, // for complete groups, and % for the remainder. For a sanity check, quotient * divisor + remainder should rebuild the original whole count." },
           { learner: "Why did a correct-looking decimal fail?", coach: "Separate calculation from presentation. Keep useful precision internally; apply round() or an f-string format only where the contract requests it, and test values just beside the rounding boundary." },
+          { learner: "Why does round(2.5) produce 2 instead of 3?", coach: "Python uses nearest-with-ties-to-even for exact halfway values: 2 is the even neighbour of 2.5, while round(3.5) becomes 4. Also remember that binary floating-point may store a decimal-looking value slightly above or below the mathematical tie." },
+          { learner: "What is the difference between a built-in, module, package, and library?", coach: "Built-ins such as round need no import. A module is one importable namespace, a package organizes modules, and library is the broad informal name for reusable code. Python's standard library ships with Python; third-party packages must be installed in the runtime before import can find them." },
         ],
         documentation: [
           { label: "Numeric types", description: "Integer and floating-point behaviour, operators, and mixed numeric calculations.", url: "https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex" },
           { label: "Arithmetic expressions", description: "Official precedence and semantics for arithmetic, floor division, remainder, and powers.", url: "https://docs.python.org/3/reference/expressions.html#binary-arithmetic-operations" },
           { label: "Built-in round()", description: "How rounding precision and tie behaviour work.", url: "https://docs.python.org/3/library/functions.html#round" },
+          { label: "Modules and imports", description: "How module namespaces, import forms, search paths, and packages work.", url: "https://docs.python.org/3/tutorial/modules.html" },
         ],
         runbook: [
           runStep("1. Classify quantities", "Label each value as a count, measurement, ratio, remainder, or formatted string.", "A justified Python type and unit for every value.", "The representation and operator should follow the domain meaning; choosing them together prevents accidental truncation and meaningless arithmetic.", "Make a two-column list headed exact and approximate, then place every input and result in one column with its unit."),
@@ -712,6 +717,7 @@
           { learner: "Should this function call input() itself?", coach: "Usually keep input and print in a thin outer layer. Parse text there—for example, quantity = int(input())—and pass the integer into a function whose contract is easy to call and test." },
           { learner: "I can see the right value, so why did the caller receive None?", coach: "print(value) displays a value but returns None. Follow every function path and use return when the contract promises data back to the caller." },
           { learner: "When is a helper worth creating?", coach: "Extract a helper when you can give one transformation a clear name, parameters, and return type. If the helper only forwards arguments without clarifying an idea, keep the flow together." },
+          { learner: "Should I write import module or from module import name?", coach: "Prefer import module when the qualified name clarifies where a tool comes from, such as math.isclose. A focused from-import can be concise when the source remains obvious. Avoid import * because it hides name origins and can silently overwrite another binding." },
         ],
         documentation: [
           { label: "Defining functions", description: "Parameters, local scope, default values, and function definitions in the Python tutorial.", url: "https://docs.python.org/3/tutorial/controlflow.html#defining-functions" },

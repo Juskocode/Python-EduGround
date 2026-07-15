@@ -27,6 +27,7 @@
   var testData = window.EXERCISE_TESTS || {};
   var starterCode = window.STARTER_CODE || {};
   var learning = window.LEARNING_CONTENT || {};
+  var toolboxByChapter = window.LEARNING_TOOLBOX || {};
   var audio = window.APP_AUDIO || createSilentAudio();
 
   if (!course || !Array.isArray(course.chapters) || course.chapters.length === 0) {
@@ -903,6 +904,13 @@
       heading,
       el("p", "tutorial-section__explanation", "Use this repeatable loop when a problem feels vague or a test fails. Each phase ends with evidence you can inspect.")
     );
+    var toolbox = Array.isArray(toolboxByChapter[String(chapter.id)])
+      ? toolboxByChapter[String(chapter.id)]
+      : [];
+    var toolboxPanel = renderChapterToolbox(chapter, toolbox);
+    if (toolboxPanel) {
+      section.append(toolboxPanel);
+    }
     var coachConversation = content && Array.isArray(content.coachConversation) ? content.coachConversation : [];
     var conversation = renderCoachConversation(chapter, coachConversation);
     if (conversation) {
@@ -938,6 +946,75 @@
       section.append(documentationPanel);
     }
     return section;
+  }
+
+  function renderChapterToolbox(chapter, toolbox) {
+    var tools = toolbox.filter(function (tool) {
+      return tool && tool.syntax && tool.kind && tool.description && tool.useWhen && tool.result && tool.caution && tool.example;
+    });
+    if (!tools.length) {
+      return null;
+    }
+
+    var block = el("section", "runbook-toolbox");
+    var headingId = "runbook-toolbox-" + domId(chapter.id);
+    var heading = el("h3", null, "Python toolbox: choose by intent");
+    var intro = el(
+      "p",
+      "runbook-toolbox__intro",
+      "Meet the chapter's new language tools before you need them. Each card explains what it does, when it fits, what it produces, and the mistake most worth avoiding."
+    );
+    var grid = el("ul", "runbook-toolbox__grid");
+    heading.id = headingId;
+    block.setAttribute("aria-labelledby", headingId);
+
+    tools.forEach(function (tool) {
+      var item = el("li", "runbook-tool");
+      var top = el("div", "runbook-tool__top");
+      var signature = el("h4", "runbook-tool__signature");
+      var kind = el("span", "runbook-tool__kind", String(tool.kind));
+      var facts = el("dl", "runbook-tool__facts");
+      signature.append(el("code", null, String(tool.syntax)));
+      top.append(kind, signature);
+      item.append(top, el("p", "runbook-tool__description", String(tool.description)));
+
+      if (tool.importCode) {
+        var importRow = el("div", "runbook-tool__import");
+        importRow.append(el("span", null, "Import first"), el("code", null, String(tool.importCode)));
+        item.append(importRow);
+      }
+
+      [
+        ["Use when", tool.useWhen],
+        ["What you get", tool.result],
+        ["Watch out", tool.caution]
+      ].forEach(function (fact) {
+        facts.append(el("dt", null, fact[0]), el("dd", null, String(fact[1])));
+      });
+      item.append(facts, renderToolboxExample(tool));
+      grid.append(item);
+    });
+
+    block.append(el("span", "eyebrow", "New functionality"), heading, intro, grid);
+    return block;
+  }
+
+  function renderToolboxExample(tool) {
+    var codeBox = el("div", "tutorial-code runbook-tool__example");
+    var codeHeader = el("div", "tutorial-code__header");
+    var codeMeta = el("span", "tutorial-code__meta");
+    var copyButton = el("button", "tutorial-copy-button", "Copy example");
+    var pre = el("pre");
+    copyButton.type = "button";
+    copyButton.dataset.copySnippet = "true";
+    codeMeta.append(el("span", null, "Python 3"), copyButton);
+    codeHeader.append(el("span", null, "try-it.py"), codeMeta);
+    var completeExample = tool.importCode
+      ? String(tool.importCode) + "\n\n" + String(tool.example)
+      : String(tool.example);
+    pre.append(el("code", null, completeExample));
+    codeBox.append(codeHeader, pre);
+    return codeBox;
   }
 
   function renderCoachConversation(chapter, conversation) {
