@@ -5,7 +5,8 @@
     passed: "fp-playground.passed.v2",
     drafts: "fp-playground.drafts.v2",
     theme: "fp-playground.theme.v1",
-    lastExercise: "fp-playground.last-exercise.v2"
+    lastExercise: "fp-playground.last-exercise.v2",
+    learning: "fp-playground.learning.v1"
   };
 
   var elements = {
@@ -53,6 +54,7 @@
     return validExerciseIds.has(exerciseId);
   }));
   var drafts = readDrafts();
+  var learningProgress = readLearningProgress();
   var revealedHints = new Map();
   var runResults = new Map();
   var draftPersistTimer = null;
@@ -96,7 +98,7 @@
     var view;
     if (parsed.name === "chapter") {
       view = renderChapterHub(parsed.chapter);
-      document.title = parsed.chapter.title + " · Python Foundations";
+      document.title = parsed.chapter.title + " · Python EduGround";
     } else if (parsed.name === "exercises") {
       view = renderExerciseCatalogue(parsed.chapter);
       document.title = "Exercises · " + parsed.chapter.title;
@@ -108,10 +110,10 @@
       document.title = parsed.exercise.title + " · Python Exercise";
     } else if (parsed.name === "badges") {
       view = renderBadgesPage();
-      document.title = "Badges · Python Foundations";
+      document.title = "Badges · Python EduGround";
     } else {
       view = renderDashboard();
-      document.title = "Python Foundations · Learning Path";
+      document.title = "Python EduGround · Learning Path";
     }
 
     elements.main.replaceChildren(view);
@@ -202,6 +204,8 @@
     var rank = getCurrentRank(stats);
     var nextRank = getNextRank(rank);
     var continueChapter = getContinueChapter();
+    var continueChapterProgress = getChapterProgress(continueChapter);
+    var continueLearningProgress = getChapterLearningProgress(continueChapter);
     var hero = el("section", "dashboard-hero");
     var heroCopy = el("div", "dashboard-hero__copy");
     var eyebrow = el("p", "eyebrow", "Python learning path");
@@ -219,6 +223,24 @@
     );
     var badgeLink = anchor("#profile/badges", "button button--quiet", "View badges");
     var heroProgress = el("section", "dashboard-progress");
+    var currentLearning = anchor(
+      "#chapter/" + encodeURIComponent(String(continueChapter.id)),
+      "dashboard-current-learning"
+    );
+    var currentLearningMarker = el("span", "dashboard-current-learning__marker", "→");
+    var currentLearningCopy = el("span", "dashboard-current-learning__copy");
+    currentLearningMarker.setAttribute("aria-hidden", "true");
+    currentLearningCopy.append(
+      el("span", "dashboard-current-learning__label", stats.passedExercises ? "Continue your current chapter" : "Recommended starting point"),
+      el("strong", null, "Chapter " + padChapter(continueChapter.number) + " · " + continueChapter.title),
+      el(
+        "span",
+        "dashboard-current-learning__meta",
+        continueChapterProgress.done + " / " + continueChapterProgress.total + " exercises · " +
+          continueLearningProgress.done + " / " + continueLearningProgress.total + " guide sections"
+      )
+    );
+    currentLearning.append(currentLearningMarker, currentLearningCopy, el("span", "dashboard-current-learning__open", "Open →"));
     var progressTop = el("div", "dashboard-progress__top");
     var progressLabel = el("div");
     var progressEyebrow = el("span", "dashboard-progress__label", "Overall progress");
@@ -234,7 +256,7 @@
     title.id = "dashboard-title";
     hero.setAttribute("aria-labelledby", title.id);
     heroActions.append(continueLink, badgeLink);
-    heroCopy.append(eyebrow, title, lede, heroActions);
+    heroCopy.append(eyebrow, title, lede, currentLearning, heroActions);
 
     progressLabel.append(progressEyebrow, progressTitle);
     progressTop.append(progressLabel, progressPercent);
@@ -375,13 +397,14 @@
     var tutorialCount = chapterLearning && Array.isArray(chapterLearning.tutorial)
       ? chapterLearning.tutorial.length
       : 0;
+    var guideProgress = getChapterLearningProgress(chapter);
     var runbookChoice = renderChoiceCard({
       href: "#chapter/" + encodeURIComponent(String(chapter.id)) + "/tutorials",
       icon: "{ }",
       eyebrow: "Learn the concepts",
       title: "Runbook & tutorials",
       copy: "Build a mental model with worked Python examples, common pitfalls, and a practical problem-solving sequence.",
-      meta: tutorialCount + " tutorials · 5 runbook phases",
+      meta: guideProgress.done + " / " + guideProgress.total + " guide sections understood · " + tutorialCount + " tutorials",
       action: "Open learning guide"
     });
     choiceGrid.append(exercisesChoice, runbookChoice);
@@ -500,6 +523,7 @@
     var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
     var runbook = content && Array.isArray(content.runbook) ? content.runbook : [];
     var objectives = content && Array.isArray(content.objectives) ? content.objectives : [];
+    var deepDive = content && content.deepDive && typeof content.deepDive === "object" ? content.deepDive : null;
     var wrapper = el("div", "page-shell tutorial-page");
 
     wrapper.append(renderBreadcrumbs([
@@ -524,7 +548,7 @@
     if (!objectives.length) {
       objectiveList.append(el("li", null, "Apply this chapter's ideas with a clear trace and a tested result."));
     }
-    objectiveBox.append(objectiveList);
+    objectiveBox.append(objectiveList, renderLearningProgressPanel(chapter));
     hero.append(heroCopy, objectiveBox);
     var boundary = el("aside", "tutorial-boundary");
     boundary.append(
@@ -559,13 +583,25 @@
       var button = el("button", "tutorial-toc__button", String(index + 1).padStart(2, "0") + " · " + tutorial.title);
       button.type = "button";
       button.dataset.scrollTarget = "tutorial-section-" + index;
+      button.dataset.learningToc = "tutorial-" + index;
+      button.classList.toggle("is-understood", isLearningUnderstood(chapter, "tutorial-" + index));
       item.append(button);
       tocList.append(item);
     });
+    if (hasDeepDiveContent(deepDive)) {
+      var deepDiveItem = el("li");
+      var deepDiveButton = el("button", "tutorial-toc__button", "Deep dive · Practise the model");
+      deepDiveButton.type = "button";
+      deepDiveButton.dataset.scrollTarget = "chapter-deep-dive";
+      deepDiveItem.append(deepDiveButton);
+      tocList.append(deepDiveItem);
+    }
     var runbookButtonItem = el("li");
     var runbookButton = el("button", "tutorial-toc__button", "Runbook · Practice loop");
     runbookButton.type = "button";
     runbookButton.dataset.scrollTarget = "chapter-runbook";
+    runbookButton.dataset.learningToc = "runbook";
+    runbookButton.classList.toggle("is-understood", isLearningUnderstood(chapter, "runbook"));
     runbookButtonItem.append(runbookButton);
     tocList.append(runbookButtonItem);
     toc.append(tocTitle, tocList);
@@ -575,8 +611,11 @@
       article.append(renderFallbackTutorial(chapter));
     } else {
       tutorials.forEach(function (tutorial, index) {
-        article.append(renderTutorialSection(tutorial, index));
+        article.append(renderTutorialSection(chapter, tutorial, index));
       });
+    }
+    if (hasDeepDiveContent(deepDive)) {
+      article.append(renderDeepDive(chapter, deepDive));
     }
     article.append(renderDeepRunbook(chapter, runbook));
     layout.append(toc, article);
@@ -597,7 +636,39 @@
     return wrapper;
   }
 
-  function renderTutorialSection(tutorial, index) {
+  function renderLearningProgressPanel(chapter) {
+    var stats = getChapterLearningProgress(chapter);
+    var panel = el("section", "tutorial-progress");
+    var top = el("div", "tutorial-progress__top");
+    var copy = el("div");
+    var count = el("strong", "tutorial-progress__count", stats.done + " / " + stats.total);
+    var bar = progressElement(stats.done, stats.total, chapter.title + " learning guide progress");
+    var status = el(
+      "p",
+      "tutorial-progress__status",
+      stats.done === stats.total ? "Guide complete — revisit any section whenever you need it." : "Mark each concept after you can explain it in your own words."
+    );
+    panel.dataset.learningProgressPanel = String(chapter.id);
+    count.dataset.learningProgressCount = String(chapter.id);
+    bar.dataset.learningProgressBar = String(chapter.id);
+    status.dataset.learningProgressStatus = String(chapter.id);
+    copy.append(el("span", null, "Learning guide"), el("strong", null, stats.percent + "% understood"));
+    top.append(copy, count);
+    panel.append(top, bar, status);
+    return panel;
+  }
+
+  function renderLearningToggle(chapter, itemId) {
+    var understood = isLearningUnderstood(chapter, itemId);
+    var button = el("button", "learning-mark" + (understood ? " is-understood" : ""), understood ? "Understood ✓" : "Mark understood");
+    button.type = "button";
+    button.dataset.learningToggle = itemId;
+    button.dataset.chapterId = String(chapter.id);
+    button.setAttribute("aria-pressed", String(understood));
+    return button;
+  }
+
+  function renderTutorialSection(chapter, tutorial, index) {
     var section = el("section", "tutorial-section");
     var heading = el("header", "tutorial-section__heading");
     var number = el("span", "tutorial-section__number", String(index + 1).padStart(2, "0"));
@@ -610,9 +681,12 @@
     var checklistList = el("ul");
     var takeaway = el("aside", "tutorial-takeaway");
     var pitfall = el("aside", "tutorial-pitfall");
+    var learningItemId = "tutorial-" + index;
 
     section.id = "tutorial-section-" + index;
-    heading.append(number, title);
+    section.dataset.learningItem = learningItemId;
+    section.classList.toggle("is-understood", isLearningUnderstood(chapter, learningItemId));
+    heading.append(number, title, renderLearningToggle(chapter, learningItemId));
     var codeMeta = el("span", "tutorial-code__meta");
     var copyButton = el("button", "tutorial-copy-button", "Copy example");
     copyButton.type = "button";
@@ -634,11 +708,184 @@
     return section;
   }
 
+  function hasDeepDiveContent(deepDive) {
+    return Boolean(deepDive && (
+      deepDive.mentalModel ||
+      (Array.isArray(deepDive.guidedPractice) && deepDive.guidedPractice.length) ||
+      (Array.isArray(deepDive.glossary) && deepDive.glossary.length) ||
+      (Array.isArray(deepDive.debugChecklist) && deepDive.debugChecklist.length) ||
+      deepDive.checkpoint
+    ));
+  }
+
+  function renderDeepDive(chapter, deepDive) {
+    var section = el("section", "tutorial-section deep-dive-section");
+    var heading = el("header", "tutorial-section__heading");
+    heading.append(el("span", "tutorial-section__number", "DD"), el("h2", null, "Deepen the mental model"));
+    section.id = "chapter-deep-dive";
+    section.append(
+      heading,
+      el("p", "tutorial-section__explanation", "Slow down here: trace the model, practise on a fresh situation, then check what you can explain without running code.")
+    );
+
+    if (deepDive.mentalModel && typeof deepDive.mentalModel === "object") {
+      section.append(renderMentalModel(deepDive.mentalModel));
+    }
+    if (Array.isArray(deepDive.guidedPractice) && deepDive.guidedPractice.length) {
+      section.append(renderGuidedPractice(chapter, deepDive.guidedPractice));
+    }
+    if (
+      (Array.isArray(deepDive.glossary) && deepDive.glossary.length) ||
+      (Array.isArray(deepDive.debugChecklist) && deepDive.debugChecklist.length)
+    ) {
+      section.append(renderReferenceGrid(deepDive.glossary, deepDive.debugChecklist));
+    }
+    if (deepDive.checkpoint && typeof deepDive.checkpoint === "object") {
+      section.append(renderCheckpoint(chapter, deepDive.checkpoint));
+    }
+    return section;
+  }
+
+  function renderMentalModel(model) {
+    var block = el("section", "mental-model");
+    var title = el("h3", null, model.title || "Mental model");
+    block.append(title);
+    if (model.body) {
+      block.append(el("p", "mental-model__body", model.body));
+    }
+    if (Array.isArray(model.steps) && model.steps.length) {
+      var flow = el("ol", "mental-model__flow");
+      model.steps.forEach(function (step, index) {
+        var item = el("li");
+        var marker = el("span", "mental-model__marker", String(index + 1).padStart(2, "0"));
+        var copy = el("div");
+        copy.append(el("strong", null, step && step.label ? step.label : "Step " + (index + 1)));
+        if (step && step.detail) {
+          copy.append(el("p", null, step.detail));
+        }
+        item.append(marker, copy);
+        flow.append(item);
+      });
+      block.append(flow);
+    }
+    return block;
+  }
+
+  function renderGuidedPractice(chapter, practices) {
+    var block = el("section", "guided-practice");
+    var heading = el("header", "deep-dive-heading");
+    heading.append(el("span", "eyebrow", "Guided practice"), el("h3", null, "Predict before you reveal"));
+    block.append(heading);
+    var grid = el("div", "guided-practice__grid");
+    practices.forEach(function (practice, index) {
+      var card = el("article", "guided-practice-card");
+      var revealId = "guided-reveal-" + domId(chapter.id) + "-" + index;
+      card.append(el("span", "guided-practice-card__number", "Practice " + (index + 1)), el("h4", null, practice.title || "Trace this example"));
+      if (practice.prompt) {
+        card.append(el("p", "guided-practice-card__prompt", practice.prompt));
+      }
+      if (practice.starterCode) {
+        var codeBox = el("div", "tutorial-code guided-practice-code");
+        var codeHeader = el("div", "tutorial-code__header");
+        var codeMeta = el("span", "tutorial-code__meta");
+        var copyButton = el("button", "tutorial-copy-button", "Copy starter");
+        var pre = el("pre");
+        copyButton.type = "button";
+        copyButton.dataset.copySnippet = "true";
+        copyButton.dataset.copyRestingLabel = "Copy starter";
+        codeMeta.append(el("span", null, "Python 3"), copyButton);
+        codeHeader.append(el("span", null, "practice-starter.py"), codeMeta);
+        pre.append(el("code", null, practice.starterCode));
+        codeBox.append(codeHeader, pre);
+        card.append(codeBox);
+      }
+      if (Array.isArray(practice.questions) && practice.questions.length) {
+        var questions = el("ol", "guided-practice-card__questions");
+        practice.questions.forEach(function (question) {
+          questions.append(el("li", null, question));
+        });
+        card.append(questions);
+      }
+      if (practice.reveal) {
+        var revealButton = el("button", "button button--quiet guided-practice-card__reveal", "Reveal coaching note");
+        var reveal = el("aside", "guided-practice-card__answer", practice.reveal);
+        revealButton.type = "button";
+        revealButton.dataset.revealPractice = revealId;
+        revealButton.setAttribute("aria-expanded", "false");
+        revealButton.setAttribute("aria-controls", revealId);
+        reveal.id = revealId;
+        reveal.hidden = true;
+        card.append(revealButton, reveal);
+      }
+      grid.append(card);
+    });
+    block.append(grid);
+    return block;
+  }
+
+  function renderReferenceGrid(glossary, debuggingChecklist) {
+    var grid = el("div", "deep-reference-grid");
+    if (Array.isArray(glossary) && glossary.length) {
+      var glossarySection = el("section", "glossary-panel");
+      var terms = el("dl", "glossary-list");
+      glossarySection.append(el("span", "eyebrow", "Language of the chapter"), el("h3", null, "Glossary"));
+      glossary.forEach(function (entry) {
+        if (!entry) {
+          return;
+        }
+        terms.append(el("dt", null, entry.term || "Term"), el("dd", null, entry.definition || ""));
+      });
+      glossarySection.append(terms);
+      grid.append(glossarySection);
+    }
+    if (Array.isArray(debuggingChecklist) && debuggingChecklist.length) {
+      var debugSection = el("section", "debug-checklist");
+      var list = el("ul");
+      debugSection.append(el("span", "eyebrow", "When a test is red"), el("h3", null, "Debugging checklist"));
+      debuggingChecklist.forEach(function (item) {
+        list.append(el("li", null, item));
+      });
+      debugSection.append(list);
+      grid.append(debugSection);
+    }
+    return grid;
+  }
+
+  function renderCheckpoint(chapter, checkpoint) {
+    var block = el("section", "knowledge-check");
+    var options = Array.isArray(checkpoint.options) ? checkpoint.options : [];
+    var feedback = el("p", "knowledge-check__feedback");
+    var feedbackId = "checkpoint-feedback-" + domId(chapter.id);
+    block.dataset.checkpoint = String(chapter.id);
+    block.dataset.checkpointExplanation = checkpoint.explanation || "Review the mental model and explain why the option fits.";
+    block.append(el("span", "eyebrow", "Quick checkpoint"), el("h3", null, checkpoint.question || "Which statement best matches the model?"));
+    var optionList = el("div", "knowledge-check__options");
+    optionList.setAttribute("role", "group");
+    optionList.setAttribute("aria-label", "Checkpoint answer choices");
+    options.forEach(function (option, index) {
+      var button = el("button", "knowledge-check__option", option);
+      button.type = "button";
+      button.dataset.checkpointOption = String(index);
+      button.dataset.answerIndex = String(Number(checkpoint.answerIndex));
+      button.setAttribute("aria-pressed", "false");
+      button.setAttribute("aria-describedby", feedbackId);
+      optionList.append(button);
+    });
+    feedback.id = feedbackId;
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    feedback.hidden = true;
+    block.append(optionList, feedback);
+    return block;
+  }
+
   function renderDeepRunbook(chapter, steps) {
     var section = el("section", "runbook-section");
     var heading = el("header", "tutorial-section__heading");
-    heading.append(el("span", "tutorial-section__number", "RB"), el("h2", null, "Problem-solving runbook"));
+    heading.append(el("span", "tutorial-section__number", "RB"), el("h2", null, "Problem-solving runbook"), renderLearningToggle(chapter, "runbook"));
     section.id = "chapter-runbook";
+    section.dataset.learningItem = "runbook";
+    section.classList.toggle("is-understood", isLearningUnderstood(chapter, "runbook"));
     section.append(
       heading,
       el("p", "tutorial-section__explanation", "Use this repeatable loop when a problem feels vague or a test fails. Each phase ends with evidence you can inspect.")
@@ -651,10 +898,18 @@
       var item = el("li", "runbook-step");
       var phase = el("div", "runbook-step__phase", step.phase);
       var body = el("div", "runbook-step__body");
-      body.append(
-        el("p", null, step.action),
-        el("span", "runbook-step__evidence", "Evidence: " + step.evidence)
-      );
+      body.append(el("p", "runbook-step__action", step.action));
+      if (step.why) {
+        var why = el("aside", "runbook-step__why");
+        why.append(el("strong", null, "Why this matters"), el("p", null, step.why));
+        body.append(why);
+      }
+      if (step.whenStuck) {
+        var stuck = el("aside", "runbook-step__stuck");
+        stuck.append(el("strong", null, "When you are stuck"), el("p", null, step.whenStuck));
+        body.append(stuck);
+      }
+      body.append(el("span", "runbook-step__evidence", "Evidence: " + step.evidence));
       item.append(phase, body);
       list.append(item);
     });
@@ -1083,6 +1338,9 @@
     var copyCodeButton = event.target.closest("button[data-copy-code]");
     var pasteCodeButton = event.target.closest("button[data-paste-code]");
     var copySnippetButton = event.target.closest("button[data-copy-snippet]");
+    var learningButton = event.target.closest("button[data-learning-toggle]");
+    var practiceRevealButton = event.target.closest("button[data-reveal-practice]");
+    var checkpointButton = event.target.closest("button[data-checkpoint-option]");
     var badgeButton = event.target.closest("button[data-open-badge]");
     var closeDialogButton = event.target.closest("button[data-close-badge-dialog]");
 
@@ -1111,6 +1369,18 @@
     }
     if (copySnippetButton) {
       copyTutorialSnippet(copySnippetButton);
+      return;
+    }
+    if (learningButton) {
+      toggleLearningItem(learningButton);
+      return;
+    }
+    if (practiceRevealButton) {
+      togglePracticeReveal(practiceRevealButton);
+      return;
+    }
+    if (checkpointButton) {
+      checkKnowledgeAnswer(checkpointButton);
       return;
     }
     if (resetButton) {
@@ -1196,11 +1466,118 @@
     }
     try {
       await writeClipboardText(code.textContent);
-      showControlFeedback(button, "Copied", "Copy example", 1400);
-      announce("Concept example copied to the clipboard.");
+      var restingLabel = button.dataset.copyRestingLabel || "Copy example";
+      showControlFeedback(button, "Copied", restingLabel, 1400);
+      announce(restingLabel === "Copy starter" ? "Practice starter copied to the clipboard." : "Concept example copied to the clipboard.");
     } catch (error) {
       announce("Copy was blocked by the browser. Select the example and copy it manually.");
     }
+  }
+
+  function toggleLearningItem(button) {
+    var chapter = chapterById.get(String(button.dataset.chapterId));
+    var itemId = button.dataset.learningToggle;
+    if (!chapter || !itemId) {
+      return;
+    }
+    var chapterId = String(chapter.id);
+    var items = learningProgress.get(chapterId) || new Set();
+    var wasUnderstood = items.has(itemId);
+    if (wasUnderstood) {
+      items.delete(itemId);
+    } else {
+      items.add(itemId);
+    }
+    learningProgress.set(chapterId, items);
+    persistLearningProgress();
+    syncLearningProgressUI(chapter);
+    var stats = getChapterLearningProgress(chapter);
+    if (!wasUnderstood && stats.done === stats.total) {
+      audio.playAchievement();
+      announce(chapter.title + " learning guide complete. You can revisit any section at any time.");
+    } else {
+      announce(wasUnderstood ? "Section marked for review." : "Section marked understood. " + stats.done + " of " + stats.total + " guide sections complete.");
+    }
+  }
+
+  function syncLearningProgressUI(chapter) {
+    var chapterId = String(chapter.id);
+    var stats = getChapterLearningProgress(chapter);
+    elements.main.querySelectorAll("button[data-learning-toggle][data-chapter-id='" + cssEscape(chapterId) + "']").forEach(function (button) {
+      var understood = isLearningUnderstood(chapter, button.dataset.learningToggle);
+      button.classList.toggle("is-understood", understood);
+      button.setAttribute("aria-pressed", String(understood));
+      button.textContent = understood ? "Understood ✓" : "Mark understood";
+    });
+    elements.main.querySelectorAll("[data-learning-item]").forEach(function (section) {
+      section.classList.toggle("is-understood", isLearningUnderstood(chapter, section.dataset.learningItem));
+    });
+    elements.main.querySelectorAll("[data-learning-toc]").forEach(function (tocButton) {
+      tocButton.classList.toggle("is-understood", isLearningUnderstood(chapter, tocButton.dataset.learningToc));
+    });
+    var count = elements.main.querySelector("[data-learning-progress-count='" + cssEscape(chapterId) + "']");
+    var bar = elements.main.querySelector("[data-learning-progress-bar='" + cssEscape(chapterId) + "']");
+    var status = elements.main.querySelector("[data-learning-progress-status='" + cssEscape(chapterId) + "']");
+    var panel = elements.main.querySelector("[data-learning-progress-panel='" + cssEscape(chapterId) + "']");
+    if (count) {
+      count.textContent = stats.done + " / " + stats.total;
+    }
+    if (bar) {
+      bar.max = Math.max(stats.total, 1);
+      bar.value = stats.done;
+      bar.setAttribute("aria-label", chapter.title + " learning guide: " + stats.done + " of " + stats.total + " sections understood");
+    }
+    if (status) {
+      status.textContent = stats.done === stats.total
+        ? "Guide complete — revisit any section whenever you need it."
+        : "Mark each concept after you can explain it in your own words.";
+    }
+    if (panel) {
+      panel.classList.toggle("is-complete", stats.done === stats.total);
+      var percent = panel.querySelector(".tutorial-progress__top > div > strong");
+      if (percent) {
+        percent.textContent = stats.percent + "% understood";
+      }
+    }
+  }
+
+  function togglePracticeReveal(button) {
+    var target = document.getElementById(button.dataset.revealPractice);
+    if (!target) {
+      return;
+    }
+    var expanded = button.getAttribute("aria-expanded") === "true";
+    button.setAttribute("aria-expanded", String(!expanded));
+    button.textContent = expanded ? "Reveal coaching note" : "Hide coaching note";
+    target.hidden = expanded;
+    if (!expanded) {
+      announce("Coaching note revealed. Compare it with your prediction.");
+    }
+  }
+
+  function checkKnowledgeAnswer(button) {
+    var checkpoint = button.closest(".knowledge-check");
+    if (!checkpoint) {
+      return;
+    }
+    var selectedIndex = Number(button.dataset.checkpointOption);
+    var answerIndex = Number(button.dataset.answerIndex);
+    var correct = Number.isInteger(answerIndex) && selectedIndex === answerIndex;
+    checkpoint.querySelectorAll("button[data-checkpoint-option]").forEach(function (option) {
+      option.classList.remove("is-correct", "is-incorrect");
+      option.setAttribute("aria-pressed", String(option === button));
+    });
+    button.classList.add(correct ? "is-correct" : "is-incorrect");
+    var feedback = checkpoint.querySelector(".knowledge-check__feedback");
+    if (feedback) {
+      feedback.hidden = false;
+      feedback.classList.toggle("is-correct", correct);
+      feedback.classList.toggle("is-incorrect", !correct);
+      feedback.textContent = correct
+        ? "Correct. " + checkpoint.dataset.checkpointExplanation
+        : "Not quite. Trace the mental-model steps once more, then choose again.";
+    }
+    announce(correct ? "Checkpoint correct." : "Checkpoint answer is not correct yet. Try again.");
   }
 
   function writeClipboardText(value) {
@@ -2148,6 +2525,68 @@
       : null;
   }
 
+  function getLearningItemIds(chapter) {
+    var content = getChapterLearning(chapter);
+    var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
+    var itemIds = tutorials.map(function (_tutorial, index) {
+      return "tutorial-" + index;
+    });
+    itemIds.push("runbook");
+    return itemIds;
+  }
+
+  function getChapterLearningProgress(chapter) {
+    var itemIds = getLearningItemIds(chapter);
+    var understood = learningProgress && learningProgress.get(String(chapter.id));
+    var done = itemIds.reduce(function (count, itemId) {
+      return count + (understood && understood.has(itemId) ? 1 : 0);
+    }, 0);
+    return {
+      done: done,
+      total: itemIds.length,
+      percent: itemIds.length ? Math.round((done / itemIds.length) * 100) : 0
+    };
+  }
+
+  function isLearningUnderstood(chapter, itemId) {
+    var items = learningProgress && learningProgress.get(String(chapter.id));
+    return Boolean(items && items.has(itemId));
+  }
+
+  function readLearningProgress() {
+    var result = new Map();
+    var raw = safeRead(STORAGE_KEYS.learning);
+    if (!raw) {
+      return result;
+    }
+    try {
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return result;
+      }
+      Object.keys(parsed).forEach(function (chapterId) {
+        if (!chapterById.has(chapterId) || !Array.isArray(parsed[chapterId])) {
+          return;
+        }
+        var validIds = new Set(getLearningItemIds(chapterById.get(chapterId)));
+        result.set(chapterId, new Set(parsed[chapterId].map(String).filter(function (itemId) {
+          return validIds.has(itemId);
+        })));
+      });
+      return result;
+    } catch (error) {
+      return new Map();
+    }
+  }
+
+  function persistLearningProgress() {
+    var serialized = {};
+    learningProgress.forEach(function (items, chapterId) {
+      serialized[chapterId] = Array.from(items).sort();
+    });
+    safeWrite(STORAGE_KEYS.learning, JSON.stringify(serialized));
+  }
+
   function renderBreadcrumbs(items) {
     var nav = el("nav", "breadcrumbs");
     var list = el("ol");
@@ -2552,6 +2991,6 @@
     );
     shell.append(card);
     elements.main.replaceChildren(shell);
-    document.title = "Data unavailable · Python Foundations";
+    document.title = "Data unavailable · Python EduGround";
   }
 })();

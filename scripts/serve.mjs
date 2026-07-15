@@ -255,7 +255,7 @@ server.listen(configuration.port, configuration.host, () => {
   const displayHost = configuration.host.includes(":") ? `[${configuration.host}]` : configuration.host;
   const url = `http://${displayHost}:${port}`;
 
-  console.log("Programming Foundations Playground");
+  console.log("Python EduGround");
   console.log(`Local server: ${url}`);
   console.log(`Serving: ${REPOSITORY_ROOT}`);
   console.log("Press Ctrl+C to stop.");

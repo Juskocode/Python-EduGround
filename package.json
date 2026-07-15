@@ -1,8 +1,8 @@
 {
-  "name": "programming-foundations-playground",
+  "name": "python-eduground",
   "version": "1.0.0",
   "private": true,
-  "description": "Local interactive Python exercise playground.",
+  "description": "Interactive, solution-free Python learning path with browser execution.",
   "scripts": {
     "serve": "node scripts/serve.mjs",
     "vendor:ace": "node scripts/vendor-ace.mjs",

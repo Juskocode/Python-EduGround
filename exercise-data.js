@@ -15,7 +15,7 @@
   const step = (title, body) => ({ title, body });
 
   window.COURSE_DATA = {
-    title: "Python Foundations Playground",
+    title: "Python EduGround",
     note: "The repository contains solutions but not the original statements. Every question below is a teaching prompt inferred from its filename, inputs, function signature, and observed behaviour.",
     chapters: [
       {
