@@ -5,6 +5,7 @@
 .env.local
 node_modules
 npm-debug.log*
+submissions/
 solution-code.js
 Py*/
 README.md

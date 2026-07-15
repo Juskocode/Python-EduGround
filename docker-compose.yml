@@ -27,11 +27,15 @@ services:
       DATABASE_SSL: "false"
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8000,http://127.0.0.1:8000}
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-2592000}
+      SUBMISSIONS_DIR: /app/submissions
       HOST: 0.0.0.0
       PORT: 8000
+    volumes:
+      - submissions_data:/app/submissions
     ports:
       - "${PORT:-8000}:8000"
     command: ["sh", "-c", "npm run migrate && npm run serve -- --host 0.0.0.0"]
 
 volumes:
   postgres_data:
+  submissions_data:

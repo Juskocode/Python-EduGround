@@ -67,6 +67,7 @@
   var stateSyncTimer = null;
   var suppressStateSync = false;
   var remoteFilesLoaded = new Set();
+  var accountFileSaves = new Map();
   var activeEditor = null;
   var activeRun = null;
   var currentRoute = null;
@@ -1400,6 +1401,16 @@
       el("span", "runtime-note__dot"),
       document.createTextNode(" Python runs in an isolated browser worker. Drafts stay local by default; after sign-in, your own code and progress sync to your account. Repository solutions are never loaded into this page.")
     );
+    var submissionSave = el(
+      "p",
+      "submission-save submission-save--" + (currentUser ? "ready" : "local"),
+      currentUser
+        ? "Save or Run tests to store this exact code in your account and create its chapter exNN.py file."
+        : "Local draft only. Sign in from your profile to create a durable chapter exNN.py file."
+    );
+    submissionSave.dataset.submissionSave = exerciseId;
+    submissionSave.setAttribute("role", "status");
+    submissionSave.setAttribute("aria-live", "polite");
     var results = el("section", "test-results");
     results.dataset.testResults = exerciseId;
     results.setAttribute("aria-live", "polite");
@@ -1410,7 +1421,7 @@
       results.append(renderResultsEmpty());
     }
 
-    section.append(heading, layout, runtime, results);
+    section.append(heading, layout, runtime, submissionSave, results);
     return section;
   }
 
@@ -1645,6 +1656,11 @@
     scheduleDraftSave(exerciseId, code, true);
 
     if (!authToken || !currentUser) {
+      setSubmissionSaveStatus(
+        exerciseId,
+        "local",
+        "Saved in this browser only. Sign in from your profile to create a durable chapter exNN.py file."
+      );
       showControlFeedback(button, "Saved locally", "Save", 1600);
       announce("Draft saved in this browser. Sign in from your profile if you also want it stored in PostgreSQL.");
       return;
@@ -1652,16 +1668,24 @@
 
     button.disabled = true;
     button.textContent = "Saving…";
-    setSyncStatus("working", "Saving " + filename + "…");
+    var saveSessionToken = authToken;
+    setSyncStatus("working", "Saving your Python file…");
+    setSubmissionSaveStatus(exerciseId, "working", "Saving this exact editor snapshot to your account…");
     try {
-      await apiRequest("/api/files/" + encodeURIComponent(exerciseId), {
-        method: "PUT",
-        body: { filename: filename, content: code }
-      });
-      setSyncStatus("success", filename + " saved locally and to your account.");
-      announce(filename + " saved locally and to your account.");
+      var file = await persistAccountExerciseFile(exerciseId, code);
+      var savedMessage = describeAccountFileSave(file, filename);
+      if (authToken !== saveSessionToken || !currentUser) {
+        return;
+      }
+      setSyncStatus("success", savedMessage);
+      setSubmissionSaveStatus(exerciseId, file.mirrorStatus === "saved" ? "success" : "account", savedMessage);
+      announce(savedMessage);
     } catch (error) {
+      if (authToken !== saveSessionToken || !currentUser) {
+        return;
+      }
       setSyncStatus("error", "Cloud save failed. Your local draft is safe.");
+      setSubmissionSaveStatus(exerciseId, "error", "Account save failed. Your exact code remains saved in this browser.");
       announce("Cloud save failed, but your local draft is safe. " + getErrorMessage(error));
     } finally {
       if (button.isConnected) {
@@ -1669,6 +1693,91 @@
         button.textContent = "Save";
       }
     }
+  }
+
+  function persistAccountExerciseFile(exerciseId, code) {
+    if (!authToken || !currentUser) {
+      return Promise.reject(new Error("Sign in to save a chapter file to your account."));
+    }
+
+    var exercise = exerciseById.get(exerciseId);
+    var filename = getSafePythonFilename(exercise);
+    var sessionToken = authToken;
+    var saveState = accountFileSaves.get(exerciseId);
+    if (!saveState) {
+      saveState = {
+        queuedCode: null,
+        queuedPromise: null,
+        tail: Promise.resolve()
+      };
+      accountFileSaves.set(exerciseId, saveState);
+    }
+
+    if (saveState.queuedPromise && saveState.queuedCode === code) {
+      return saveState.queuedPromise;
+    }
+
+    var savePromise = saveState.tail
+      .catch(function () {
+        // A later snapshot must still be attempted if an earlier save failed.
+      })
+      .then(function () {
+        return apiRequest("/api/files/" + encodeURIComponent(exerciseId), {
+          method: "PUT",
+          body: { content: code },
+          token: sessionToken
+        });
+      })
+      .then(function (response) {
+        var file = response && response.file ? response.file : { filename: filename };
+        return file;
+      });
+
+    saveState.tail = savePromise;
+    saveState.queuedCode = code;
+    saveState.queuedPromise = savePromise;
+    function finishSave() {
+      if (saveState.queuedPromise === savePromise) {
+        saveState.queuedCode = null;
+        saveState.queuedPromise = null;
+      }
+    }
+    savePromise.then(finishSave, finishSave);
+    return savePromise;
+  }
+
+  function describeAccountFileSave(file, fallbackFilename) {
+    if (file && (file.mirrorStatus === "disabled" || file.mirrorStatus === "unavailable")) {
+      return "Saved to your PostgreSQL account. The server chapter file is currently unavailable.";
+    }
+    var relativePath = file && (file.relativePath || file.path);
+    if (relativePath) {
+      return "Saved to " + relativePath + ".";
+    }
+    return (file && file.filename ? file.filename : fallbackFilename) + " saved to your account.";
+  }
+
+  function describeAccountFileLocation(file, fallbackFilename) {
+    if (file && (file.mirrorStatus === "disabled" || file.mirrorStatus === "unavailable")) {
+      return "Your PostgreSQL account has a saved snapshot. The server chapter file is currently unavailable.";
+    }
+    var relativePath = file && (file.relativePath || file.path);
+    if (relativePath) {
+      return "Account file ready at " + relativePath + ". Save or Run tests to update it.";
+    }
+    return "Account file ready as " + (file && file.filename ? file.filename : fallbackFilename) + ".";
+  }
+
+  function setSubmissionSaveStatus(exerciseId, kind, message) {
+    if (!isCurrentExercise(exerciseId)) {
+      return;
+    }
+    var status = elements.main.querySelector("[data-submission-save='" + cssEscape(exerciseId) + "']");
+    if (!status) {
+      return;
+    }
+    status.className = "submission-save submission-save--" + kind;
+    status.textContent = message;
   }
 
   function downloadExerciseFile(exerciseId, button) {
@@ -2111,6 +2220,46 @@
 
     var runToken = String(Date.now()) + "-" + exerciseId;
     activeRun = { token: runToken, exerciseId: exerciseId };
+    var runSessionToken = authToken && currentUser ? authToken : "";
+    var submissionSavePromise = null;
+    if (scope === "all") {
+      scheduleDraftSave(exerciseId, code, true);
+      if (authToken && currentUser) {
+        var submissionFilename = getSafePythonFilename(exercise);
+        var submissionSessionToken = authToken;
+        setSyncStatus("working", "Saving the submitted code…");
+        setSubmissionSaveStatus(exerciseId, "working", "Saving this exact test submission to your account…");
+        submissionSavePromise = persistAccountExerciseFile(exerciseId, code).then(
+          function (file) {
+            var message = describeAccountFileSave(file, submissionFilename);
+            if (authToken === submissionSessionToken && currentUser) {
+              setSyncStatus("success", message);
+              setSubmissionSaveStatus(exerciseId, file.mirrorStatus === "saved" ? "success" : "account", message);
+              announce("Test submission " + message.charAt(0).toLowerCase() + message.slice(1));
+            }
+            return { file: file };
+          },
+          function (error) {
+            if (authToken === submissionSessionToken && currentUser) {
+              setSyncStatus("error", "Submission file could not sync. Your local draft is safe.");
+              setSubmissionSaveStatus(
+                exerciseId,
+                "error",
+                "Tests will still run, but the account file could not be saved. Your exact code remains local."
+              );
+              announce("The submitted code remains local because its account file could not sync. " + getErrorMessage(error));
+            }
+            return { error: error };
+          }
+        );
+      } else {
+        setSubmissionSaveStatus(
+          exerciseId,
+          "local",
+          "This test submission is saved in this browser only. Sign in to create a durable chapter exNN.py file."
+        );
+      }
+    }
     audio.playSubmit();
     setIdeControlsLocked(true);
     button.textContent = scope === "visible" ? "Running…" : "Running tests…";
@@ -2146,12 +2295,17 @@
       if (scope === "all" && allPassed && selectedTests.length === allTests.length) {
         markExercisePassed(exerciseId);
       }
-      if (authToken && currentUser) {
+      if (submissionSavePromise) {
+        await submissionSavePromise;
+      }
+      if (runSessionToken) {
         try {
-          await persistRunDetails(exerciseId, scope, results, allPassed, stored.completedAt);
+          await persistRunDetails(exerciseId, scope, results, allPassed, stored.completedAt, runSessionToken);
         } catch (syncError) {
-          setSyncStatus("error", "Run finished locally, but its history could not sync.");
-          announce("Tests finished and remain valid locally. Run history could not sync: " + getErrorMessage(syncError));
+          if (authToken === runSessionToken && currentUser) {
+            setSyncStatus("error", "Run finished locally, but its history could not sync.");
+            announce("Tests finished and remain valid locally. Run history could not sync: " + getErrorMessage(syncError));
+          }
         }
       }
     } catch (error) {
@@ -2630,6 +2784,7 @@
       if (!authToken || !currentUser) {
         throw new Error("The server did not return a usable session.");
       }
+      accountFileSaves.clear();
       safeWrite(STORAGE_KEYS.authToken, authToken);
       try {
         await syncFromServerAndPush();
@@ -2642,6 +2797,7 @@
     } catch (error) {
       authToken = "";
       currentUser = null;
+      accountFileSaves.clear();
       safeRemove(STORAGE_KEYS.authToken);
       setSyncStatus("error", getErrorMessage(error));
       buttons.forEach(function (button) { button.disabled = false; });
@@ -2664,6 +2820,7 @@
       if (error && error.status === 401) {
         authToken = "";
         currentUser = null;
+        accountFileSaves.clear();
         safeRemove(STORAGE_KEYS.authToken);
         setSyncStatus("error", "Your session expired. Local work is still safe; sign in again to resume sync.");
       } else {
@@ -2707,7 +2864,15 @@
       authToken = "";
       currentUser = null;
       remoteFilesLoaded.clear();
+      accountFileSaves.clear();
       safeRemove(STORAGE_KEYS.authToken);
+      if (currentRoute && currentRoute.name === "exercise") {
+        setSubmissionSaveStatus(
+          String(currentRoute.exercise.id),
+          "local",
+          "Local draft only. Sign in from your profile to create a durable chapter exNN.py file."
+        );
+      }
       setSyncStatus("idle", "Local-only mode");
       renderProfile();
       announce("Signed out. Your browser drafts and progress remain available locally.");
@@ -2822,7 +2987,16 @@
     try {
       var response = await apiRequest("/api/files/" + encodeURIComponent(exerciseId));
       var file = response && response.file;
-      if (!file || typeof file.content !== "string" || drafts.has(exerciseId)) {
+      if (!file || typeof file.content !== "string") {
+        remoteFilesLoaded.add(exerciseId);
+        return;
+      }
+      setSubmissionSaveStatus(
+        exerciseId,
+        file.mirrorStatus === "saved" ? "account" : "ready",
+        describeAccountFileLocation(file, getSafePythonFilename(exerciseById.get(exerciseId)))
+      );
+      if (drafts.has(exerciseId)) {
         remoteFilesLoaded.add(exerciseId);
         return;
       }
@@ -2848,10 +3022,11 @@
     }
   }
 
-  function persistRunDetails(exerciseId, scope, results, allPassed, completedAt) {
+  function persistRunDetails(exerciseId, scope, results, allPassed, completedAt, sessionToken) {
     var passedCount = results.filter(function (result) { return result.passed; }).length;
     return apiRequest("/api/runs", {
       method: "POST",
+      token: sessionToken,
       body: {
         exerciseId: exerciseId,
         scope: scope,
@@ -2884,8 +3059,9 @@
     if (config.body !== undefined) {
       headers["Content-Type"] = "application/json";
     }
-    if (config.authenticated !== false && authToken) {
-      headers.Authorization = "Bearer " + authToken;
+    var requestToken = Object.prototype.hasOwnProperty.call(config, "token") ? config.token : authToken;
+    if (config.authenticated !== false && requestToken) {
+      headers.Authorization = "Bearer " + requestToken;
     }
     try {
       var response = await fetch(path, {

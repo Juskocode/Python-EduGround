@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --chown=node:node . .
+RUN mkdir -p /app/submissions && chown node:node /app/submissions && chmod 700 /app/submissions
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0

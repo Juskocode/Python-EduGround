@@ -6,7 +6,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApiHandler } from "../server/api.mjs";
 import { createDatabase } from "../server/database.mjs";
+import { listExerciseFiles } from "../server/exercise-manifest.mjs";
 import { resolveRequestedFile, streamStaticFile } from "../server/static.mjs";
+import {
+  createSubmissionFileStore,
+  resolveSubmissionsDirectory,
+} from "../server/submission-files.mjs";
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = resolve(SCRIPT_DIRECTORY, "..");
@@ -101,7 +106,27 @@ try {
 }
 
 const database = createDatabase(process.env, console);
-const handleApi = createApiHandler({ database, environment: process.env, logger: console });
+const submissionsDirectory = resolveSubmissionsDirectory(
+  process.env,
+  resolve(REPOSITORY_ROOT, "submissions")
+);
+const solutionDirectories = [
+  ...new Set(listExerciseFiles().map((exercise) => exercise.chapterDirectory)),
+].map((directory) => resolve(REPOSITORY_ROOT, directory));
+const publicAssetDirectories = ["assets", "test-data", "docs/screenshots"].map((directory) =>
+  resolve(REPOSITORY_ROOT, directory)
+);
+const submissionFiles = createSubmissionFileStore({
+  rootDirectory: submissionsDirectory,
+  forbiddenDirectories: [...solutionDirectories, ...publicAssetDirectories],
+  logger: console,
+});
+const handleApi = createApiHandler({
+  database,
+  submissionFiles,
+  environment: process.env,
+  logger: console,
+});
 const server = createServer(async (request, response) => {
   setDevelopmentHeaders(response);
 
@@ -166,6 +191,11 @@ server.listen(configuration.port, configuration.host, () => {
     database.configured
       ? "Cloud save: PostgreSQL configured"
       : "Cloud save: unavailable (set DATABASE_URL to enable)"
+  );
+  console.log(
+    submissionFiles.configured
+      ? "Submission files: per-user chapter mirror configured"
+      : "Submission files: disabled (PostgreSQL remains authoritative)"
   );
   console.log("Press Ctrl+C to stop.");
 });

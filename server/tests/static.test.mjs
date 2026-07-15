@@ -37,6 +37,7 @@ test("solutions and backend or deployment files are not served", async () => {
     "/package.json",
     "/package-lock.json",
     "/docker-compose.yml",
+    "/submissions/learner/Py01%20First%20Programs/ex00.py",
     "/.env",
     "/docs/ROADMAP.md",
   ]) {

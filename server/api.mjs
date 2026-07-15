@@ -1,4 +1,5 @@
 import { DatabaseUnavailableError } from "./database.mjs";
+import { getExerciseFile } from "./exercise-manifest.mjs";
 import { HttpError, readJson, requireMethod, sendJson } from "./http.mjs";
 import {
   createSessionToken,
@@ -42,12 +43,15 @@ function publicUser(row) {
   };
 }
 
-function publicFile(row) {
+function publicFile(row, mirror, exercise) {
   return {
     exerciseId: row.exercise_id,
-    filename: row.filename,
+    filename: exercise.filename,
     content: row.content,
     updatedAt: asIsoString(row.updated_at),
+    relativePath: mirror.relativePath,
+    path: mirror.relativePath,
+    mirrorStatus: mirror.status,
   };
 }
 
@@ -77,6 +81,15 @@ function validateExerciseId(value) {
     throw new HttpError(400, "INVALID_EXERCISE_ID", "Exercise id is invalid.");
   }
   return value;
+}
+
+function requireKnownExercise(value) {
+  const exerciseId = validateExerciseId(value);
+  const exercise = getExerciseFile(exerciseId);
+  if (!exercise) {
+    throw new HttpError(404, "EXERCISE_NOT_FOUND", "Exercise is not present in this course.");
+  }
+  return exercise;
 }
 
 function requestIp(request, trustProxy) {
@@ -216,7 +229,12 @@ function sendApiError(response, result, method) {
   sendJson(response, result.status, result.payload, method);
 }
 
-export function createApiHandler({ database, environment = process.env, logger = console }) {
+export function createApiHandler({
+  database,
+  submissionFiles,
+  environment = process.env,
+  logger = console,
+}) {
   const rateLimit = createRateLimiter();
   const trustProxy = environment.TRUST_PROXY === "true" || environment.TRUST_PROXY === "1";
   const configuredTtl = Number(environment.SESSION_TTL_SECONDS || 30 * 24 * 60 * 60);
@@ -390,49 +408,91 @@ export function createApiHandler({ database, environment = process.env, logger =
       const fileMatch = /^\/api\/files\/([^/]+)$/u.exec(pathname);
       if (fileMatch) {
         requireMethod(request, ["GET", "PUT"]);
-        let exerciseId;
+        let exercise;
         try {
-          exerciseId = validateExerciseId(decodeURIComponent(fileMatch[1]));
+          exercise = requireKnownExercise(decodeURIComponent(fileMatch[1]));
         } catch (error) {
           if (error instanceof URIError) {
             throw new HttpError(400, "INVALID_EXERCISE_ID", "Exercise id is invalid.");
           }
           throw error;
         }
+        const exerciseId = exercise.exerciseId;
         const user = await authenticate(request, database);
 
+        const materialize = async (content) => {
+          if (!submissionFiles?.save) {
+            return { status: "disabled", relativePath: exercise.relativePath, bytes: null };
+          }
+          try {
+            return await submissionFiles.save({ userId: user.id, exerciseId, content });
+          } catch (error) {
+            logger.warn("Could not materialize the PostgreSQL file mirror.", {
+              error: error?.code || error?.name || "Error",
+            });
+            return { status: "unavailable", relativePath: exercise.relativePath, bytes: null };
+          }
+        };
+
         if (request.method === "GET") {
-          const result = await database.query(
-            `SELECT exercise_id, filename, content, updated_at
-               FROM user_files
-              WHERE user_id = $1 AND exercise_id = $2`,
-            [user.id, exerciseId]
-          );
-          if (result.rowCount === 0) {
+          const stored = await database.transaction(async (client) => {
+            const result = await client.query(
+              `SELECT exercise_id, filename, content, updated_at
+                 FROM user_files
+                WHERE user_id = $1 AND exercise_id = $2
+                FOR UPDATE`,
+              [user.id, exerciseId]
+            );
+            if (result.rowCount === 0) return null;
+            let row = result.rows[0];
+            if (row.filename !== exercise.filename) {
+              const canonicalized = await client.query(
+                `UPDATE user_files
+                    SET filename = $3
+                  WHERE user_id = $1 AND exercise_id = $2
+                  RETURNING exercise_id, filename, content, updated_at`,
+                [user.id, exerciseId, exercise.filename]
+              );
+              row = canonicalized.rows[0];
+            }
+            const mirror = await materialize(row.content);
+            return { row, mirror };
+          });
+          if (!stored) {
             throw new HttpError(404, "FILE_NOT_FOUND", "No saved file exists for this exercise.");
           }
-          sendJson(response, 200, { file: publicFile(result.rows[0]) }, request.method);
+          sendJson(
+            response,
+            200,
+            { file: publicFile(stored.row, stored.mirror, exercise) },
+            request.method
+          );
           return true;
         }
 
         const body = await readJson(request);
-        const filename = requireString(body.filename?.trim(), "filename", { minimum: 1, maximum: 120 });
-        if (/[/\\\0\r\n]/u.test(filename) || filename === "." || filename === "..") {
-          throw new HttpError(400, "INVALID_INPUT", "filename must be a plain file name without a path.");
-        }
         const content = requireString(body.content, "content", { minimum: 0, maximum: FILE_MAX_BYTES });
         if (Buffer.byteLength(content) > FILE_MAX_BYTES) {
           throw new HttpError(413, "FILE_TOO_LARGE", "Saved code must be at most 256 KiB.");
         }
-        const result = await database.query(
-          `INSERT INTO user_files (user_id, exercise_id, filename, content, updated_at)
-           VALUES ($1, $2, $3, $4, NOW())
-           ON CONFLICT (user_id, exercise_id) DO UPDATE
-             SET filename = EXCLUDED.filename, content = EXCLUDED.content, updated_at = NOW()
-           RETURNING exercise_id, filename, content, updated_at`,
-          [user.id, exerciseId, filename, content]
+        const stored = await database.transaction(async (client) => {
+          const result = await client.query(
+            `INSERT INTO user_files (user_id, exercise_id, filename, content, updated_at)
+             VALUES ($1, $2, $3, $4, NOW())
+             ON CONFLICT (user_id, exercise_id) DO UPDATE
+               SET filename = EXCLUDED.filename, content = EXCLUDED.content, updated_at = NOW()
+             RETURNING exercise_id, filename, content, updated_at`,
+            [user.id, exerciseId, exercise.filename, content]
+          );
+          const mirror = await materialize(result.rows[0].content);
+          return { row: result.rows[0], mirror };
+        });
+        sendJson(
+          response,
+          200,
+          { file: publicFile(stored.row, stored.mirror, exercise) },
+          request.method
         );
-        sendJson(response, 200, { file: publicFile(result.rows[0]) }, request.method);
         return true;
       }
 
@@ -440,7 +500,7 @@ export function createApiHandler({ database, environment = process.env, logger =
         requireMethod(request, ["POST"]);
         const user = await authenticate(request, database);
         const body = await readJson(request);
-        const exerciseId = validateExerciseId(body.exerciseId);
+        const exerciseId = requireKnownExercise(body.exerciseId).exerciseId;
         const scope = requireString(body.scope, "scope", { minimum: 1, maximum: 32 });
         if (!RUN_SCOPE_PATTERN.test(scope)) {
           throw new HttpError(400, "INVALID_INPUT", "scope is invalid.");
