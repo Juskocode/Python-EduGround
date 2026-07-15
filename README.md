@@ -1,6 +1,6 @@
 # Python EduGround
 
-Python EduGround turns the 11 exercise chapters in this repository into a local, game-like Python learning path. Learners can study solution-free tutorials, follow a practical debugging runbook, write code in a full editor, execute Python in the browser, and earn stars only when every visible and hidden learning check passes.
+Python EduGround turns the 11 exercise chapters in this repository into a local-first, game-like Python learning path. Learners can study solution-free tutorials, work through practical runbooks, write code in a Monokai editor, run Python in the browser, and optionally sync their own work to PostgreSQL.
 
 ## Product tour
 
@@ -22,6 +22,10 @@ Python EduGround turns the 11 exercise chapters in this repository into a local,
 
 ![All tests passed with expected and actual output visible](docs/screenshots/test-results.jpg)
 
+### Optional account sync
+
+![Local-first profile with opt-in PostgreSQL registration and sign-in controls](docs/screenshots/account-sync.jpg)
+
 ## Current learning experience
 
 | Area | Included |
@@ -30,14 +34,15 @@ Python EduGround turns the 11 exercise chapters in this repository into a local,
 | Guided learning | 44 tutorials, 55 runbook phases, 55 mental-model steps, and 22 guided practices |
 | Reference material | 66 glossary terms, 66 debugging checks, and one checkpoint per chapter |
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, and progressive hints |
-| Editor | Vendored Ace editor with Python highlighting, autocomplete, search, folding, line numbers, saved drafts, and copy/paste controls |
-| Runner | Pyodide in an isolated browser worker with visible-only Run and complete Run tests actions |
+| Editor | Vendored Ace with a persistent Sublime or Vim keymap, fixed Monokai theme, Python highlighting, autocomplete, search, folding, line numbers, and copy/paste controls |
+| Files | Automatic browser drafts, explicit **Save**, and a **Download .py** action for a real local file |
+| Runner | Pyodide in an isolated browser worker; **Run** checks visible examples and **Run tests** adds hidden cases |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
 | Motivation | Chapter progress, difficulty stars, eight Pythonic ranks, ten badges, achievement toasts, and optional sound cues |
-| Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, and persistent mute state |
-| Privacy | Drafts, guide progress, exercise progress, ranks, and preferences stay in local browser storage |
+| Persistence | Local browser storage by default; optional email/password account sync backed by PostgreSQL |
+| Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
-Every chapter guide now combines five layers:
+Every chapter guide combines five layers:
 
 1. Four concept tutorials with unrelated examples, checklists, takeaways, and common pitfalls.
 2. A visual mental model that explains how values or control move through the chapter's topic.
@@ -45,20 +50,22 @@ Every chapter guide now combines five layers:
 4. A glossary, debugging checklist, and knowledge checkpoint.
 5. A five-phase runbook where every phase explains **why it matters**, **what to try when stuck**, and **what evidence proves the phase is complete**.
 
-Guide sections can be marked understood. Their progress persists separately from graded exercise passes so reading a tutorial never awards exercise stars.
+Guide sections can be marked understood. Their progress persists separately from graded exercise passes, so reading a tutorial never awards exercise stars.
 
 ## Run locally
 
 Requirements: a modern browser and Node.js 18 or newer.
+
+### Local-only mode
+
+No database is required for the complete curriculum, editor, browser runner, local drafts, or local progress:
 
 ```bash
 npm ci
 npm run serve
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
-
-The development server has no runtime dependencies, binds to the local machine by default, serves JavaScript modules with the correct MIME types, and disables caching. A different host or port can be selected when needed:
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). A different host or port can be selected when needed:
 
 ```bash
 node scripts/serve.mjs --port 4173
@@ -68,9 +75,27 @@ node scripts/serve.mjs --help
 
 HTTP serving is required for the module-based Python worker. Ace is checked into the repository. The first Python run downloads a pinned Pyodide runtime from jsDelivr, with a separately pinned UNPKG fallback, so the initial run needs an internet connection.
 
+### PostgreSQL account sync
+
+The shortest Docker-backed setup is:
+
+```bash
+docker-compose up --build
+```
+
+The Compose stack creates PostgreSQL storage, applies the checked-in migrations, and serves the app. For a manually managed or hosted database:
+
+```bash
+export DATABASE_URL='postgresql://eduground:change-this-password@127.0.0.1:5432/eduground'
+npm run migrate
+npm run serve
+```
+
+Database-backed saving is opt-in from the profile menu. Unsigned learners remain local-only. See [docs/PERSISTENCE.md](docs/PERSISTENCE.md) for the complete data model, environment reference, deployment, backup, restore, security, and deletion guidance.
+
 ## Navigation
 
-The app uses bookmarkable hash routes, so every view works with the local static server.
+The app uses bookmarkable hash routes:
 
 | Route | View |
 | --- | --- |
@@ -85,12 +110,30 @@ Legacy routes such as `#py01` redirect to the corresponding chapter hub.
 
 ## Editor controls
 
-- **Run** executes only the visible examples.
-- **Run tests** adds the hidden learning checks and awards stars after a completely green run.
-- **Copy** and **Paste** provide explicit clipboard controls alongside normal editor shortcuts.
-- **Restart** restores the clean solution-free starter for the current exercise.
-- `Ctrl/Command + Enter` runs the complete suite.
-- `Ctrl/Command + S` saves the current draft immediately.
+- Choose **Sublime** or **Vim** from the **Keys** selector. The selection persists; the visual theme remains Monokai.
+- `Shift + Enter` runs the visible examples.
+- `Ctrl/Command + Enter` runs the complete visible and hidden suite.
+- `Ctrl/Command + S` performs the same explicit save as the **Save** button.
+- **Save** always flushes the browser draft and, when signed in, also saves that exercise file to the learner's PostgreSQL account.
+- **Download .py** creates a normal Python file through the browser, whether signed in or not.
+- **Copy** and **Paste** complement normal editor or Vim/Sublime clipboard commands.
+- **Restart** restores the clean, solution-free starter for the current exercise.
+
+Typing is auto-saved to browser storage after a short delay. Signed-in progress and drafts are also synchronized in the background; the explicit **Save** action creates or updates the account's named exercise file.
+
+## What is saved
+
+| Data | Unsigned learner | Signed-in learner |
+| --- | --- | --- |
+| Draft code | Browser storage | Browser storage and account state |
+| Explicitly saved exercise file | Browser draft; optional `.py` download | PostgreSQL `user_files` record and browser draft |
+| Passed exercises and stars | Browser storage | Browser storage and PostgreSQL account state |
+| Guide markers | Browser storage | Browser storage and PostgreSQL account state |
+| Editor keymap | Browser storage | Browser storage and PostgreSQL account state |
+| Complete run details | Current page memory only | PostgreSQL run-history record; current UI does not yet reload this history |
+| Theme and sound | Browser storage | Browser storage only |
+
+Local storage is scoped to the exact browser origin. For example, `127.0.0.1:8000` and `localhost:8000` have different local drafts. Account data is attached to the PostgreSQL database and can follow a learner to another deployment after they sign in there with the same account credentials.
 
 ## Validate the repository
 
@@ -100,7 +143,7 @@ node --check python-runner-worker.mjs
 git diff --check
 ```
 
-`npm run validate` checks application syntax, all 11 chapter definitions, all 92 exercise definitions, all 281 tests, every solution-free starter, every tutorial and runbook phase, and the complete deep-learning schema.
+`npm run validate` checks application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 tests, every solution-free starter, every tutorial and runbook phase, and the complete deep-learning schema.
 
 The release smoke flow also covers:
 
@@ -108,6 +151,8 @@ The release smoke flow also covers:
 - Persistent tutorial-understanding markers.
 - Guided-practice reveal and chapter checkpoint feedback.
 - Safe starter code with no repository answer loaded into the page.
+- Sublime/Vim switching, Monokai styling, and editor keyboard shortcuts.
+- Local and signed-in file saving.
 - All-green execution across visible and hidden tests.
 - Failure output with expected/actual fields and Python tracebacks.
 - Dark mode, copy/paste controls, ranks, badges, and local persistence.
@@ -116,9 +161,9 @@ The release smoke flow also covers:
 
 | Path | Responsibility |
 | --- | --- |
-| `index.html` | Stable application shell and asset loading order |
-| `course-ui.css` | Responsive light/dark UI, learning guide, runbook, and IDE layout |
-| `course-app.js` | Router, views, persistence, profile, editor adapter, runner controls, and result rendering |
+| `index.html` | Stable application shell and vendored asset loading order |
+| `course-ui.css` | Responsive light/dark UI, learning guide, account panel, runbook, and IDE layout |
+| `course-app.js` | Router, views, local/account persistence, profile, editor adapter, runner controls, and result rendering |
 | `learning-content.js` | Ranks, badges, tutorials, deep dives, checkpoints, and runbooks |
 | `exercise-data.js` | Chapters, prompts, topics, source paths, and hints |
 | `test-data/` | 186 visible and 95 hidden learning checks |
@@ -126,16 +171,21 @@ The release smoke flow also covers:
 | `solution-code.js` | Build-time repository artifact that is deliberately not loaded by the learner page |
 | `audio-feedback.js` | Synthesized click, result, and achievement cues |
 | `python-runner-worker.mjs` | Isolated Python execution, output capture, timeout handling, and traceback capture |
-| `assets/vendor/ace/` | Pinned Ace 1.44.0 runtime and license |
-| `scripts/validate-learning-content.mjs` | Tutorial, deep-dive, checkpoint, and solution-isolation validation |
+| `assets/vendor/ace/` | Pinned Ace 1.44.0 runtime, Monokai theme, Sublime/Vim keymaps, and license |
+| `server/` | Same-origin HTTP API, authentication, PostgreSQL access, security helpers, and static serving |
+| `db/migrations/` | Ordered, checksum-protected PostgreSQL schema migrations |
+| `scripts/migrate.mjs` | Migration command used locally and during deployment |
+| `docs/PERSISTENCE.md` | Account sync, deployment durability, backup/restore, and security guide |
 
-## Content and assessment transparency
+## Content, privacy, and assessment transparency
 
 The repository contains Python solutions but not the original problem statements or tests. The teaching prompts, contracts, hints, tutorial content, and tests are learning-oriented reconstructions inferred from visible filenames, signatures, inputs, and solution behaviour. They are not official or verbatim course questions.
 
-Hidden cases stay masked in the interface until a complete run returns. Because this is a static local application, their JavaScript definitions remain inspectable; they are useful learning checks, not secure assessment secrets. A future hosted assessment mode would need server-side execution and server-held tests.
+Hidden cases stay masked in the interface until a complete run returns. Their JavaScript definitions remain inspectable in the browser, so they are useful learning checks rather than secure assessment secrets. A genuinely secret assessment would require server-side execution and server-held tests.
 
-`solution-code.js` supports local generation and validation only. It is not requested by `index.html`, `window.SOLUTION_CODE` is not created in the learner page, and editor resets restore a safe starter rather than an answer.
+`solution-code.js` supports local generation and validation only. It is not requested by `index.html`, `window.SOLUTION_CODE` is not created in the learner page, and editor resets restore a safe starter rather than an answer. The server uses a public-file allowlist, so the solution bundle, original `Py*/` sources, migrations, backend modules, and deployment secrets are not downloadable from the web application.
+
+Unsigned use sends no learner code or progress to the application API. Creating an account opts into syncing drafts, saved files, progress, editor mode, and detailed test results to the configured PostgreSQL database. Python code still executes in the browser, not on the Node server. See [the persistence security notes](docs/PERSISTENCE.md#security-limitations) before exposing account sync publicly.
 
 ## Refresh generated or vendored artifacts
 
@@ -155,4 +205,4 @@ npm run vendor:ace
 
 ## Future improvements
 
-The prioritized, issue-ready backlog is in [docs/ROADMAP.md](docs/ROADMAP.md). It covers release hygiene, continuous browser testing, accessibility, runnable micro-labs, safer draft handling, performance, offline support, data portability, and curriculum authoring.
+The prioritized, issue-ready backlog is in [docs/ROADMAP.md](docs/ROADMAP.md). It now treats editor modes, file downloads, and optional PostgreSQL sync as delivered foundations and focuses future work on production account security, conflict visibility, run-history UX, CI, accessibility, performance, offline use, data portability, and curriculum authoring.
