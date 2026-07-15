@@ -6,7 +6,9 @@
     drafts: "fp-playground.drafts.v2",
     theme: "fp-playground.theme.v1",
     lastExercise: "fp-playground.last-exercise.v2",
-    learning: "fp-playground.learning.v1"
+    learning: "fp-playground.learning.v1",
+    editorMode: "fp-playground.editor-mode.v1",
+    authToken: "fp-playground.auth-token.v1"
   };
 
   var elements = {
@@ -55,9 +57,16 @@
   }));
   var drafts = readDrafts();
   var learningProgress = readLearningProgress();
+  var editorMode = readEditorMode();
+  var authToken = safeRead(STORAGE_KEYS.authToken) || "";
+  var currentUser = null;
+  var syncState = { kind: "idle", message: authToken ? "Restoring your session…" : "Local-only mode" };
   var revealedHints = new Map();
   var runResults = new Map();
   var draftPersistTimer = null;
+  var stateSyncTimer = null;
+  var suppressStateSync = false;
+  var remoteFilesLoaded = new Set();
   var activeEditor = null;
   var activeRun = null;
   var currentRoute = null;
@@ -78,10 +87,13 @@
   elements.soundToggle.addEventListener("click", toggleSound);
   elements.profileButton.addEventListener("click", toggleProfile);
   elements.profilePanel.addEventListener("click", handleProfileClick);
+  elements.profilePanel.addEventListener("submit", handleProfileSubmit);
   elements.main.addEventListener("click", handleMainClick);
+  elements.main.addEventListener("change", handleMainChange);
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("pointerdown", unlockAudio, { once: true });
   document.addEventListener("keydown", handleDocumentKeydown);
+  restoreAuthenticatedSession();
 
   function renderRoute(announceChange) {
     var parsed = parseRoute();
@@ -381,7 +393,7 @@
     var choiceHeading = el("header", "section-heading");
     choiceHeading.append(
       el("h2", null, "What would you like to do?"),
-      el("p", null, "Study the ideas first or jump into the exercises. Your progress stays in sync.")
+      el("p", null, "Study the ideas first or jump into the exercises. Progress saves locally, with optional account sync.")
     );
     var choiceGrid = el("div", "choice-grid");
     var exercisesChoice = renderChoiceCard({
@@ -940,7 +952,13 @@
     heroCopy.append(
       el("p", "eyebrow", "Learner profile"),
       el("h1", null, "Your Python constellation"),
-      el("p", null, "Ranks and badges are calculated from full test passes. Nothing leaves this browser.")
+      el(
+        "p",
+        null,
+        currentUser
+          ? "Ranks and badges come from full test passes and are included in your opt-in account sync."
+          : "Ranks and badges come from full test passes and remain in this browser unless you choose to sign in."
+      )
     );
     var heroStats = el("div", "badges-hero__stats");
     heroStats.append(
@@ -1191,15 +1209,38 @@
     modified.setAttribute("aria-label", "Starter code");
     fileTab.append(el("span", "ide-file-tab__type", "PY"), el("span", null, getExerciseFileName(exercise)), modified);
     var actions = el("div", "ide-actions");
+    var modeField = el("label", "ide-mode-field");
+    var modeLabel = el("span", null, "Keys");
+    var modeSelect = el("select", "ide-mode-select");
     var copyButton = el("button", "ide-button ide-button--quiet", "Copy");
     var pasteButton = el("button", "ide-button ide-button--quiet", "Paste");
+    var saveButton = el("button", "ide-button ide-button--quiet", "Save");
+    var downloadButton = el("button", "ide-button ide-button--quiet", "Download .py");
     var resetButton = el("button", "ide-button ide-button--quiet", "Restart");
     var runButton = el("button", "ide-button ide-button--run", "Run");
     var testsButton = el("button", "ide-button ide-button--tests", "Run tests");
+    modeSelect.dataset.editorMode = exerciseId;
+    modeSelect.setAttribute("aria-label", "Editor keyboard mode");
+    [
+      { value: "sublime", label: "Sublime" },
+      { value: "vim", label: "Vim" }
+    ].forEach(function (optionData) {
+      var option = el("option", null, optionData.label);
+      option.value = optionData.value;
+      option.selected = optionData.value === editorMode;
+      modeSelect.append(option);
+    });
+    modeField.append(modeLabel, modeSelect);
     copyButton.type = "button";
     copyButton.dataset.copyCode = exerciseId;
     pasteButton.type = "button";
     pasteButton.dataset.pasteCode = exerciseId;
+    saveButton.type = "button";
+    saveButton.dataset.saveFile = exerciseId;
+    saveButton.setAttribute("aria-label", "Save Python file locally and to your account when signed in");
+    downloadButton.type = "button";
+    downloadButton.dataset.downloadFile = exerciseId;
+    downloadButton.setAttribute("aria-label", "Download current Python code as a .py file");
     resetButton.type = "button";
     resetButton.dataset.resetCode = exerciseId;
     runButton.type = "button";
@@ -1210,7 +1251,7 @@
     testsButton.dataset.runScope = "all";
     runButton.disabled = !tests.some(function (test) { return !test.hidden; });
     testsButton.disabled = !tests.length;
-    actions.append(copyButton, pasteButton, resetButton, runButton, testsButton);
+    actions.append(modeField, copyButton, pasteButton, saveButton, downloadButton, resetButton, runButton, testsButton);
     topbar.append(windowControls, fileTab, actions);
 
     var frame = el("div", "ide-editor-frame");
@@ -1236,7 +1277,8 @@
       el("span", "ide-cursor-position", "Ln 1, Col 1"),
       el("span", null, "Spaces: 4"),
       el("span", null, "Python 3"),
-      el("span", "ide-shortcut", "Ctrl/⌘ + Enter · run tests")
+      el("span", "ide-shortcut", "Shift + Enter · run"),
+      el("span", "ide-shortcut", "Ctrl/⌘ + Enter · tests")
     );
     statusbar.append(editorState, details);
     editorShell.setAttribute("aria-label", "Python editor for " + exercise.title);
@@ -1248,7 +1290,7 @@
     var runtime = el("p", "runtime-note");
     runtime.append(
       el("span", "runtime-note__dot"),
-      document.createTextNode(" Python loads in an isolated browser worker on the first run. Your draft saves locally; repository solutions are never loaded into this page.")
+      document.createTextNode(" Python runs in an isolated browser worker. Drafts stay local by default; after sign-in, your own code and progress sync to your account. Repository solutions are never loaded into this page.")
     );
     var results = el("section", "test-results");
     results.dataset.testResults = exerciseId;
@@ -1337,6 +1379,8 @@
     var resetButton = event.target.closest("button[data-reset-code]");
     var copyCodeButton = event.target.closest("button[data-copy-code]");
     var pasteCodeButton = event.target.closest("button[data-paste-code]");
+    var saveFileButton = event.target.closest("button[data-save-file]");
+    var downloadFileButton = event.target.closest("button[data-download-file]");
     var copySnippetButton = event.target.closest("button[data-copy-snippet]");
     var learningButton = event.target.closest("button[data-learning-toggle]");
     var practiceRevealButton = event.target.closest("button[data-reveal-practice]");
@@ -1367,6 +1411,14 @@
       pasteIntoExercise(pasteCodeButton.dataset.pasteCode, pasteCodeButton);
       return;
     }
+    if (saveFileButton) {
+      saveExerciseFile(saveFileButton.dataset.saveFile, saveFileButton);
+      return;
+    }
+    if (downloadFileButton) {
+      downloadExerciseFile(downloadFileButton.dataset.downloadFile, downloadFileButton);
+      return;
+    }
     if (copySnippetButton) {
       copyTutorialSnippet(copySnippetButton);
       return;
@@ -1394,6 +1446,22 @@
     if (closeDialogButton) {
       closeBadgeDialog();
     }
+  }
+
+  function handleMainChange(event) {
+    var selector = event.target.closest("select[data-editor-mode]");
+    if (!selector) {
+      return;
+    }
+    var nextMode = selector.value === "vim" ? "vim" : "sublime";
+    editorMode = nextMode;
+    safeWrite(STORAGE_KEYS.editorMode, nextMode);
+    if (activeEditor && activeEditor.exerciseId === selector.dataset.editorMode) {
+      activeEditor.setKeyboardMode(nextMode);
+      activeEditor.focus();
+    }
+    queueStateSync();
+    announce((nextMode === "vim" ? "Vim" : "Sublime") + " keyboard mode enabled. Monokai remains active.");
   }
 
   function revealNextHint(exerciseId) {
@@ -1457,6 +1525,67 @@
       activeEditor.focus();
       announce("Direct paste was blocked. The editor is focused; use Ctrl or Command plus V.");
     }
+  }
+
+  async function saveExerciseFile(exerciseId, button) {
+    var exercise = exerciseById.get(exerciseId);
+    var code = getActiveCode(exerciseId);
+    if (!exercise || code === null) {
+      return;
+    }
+    var filename = getSafePythonFilename(exercise);
+    scheduleDraftSave(exerciseId, code, true);
+
+    if (!authToken || !currentUser) {
+      showControlFeedback(button, "Saved locally", "Save", 1600);
+      announce("Draft saved in this browser. Sign in from your profile if you also want it stored in PostgreSQL.");
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Saving…";
+    setSyncStatus("working", "Saving " + filename + "…");
+    try {
+      await apiRequest("/api/files/" + encodeURIComponent(exerciseId), {
+        method: "PUT",
+        body: { filename: filename, content: code }
+      });
+      setSyncStatus("success", filename + " saved locally and to your account.");
+      announce(filename + " saved locally and to your account.");
+    } catch (error) {
+      setSyncStatus("error", "Cloud save failed. Your local draft is safe.");
+      announce("Cloud save failed, but your local draft is safe. " + getErrorMessage(error));
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+        button.textContent = "Save";
+      }
+    }
+  }
+
+  function downloadExerciseFile(exerciseId, button) {
+    var exercise = exerciseById.get(exerciseId);
+    var code = getActiveCode(exerciseId);
+    if (!exercise || code === null) {
+      return;
+    }
+    var filename = getSafePythonFilename(exercise);
+    scheduleDraftSave(exerciseId, code, true);
+    downloadTextFile(filename, code);
+    showControlFeedback(button, "Downloaded", "Download .py", 1600);
+    announce(filename + " downloaded. Your browser draft is also saved locally.");
+  }
+
+  function downloadTextFile(filename, content) {
+    var blob = new Blob([content], { type: "text/x-python;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 0);
   }
 
   async function copyTutorialSnippet(button) {
@@ -1630,7 +1759,9 @@
     var state = elements.main.querySelector("[data-editor-state='" + cssEscape(exerciseId) + "']");
     var modified = elements.main.querySelector("[data-editor-modified='" + cssEscape(exerciseId) + "']");
     var position = elements.main.querySelector(".ide-cursor-position");
+    var runButton = elements.main.querySelector("button[data-run-exercise='" + cssEscape(exerciseId) + "'][data-run-scope='visible']");
     var runTestsButton = elements.main.querySelector("button[data-run-exercise='" + cssEscape(exerciseId) + "'][data-run-scope='all']");
+    var saveButton = elements.main.querySelector("button[data-save-file='" + cssEscape(exerciseId) + "']");
 
     if (!textarea || !host || !state || !modified || !position) {
       return;
@@ -1644,10 +1775,24 @@
     textarea.addEventListener("keyup", function () { updateTextareaPosition(textarea, position); });
     textarea.addEventListener("click", function () { updateTextareaPosition(textarea, position); });
     textarea.addEventListener("keydown", function (event) {
+      if (event.shiftKey && !event.ctrlKey && !event.metaKey && event.key === "Enter") {
+        event.preventDefault();
+        if (runButton && !runButton.disabled) {
+          runButton.click();
+        }
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
         if (runTestsButton && !runTestsButton.disabled) {
           runTestsButton.click();
+        }
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        if (saveButton && !saveButton.disabled) {
+          saveButton.click();
         }
       }
     });
@@ -1657,6 +1802,7 @@
     if (!window.ace || typeof window.ace.edit !== "function") {
       activeEditor = createTextareaAdapter(exerciseId, textarea, state, modified, position);
       state.textContent = "Basic editor fallback";
+      loadRemoteExerciseFile(exerciseId);
       return;
     }
 
@@ -1668,6 +1814,7 @@
         value: textarea.value,
         mode: "ace/mode/python",
         theme: "ace/theme/monokai",
+        keyboardHandler: getAceKeyboardHandler(editorMode),
         fontFamily: "SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
         fontSize: window.matchMedia("(max-width: 640px)").matches ? "16px" : "15px",
         tabSize: 4,
@@ -1695,6 +1842,15 @@
       textarea.hidden = true;
 
       aceEditor.commands.addCommand({
+        name: "runVisibleExerciseExamples",
+        bindKey: { win: "Shift-Enter", mac: "Shift-Enter" },
+        exec: function () {
+          if (runButton && !runButton.disabled) {
+            runButton.click();
+          }
+        }
+      });
+      aceEditor.commands.addCommand({
         name: "runAllExerciseTests",
         bindKey: { win: "Ctrl-Enter", mac: "Command-Enter" },
         exec: function () {
@@ -1707,9 +1863,9 @@
         name: "saveExerciseDraft",
         bindKey: { win: "Ctrl-S", mac: "Command-S" },
         exec: function () {
-          scheduleDraftSave(exerciseId, aceEditor.getValue(), true);
-          state.textContent = "Draft saved locally";
-          announce("Draft saved for " + exercise.title + ".");
+          if (saveButton && !saveButton.disabled) {
+            saveButton.click();
+          }
         }
       });
 
@@ -1744,6 +1900,9 @@
           syncPosition();
         },
         focus: function () { aceEditor.focus(); },
+        setKeyboardMode: function (mode) {
+          aceEditor.setKeyboardHandler(getAceKeyboardHandler(mode));
+        },
         destroy: function () {
           var value = aceEditor.getValue();
           textarea.value = value;
@@ -1753,6 +1912,7 @@
         }
       };
       aceEditor.resize(true);
+      loadRemoteExerciseFile(exerciseId);
     } catch (error) {
       if (aceEditor && typeof aceEditor.destroy === "function") {
         aceEditor.destroy();
@@ -1762,6 +1922,7 @@
       textarea.hidden = false;
       activeEditor = createTextareaAdapter(exerciseId, textarea, state, modified, position);
       state.textContent = "Basic editor fallback";
+      loadRemoteExerciseFile(exerciseId);
     }
   }
 
@@ -1781,6 +1942,7 @@
         textarea.dispatchEvent(new Event("input", { bubbles: true }));
       },
       focus: function () { textarea.focus(); },
+      setKeyboardMode: function () {},
       destroy: function () {
         scheduleDraftSave(exerciseId, textarea.value, true);
       }
@@ -1875,6 +2037,14 @@
       }
       if (scope === "all" && allPassed && selectedTests.length === allTests.length) {
         markExercisePassed(exerciseId);
+      }
+      if (authToken && currentUser) {
+        try {
+          await persistRunDetails(exerciseId, scope, results, allPassed, stored.completedAt);
+        } catch (syncError) {
+          setSyncStatus("error", "Run finished locally, but its history could not sync.");
+          announce("Tests finished and remain valid locally. Run history could not sync: " + getErrorMessage(syncError));
+        }
       }
     } catch (error) {
       audio.playFailure();
@@ -2172,8 +2342,89 @@
     }
     badges.append(badgesHeading, grid, detail);
 
-    var localNote = el("p", "profile-panel__local-note", "Profile, code, and progress are stored only in this browser.");
-    panel.replaceChildren(header, progress, metrics, badges, localNote);
+    var syncPanel = renderAccountSyncPanel();
+    var localNote = el(
+      "p",
+      "profile-panel__local-note",
+      currentUser
+        ? "Signed-in sync uploads only your own drafts, files, progress, editor mode, and run results. Repository solutions are never included."
+        : "Unsigned use is local-only. Nothing is uploaded until you create an account or sign in."
+    );
+    panel.replaceChildren(header, progress, metrics, badges, syncPanel, localNote);
+  }
+
+  function renderAccountSyncPanel() {
+    var section = el("section", "profile-sync");
+    var heading = el("div", "profile-panel__section-heading");
+    var status = el("p", "profile-sync__status profile-sync__status--" + syncState.kind, syncState.message);
+    status.dataset.syncStatus = "true";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    heading.append(el("strong", null, "Account & sync"), el("span", "profile-sync__mode", currentUser ? "Cloud on" : "Local only"));
+    section.append(heading);
+
+    if (currentUser) {
+      var identity = el("div", "profile-sync__identity");
+      identity.append(
+        el("span", "profile-sync__avatar", getUserInitials(currentUser)),
+        el("div", null)
+      );
+      identity.children[1].append(
+        el("strong", null, currentUser.displayName || "Python learner"),
+        el("span", null, currentUser.email || "Signed in")
+      );
+      var actions = el("div", "profile-sync__actions");
+      var syncButton = el("button", "button button--primary", "Sync now");
+      var signOutButton = el("button", "button button--quiet", "Sign out");
+      syncButton.type = "button";
+      syncButton.dataset.syncNow = "true";
+      signOutButton.type = "button";
+      signOutButton.dataset.signOut = "true";
+      actions.append(syncButton, signOutButton);
+      section.append(identity, status, actions);
+      return section;
+    }
+
+    section.append(
+      el("p", "profile-sync__disclosure", "Create an account or sign in to opt in. Your local work remains usable if the server is unavailable.")
+    );
+    var form = el("form", "profile-sync__form");
+    form.dataset.authForm = "true";
+    var nameLabel = el("label", "profile-sync__field");
+    var nameInput = el("input", "profile-sync__input");
+    nameInput.type = "text";
+    nameInput.name = "displayName";
+    nameInput.autocomplete = "name";
+    nameInput.maxLength = 80;
+    nameLabel.append(el("span", null, "Display name (new accounts)"), nameInput);
+    var emailLabel = el("label", "profile-sync__field");
+    var emailInput = el("input", "profile-sync__input");
+    emailInput.type = "email";
+    emailInput.name = "email";
+    emailInput.autocomplete = "email";
+    emailInput.required = true;
+    emailInput.maxLength = 320;
+    emailLabel.append(el("span", null, "Email"), emailInput);
+    var passwordLabel = el("label", "profile-sync__field");
+    var passwordInput = el("input", "profile-sync__input");
+    passwordInput.type = "password";
+    passwordInput.name = "password";
+    passwordInput.autocomplete = "current-password";
+    passwordInput.required = true;
+    passwordInput.minLength = 10;
+    passwordInput.maxLength = 256;
+    passwordLabel.append(el("span", null, "Password (10+ characters)"), passwordInput);
+    var actions = el("div", "profile-sync__actions");
+    var loginButton = el("button", "button button--primary", "Sign in");
+    var registerButton = el("button", "button button--quiet", "Create account");
+    loginButton.type = "submit";
+    loginButton.dataset.authAction = "login";
+    registerButton.type = "submit";
+    registerButton.dataset.authAction = "register";
+    actions.append(loginButton, registerButton);
+    form.append(nameLabel, emailLabel, passwordLabel, actions);
+    section.append(form, status);
+    return section;
   }
 
   function renderProfileMetric(icon, value, label) {
@@ -2204,6 +2455,16 @@
   }
 
   function handleProfileClick(event) {
+    var syncButton = event.target.closest("button[data-sync-now]");
+    var signOutButton = event.target.closest("button[data-sign-out]");
+    if (syncButton) {
+      manualSync(syncButton);
+      return;
+    }
+    if (signOutButton) {
+      signOut();
+      return;
+    }
     var badgeButton = event.target.closest("button[data-profile-badge]");
     if (!badgeButton) {
       if (event.target.closest("a")) {
@@ -2225,6 +2486,349 @@
       el("strong", null, selected.badge.name + (selected.unlocked ? " · Unlocked" : " · Locked")),
       el("p", null, selected.badge.description)
     );
+  }
+
+  function handleProfileSubmit(event) {
+    var form = event.target.closest("form[data-auth-form]");
+    if (!form) {
+      return;
+    }
+    event.preventDefault();
+    var action = event.submitter && event.submitter.dataset.authAction === "register" ? "register" : "login";
+    authenticate(form, action);
+  }
+
+  async function authenticate(form, action) {
+    var buttons = form.querySelectorAll("button[type='submit']");
+    var formData = new FormData(form);
+    var email = String(formData.get("email") || "").trim();
+    var password = String(formData.get("password") || "");
+    var displayName = String(formData.get("displayName") || "").trim();
+    buttons.forEach(function (button) { button.disabled = true; });
+    setSyncStatus("working", action === "register" ? "Creating your account…" : "Signing in…");
+    try {
+      var body = { email: email, password: password };
+      if (action === "register") {
+        var fallbackName = email.split("@")[0] || "";
+        body.displayName = displayName || (fallbackName.length >= 2 ? fallbackName : "Python learner");
+      }
+      var response = await apiRequest("/api/auth/" + action, {
+        method: "POST",
+        body: body,
+        authenticated: false
+      });
+      authToken = String(response.token || "");
+      currentUser = response.user || null;
+      if (!authToken || !currentUser) {
+        throw new Error("The server did not return a usable session.");
+      }
+      safeWrite(STORAGE_KEYS.authToken, authToken);
+      try {
+        await syncFromServerAndPush();
+      } catch (syncError) {
+        setSyncStatus("error", "Signed in, but sync is temporarily unavailable. Local work is safe.");
+      }
+      renderRoute(false);
+      openProfile();
+      announce("Signed in as " + (currentUser.displayName || currentUser.email) + ". Account sync is now enabled.");
+    } catch (error) {
+      authToken = "";
+      currentUser = null;
+      safeRemove(STORAGE_KEYS.authToken);
+      setSyncStatus("error", getErrorMessage(error));
+      buttons.forEach(function (button) { button.disabled = false; });
+    }
+  }
+
+  async function restoreAuthenticatedSession() {
+    if (!authToken) {
+      return;
+    }
+    try {
+      var response = await apiRequest("/api/me");
+      currentUser = response.user || null;
+      if (!currentUser) {
+        throw new Error("The saved session is no longer valid.");
+      }
+      await syncFromServerAndPush();
+      renderRoute(false);
+    } catch (error) {
+      if (error && error.status === 401) {
+        authToken = "";
+        currentUser = null;
+        safeRemove(STORAGE_KEYS.authToken);
+        setSyncStatus("error", "Your session expired. Local work is still safe; sign in again to resume sync.");
+      } else {
+        setSyncStatus("error", "Cloud sync is unavailable. Local mode remains fully usable.");
+      }
+      renderProfile();
+    }
+  }
+
+  async function manualSync(button) {
+    if (!authToken || !currentUser) {
+      return;
+    }
+    button.disabled = true;
+    setSyncStatus("working", "Merging local and account progress…");
+    flushDrafts();
+    try {
+      await syncFromServerAndPush();
+      renderRoute(false);
+      openProfile();
+      announce("Sync complete. Passed exercises and learning progress were merged safely.");
+    } catch (error) {
+      setSyncStatus("error", "Sync failed. No local work was removed. " + getErrorMessage(error));
+      if (button.isConnected) {
+        button.disabled = false;
+      }
+    }
+  }
+
+  async function signOut() {
+    window.clearTimeout(stateSyncTimer);
+    stateSyncTimer = null;
+    setSyncStatus("working", "Signing out…");
+    try {
+      if (authToken) {
+        await apiRequest("/api/auth/logout", { method: "POST", timeoutMs: 3000 });
+      }
+    } catch (error) {
+      // Local sign-out must still succeed if the API is offline.
+    } finally {
+      authToken = "";
+      currentUser = null;
+      remoteFilesLoaded.clear();
+      safeRemove(STORAGE_KEYS.authToken);
+      setSyncStatus("idle", "Local-only mode");
+      renderProfile();
+      announce("Signed out. Your browser drafts and progress remain available locally.");
+    }
+  }
+
+  async function syncFromServerAndPush() {
+    var response = await apiRequest("/api/state");
+    mergeRemoteState(response && response.state);
+    await pushLocalState();
+    setSyncStatus("success", "Synced just now");
+  }
+
+  function mergeRemoteState(remoteState) {
+    if (!remoteState || typeof remoteState !== "object" || Array.isArray(remoteState)) {
+      return;
+    }
+    suppressStateSync = true;
+    try {
+      if (Array.isArray(remoteState.passedIds)) {
+        remoteState.passedIds.map(String).forEach(function (exerciseId) {
+          if (validExerciseIds.has(exerciseId)) {
+            passed.add(exerciseId);
+          }
+        });
+      }
+      if (remoteState.drafts && typeof remoteState.drafts === "object" && !Array.isArray(remoteState.drafts)) {
+        Object.keys(remoteState.drafts).forEach(function (exerciseId) {
+          var value = remoteState.drafts[exerciseId];
+          if (validExerciseIds.has(exerciseId) && !drafts.has(exerciseId) && typeof value === "string" && value !== starterCode[exerciseId]) {
+            drafts.set(exerciseId, value);
+          }
+        });
+      }
+      if (remoteState.learningProgress && typeof remoteState.learningProgress === "object" && !Array.isArray(remoteState.learningProgress)) {
+        Object.keys(remoteState.learningProgress).forEach(function (chapterId) {
+          var chapter = chapterById.get(chapterId);
+          var remoteItems = remoteState.learningProgress[chapterId];
+          if (!chapter || !Array.isArray(remoteItems)) {
+            return;
+          }
+          var validItems = new Set(getLearningItemIds(chapter));
+          var mergedItems = learningProgress.get(chapterId) || new Set();
+          remoteItems.map(String).forEach(function (itemId) {
+            if (validItems.has(itemId)) {
+              mergedItems.add(itemId);
+            }
+          });
+          learningProgress.set(chapterId, mergedItems);
+        });
+      }
+      if (!safeRead(STORAGE_KEYS.editorMode) && (remoteState.editorMode === "vim" || remoteState.editorMode === "sublime")) {
+        editorMode = remoteState.editorMode;
+        safeWrite(STORAGE_KEYS.editorMode, editorMode);
+      }
+      persistPassed();
+      flushDrafts();
+      persistLearningProgress();
+    } finally {
+      suppressStateSync = false;
+    }
+  }
+
+  function serializeLocalState() {
+    var serializedDrafts = {};
+    var serializedLearning = {};
+    drafts.forEach(function (value, exerciseId) {
+      serializedDrafts[exerciseId] = value;
+    });
+    learningProgress.forEach(function (items, chapterId) {
+      serializedLearning[chapterId] = Array.from(items).sort();
+    });
+    return {
+      passedIds: Array.from(passed).sort(),
+      drafts: serializedDrafts,
+      learningProgress: serializedLearning,
+      editorMode: editorMode
+    };
+  }
+
+  async function pushLocalState() {
+    if (!authToken || !currentUser) {
+      return null;
+    }
+    return apiRequest("/api/state", {
+      method: "PUT",
+      body: { state: serializeLocalState() }
+    });
+  }
+
+  function queueStateSync() {
+    if (suppressStateSync || !authToken || !currentUser) {
+      return;
+    }
+    window.clearTimeout(stateSyncTimer);
+    stateSyncTimer = window.setTimeout(async function () {
+      stateSyncTimer = null;
+      setSyncStatus("working", "Saving account progress…");
+      try {
+        await pushLocalState();
+        setSyncStatus("success", "Changes synced");
+      } catch (error) {
+        setSyncStatus("error", "Cloud sync paused. Local changes are safe.");
+      }
+    }, 900);
+  }
+
+  async function loadRemoteExerciseFile(exerciseId) {
+    if (!authToken || !currentUser || remoteFilesLoaded.has(exerciseId)) {
+      return;
+    }
+    try {
+      var response = await apiRequest("/api/files/" + encodeURIComponent(exerciseId));
+      var file = response && response.file;
+      if (!file || typeof file.content !== "string" || drafts.has(exerciseId)) {
+        remoteFilesLoaded.add(exerciseId);
+        return;
+      }
+      if (!activeEditor || activeEditor.exerciseId !== exerciseId) {
+        return;
+      }
+      remoteFilesLoaded.add(exerciseId);
+      if (file.content !== starterCode[exerciseId]) {
+        activeEditor.setValue(file.content);
+        scheduleDraftSave(exerciseId, file.content, true);
+        var state = elements.main.querySelector("[data-editor-state='" + cssEscape(exerciseId) + "']");
+        if (state) {
+          state.textContent = "Synced file restored";
+        }
+        announce("Your saved account file was restored without replacing a local draft.");
+      }
+    } catch (error) {
+      if (error && error.status === 404) {
+        remoteFilesLoaded.add(exerciseId);
+        return;
+      }
+      setSyncStatus("error", "Could not load the account file. Your local draft is unchanged.");
+    }
+  }
+
+  function persistRunDetails(exerciseId, scope, results, allPassed, completedAt) {
+    var passedCount = results.filter(function (result) { return result.passed; }).length;
+    return apiRequest("/api/runs", {
+      method: "POST",
+      body: {
+        exerciseId: exerciseId,
+        scope: scope,
+        passedCount: passedCount,
+        totalCount: results.length,
+        allPassed: allPassed,
+        completedAt: new Date(completedAt).toISOString(),
+        results: results.map(function (result) {
+          return {
+            id: result.id,
+            name: result.name,
+            hidden: Boolean(result.hidden),
+            passed: Boolean(result.passed),
+            expected: result.expected,
+            actual: result.actual,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            traceback: result.traceback
+          };
+        })
+      }
+    });
+  }
+
+  async function apiRequest(path, options) {
+    var config = options || {};
+    var controller = new AbortController();
+    var timer = window.setTimeout(function () { controller.abort(); }, config.timeoutMs || 10000);
+    var headers = { Accept: "application/json" };
+    if (config.body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
+    if (config.authenticated !== false && authToken) {
+      headers.Authorization = "Bearer " + authToken;
+    }
+    try {
+      var response = await fetch(path, {
+        method: config.method || "GET",
+        headers: headers,
+        body: config.body === undefined ? undefined : JSON.stringify(config.body),
+        signal: controller.signal
+      });
+      var payload = null;
+      try {
+        payload = await response.json();
+      } catch (error) {
+        payload = null;
+      }
+      if (!response.ok) {
+        var message = payload && payload.error && payload.error.message
+          ? payload.error.message
+          : "Request failed with status " + response.status + ".";
+        var requestError = new Error(message);
+        requestError.status = response.status;
+        requestError.code = payload && payload.error ? payload.error.code : "REQUEST_FAILED";
+        throw requestError;
+      }
+      return payload || {};
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        throw new Error("The server took too long to respond.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  function setSyncStatus(kind, message) {
+    syncState = { kind: kind, message: message };
+    var status = elements.profilePanel.querySelector("[data-sync-status]");
+    if (status) {
+      status.className = "profile-sync__status profile-sync__status--" + kind;
+      status.textContent = message;
+    }
+  }
+
+  function getErrorMessage(error) {
+    return error instanceof Error ? error.message : String(error || "Unknown error");
+  }
+
+  function getUserInitials(user) {
+    var source = String(user.displayName || user.email || "PY").trim();
+    var parts = source.split(/\s+/).filter(Boolean);
+    return (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : source.slice(0, 2)).toUpperCase();
   }
 
   function renderBadgeDialog() {
@@ -2316,6 +2920,12 @@
     if (open) {
       renderProfile();
     }
+  }
+
+  function openProfile() {
+    renderProfile();
+    elements.profilePanel.hidden = false;
+    elements.profileButton.setAttribute("aria-expanded", "true");
   }
 
   function closeProfile() {
@@ -2585,6 +3195,7 @@
       serialized[chapterId] = Array.from(items).sort();
     });
     safeWrite(STORAGE_KEYS.learning, JSON.stringify(serialized));
+    queueStateSync();
   }
 
   function renderBreadcrumbs(items) {
@@ -2672,6 +3283,22 @@
     return parts[parts.length - 1] || "solution.py";
   }
 
+  function getSafePythonFilename(exercise) {
+    var base = String(exercise && exercise.id ? exercise.id : getExerciseFileName(exercise || {}))
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return (base || "python-exercise") + ".py";
+  }
+
+  function readEditorMode() {
+    return safeRead(STORAGE_KEYS.editorMode) === "vim" ? "vim" : "sublime";
+  }
+
+  function getAceKeyboardHandler(mode) {
+    return mode === "vim" ? "ace/keyboard/vim" : "ace/keyboard/sublime";
+  }
+
   function getStartingCode(exerciseId) {
     if (drafts.has(exerciseId)) {
       return drafts.get(exerciseId);
@@ -2729,6 +3356,7 @@
 
   function persistPassed() {
     safeWrite(STORAGE_KEYS.passed, JSON.stringify(Array.from(passed).sort()));
+    queueStateSync();
   }
 
   function readDrafts() {
@@ -2784,6 +3412,7 @@
       serialized[exerciseId] = value;
     });
     safeWrite(STORAGE_KEYS.drafts, JSON.stringify(serialized));
+    queueStateSync();
   }
 
   function safeRead(key) {
@@ -2813,6 +3442,14 @@
       window.localStorage.setItem(key, value);
     } catch (error) {
       // The app remains usable without persistent storage.
+    }
+  }
+
+  function safeRemove(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      // Signing out still clears the in-memory token when storage is unavailable.
     }
   }
 

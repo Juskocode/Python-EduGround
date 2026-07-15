@@ -718,6 +718,149 @@ pre {
   text-align: center;
 }
 
+.profile-sync {
+  padding: 16px 20px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.profile-sync .profile-panel__section-heading {
+  margin-bottom: 10px;
+}
+
+.profile-sync__mode {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--primary-softer);
+  color: var(--primary);
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.profile-sync__disclosure,
+.profile-sync__status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.profile-sync__status {
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.profile-sync__status--success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.profile-sync__status--error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.profile-sync__status--working {
+  background: var(--primary-softer);
+  color: var(--primary);
+}
+
+.profile-sync__form {
+  display: grid;
+  gap: 9px;
+  margin: 12px 0 10px;
+}
+
+.profile-sync__field {
+  display: grid;
+  gap: 5px;
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.profile-sync__input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  outline: 0;
+  background: var(--surface);
+  color: var(--text-strong);
+  font: inherit;
+  font-weight: 500;
+}
+
+.profile-sync__input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+.profile-sync__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.profile-sync__actions .button {
+  min-height: 38px;
+  flex: 1 1 130px;
+}
+
+.profile-sync__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 9px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-2);
+}
+
+.profile-sync__identity > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.profile-sync__identity strong,
+.profile-sync__identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-sync__identity strong {
+  color: var(--text-strong);
+  font-size: 0.76rem;
+}
+
+.profile-sync__identity span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.profile-sync__avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--text-strong);
+  color: var(--surface) !important;
+  font-family: var(--font-mono);
+  font-weight: 900;
+}
+
+.profile-sync__identity + .profile-sync__status {
+  margin-bottom: 9px;
+}
+
 .site-footer {
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 58%, transparent);
@@ -3074,8 +3217,9 @@ pre {
   display: flex;
   min-height: 54px;
   align-items: center;
+  flex-wrap: wrap;
   gap: 13px;
-  padding: 0 11px 0 15px;
+  padding: 9px 11px 9px 15px;
   border-bottom: 1px solid var(--code-border);
   background: var(--code-surface);
 }
@@ -3101,7 +3245,8 @@ pre {
   min-width: 0;
   align-items: center;
   gap: 7px;
-  align-self: stretch;
+  min-height: 36px;
+  align-self: center;
   padding: 0 12px;
   border-right: 1px solid var(--code-border);
   border-left: 1px solid var(--code-border);
@@ -3138,9 +3283,42 @@ pre {
 
 .ide-actions {
   display: flex;
+  min-width: 0;
   flex: 1;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 7px;
+}
+
+.ide-mode-field {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 9px;
+  border: 1px solid #414b59;
+  border-radius: 8px;
+  background: #242c37;
+  color: #9da9b7;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.ide-mode-select {
+  min-height: 26px;
+  padding: 0 22px 0 7px;
+  border: 0;
+  border-radius: 6px;
+  outline: 0;
+  background: #343e4b;
+  color: #eef3f7;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ide-mode-select:focus-visible {
+  box-shadow: 0 0 0 2px #70d8a9;
 }
 
 .ide-button {
@@ -4121,6 +4299,15 @@ pre {
     width: 100%;
     flex-basis: 100%;
     flex-wrap: wrap;
+  }
+
+  .ide-mode-field {
+    flex: 1 1 140px;
+    justify-content: space-between;
+  }
+
+  .ide-mode-select {
+    flex: 1;
   }
 
   .ide-button {
