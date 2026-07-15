@@ -27,6 +27,7 @@ Acceptance criteria:
 - GitHub Actions runs `npm ci`, `npm run validate`, worker syntax checks, Docker image construction, and `git diff --check` on pushes and pull requests.
 - API tests use an ephemeral PostgreSQL service and apply real migrations.
 - Browser flows cover home → guide/exercise, Sublime/Vim switching, all editor shortcuts, local save, signed-in save/sync, pass/fail results, and session restoration.
+- Assessment flows cover absolute 20/60-minute deadlines, reload/resume, automatic expiry, exact-set scoring, visible/hidden practical checks, retained review details, and cross-account workspace isolation.
 - Worker startup, syntax errors, runtime exceptions, CDN fallback, timeout recovery, and database unavailability are tested.
 - Automated accessibility checks report no serious or critical violations; failure screenshots and logs are retained as workflow artifacts.
 

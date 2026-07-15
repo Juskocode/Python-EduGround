@@ -1,6 +1,6 @@
 # Python EduGround
 
-Python EduGround turns the 11 exercise chapters in this repository into a local-first, game-like Python learning path. Learners can study solution-free tutorials, work through practical runbooks, write code in a Monokai editor, run Python in the browser, and optionally sync their own work to PostgreSQL.
+Python EduGround turns the 11 exercise chapters in this repository into a local-first, game-like Python learning path. Learners can study solution-free tutorials, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL.
 
 ## Product tour
 
@@ -22,6 +22,10 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 
 ![All tests passed with expected and actual output visible](docs/screenshots/test-results.jpg)
 
+### Timed theory and practical rooms
+
+![Dark practical assessment room with a persistent deadline, five-task map, and solution-free contract](docs/screenshots/assessment-practical.png)
+
 ### Optional account sync
 
 ![Local-first profile with opt-in PostgreSQL registration and sign-in controls](docs/screenshots/account-sync.jpg)
@@ -30,9 +34,10 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 
 | Area | Included |
 | --- | --- |
-| Curriculum | 11 chapters, 92 exercises, 281 tests, and 239 collectible difficulty stars |
+| Curriculum | 11 chapters, 92 exercises, 281 exercise tests, and 239 collectible difficulty stars |
 | Guided learning | 44 tutorials, 55 runbook phases, 55 mental-model steps, 22 guided practices, 37 learner/coach exchanges, and 40 choose-by-intent toolbox cards |
-| Reference material | 66 glossary terms, 66 debugging checks, one checkpoint per chapter, and 40 curated official Python documentation links |
+| Timed assessments | Four chapter blocks, each with 15 theory questions in 20 minutes and five practical tasks in 60 minutes; theory and practical pass independently at 60/100 |
+| Reference material | 66 glossary terms, 66 debugging checks, one checkpoint per chapter, and 60 curated official Python documentation links: 40 in chapter guides and 20 in assessments |
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, and progressive hints |
 | Editor | Vendored Ace with a persistent Sublime or Vim keymap, fixed Monokai theme, Python highlighting, autocomplete, search, folding, line numbers, and copy/paste controls |
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
@@ -53,13 +58,15 @@ Every chapter guide combines six layers:
 
 Guide sections can be marked understood. Their progress persists separately from graded exercise passes, so reading a tutorial never awards exercise stars.
 
+The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10–11 capstone. Each room keeps its own active deadline, drafts, recent attempts, and best score; assessment results do not award exercise stars. See [docs/ASSESSMENTS.md](docs/ASSESSMENTS.md) for the room rules, source transparency, scoring, official references, and client-side security limitations.
+
 ## Run locally
 
 Requirements: a modern browser and Node.js 18 or newer.
 
 ### Local-only mode
 
-No database is required for the complete curriculum, editor, browser runner, local drafts, or local progress:
+No database is required for the complete curriculum, editor, browser runner, assessment rooms, local drafts, or local progress:
 
 ```bash
 npm ci
@@ -94,6 +101,20 @@ npm run serve
 
 Database-backed saving is opt-in from the profile menu. Unsigned learners remain local-only. See [docs/PERSISTENCE.md](docs/PERSISTENCE.md) for the complete data model, environment reference, deployment, backup, restore, security, and deletion guidance.
 
+## Upgrade without losing progress
+
+`git pull` changes application files, not browser `localStorage` or PostgreSQL data. Local-only progress remains visible when the updated app is served from the same browser origin. Signed-in progress follows the PostgreSQL database and is merged with the account's locally cached workspace after sign-in.
+
+For an in-place Compose update, keep the same `COMPOSE_PROJECT_NAME` and named volumes, back up PostgreSQL, then rebuild:
+
+```bash
+git pull --ff-only
+docker-compose up -d --build
+curl --fail http://127.0.0.1:8000/readyz
+```
+
+The Compose file has a stable default project name, `fundamentos-de-programacao-playground`, so the historical `postgres_data` and `submissions_data` volumes continue to be selected even if the checkout directory is renamed. If an existing deployment used `-p` or a custom `COMPOSE_PROJECT_NAME`, continue using that exact value. The app service runs `npm run migrate` before startup; manually managed deployments must run it before routing traffic to the new release. Do not use `docker-compose down -v` during an upgrade. Follow the [upgrade, backup, and restore runbook](docs/PERSISTENCE.md#upgrade-an-existing-installation) before a production pull.
+
 ## Navigation
 
 The app uses bookmarkable hash routes:
@@ -105,6 +126,10 @@ The app uses bookmarkable hash routes:
 | `#chapter/py01/exercises` | Exercise catalogue |
 | `#chapter/py01/tutorials` | Tutorials, deep dive, checkpoint, and runbook |
 | `#exercise/py01-first-programs` | Prompt, examples, hints, IDE, tests, and results |
+| `#assessments` | Four-block timed-assessment map and saved best scores |
+| `#assessment/py01-py03` | One block's theory/practical choices and official references |
+| `#assessment/py01-py03/theory` | Theory room landing, active attempt, or latest result |
+| `#assessment/py01-py03/practical` | Practical room landing, active coding attempt, or latest result |
 | `#profile/badges` | Rank ladder and badge gallery |
 
 Legacy routes such as `#py01` redirect to the corresponding chapter hub.
@@ -119,6 +144,8 @@ Legacy routes such as `#py01` redirect to the corresponding chapter hub.
 - **Download .py** creates a normal Python file through the browser, whether signed in or not.
 - **Copy** and **Paste** complement normal editor or Vim/Sublime clipboard commands.
 - **Restart** restores the clean, solution-free starter for the current exercise.
+
+The practical assessment editor uses the same Sublime/Vim selection, Monokai theme, copy/paste controls, and `Shift + Enter` visible-check shortcut. Its five drafts belong to the timed attempt and do not create canonical chapter `exNN.py` files; use **Download .py** for a separate copy.
 
 Typing is auto-saved to browser storage after a short delay. Signed-in progress and drafts are also synchronized in the background. Explicit **Save** and every complete **Run tests** attempt upsert the exact editor snapshot and materialize it under a stable zero-based name:
 
@@ -146,11 +173,12 @@ The server owns this 92-file mapping. Learner input cannot select a path, and th
 | Explicit Save or complete test submission | Browser draft; optional `.py` download | PostgreSQL `user_files`, browser draft, and `<chapter>/exNN.py` mirror |
 | Passed exercises and stars | Browser storage | Browser storage and PostgreSQL account state |
 | Guide markers | Browser storage | Browser storage and PostgreSQL account state |
+| Timed assessment deadlines, answers, practical drafts, and recent results | Browser storage | Browser storage and PostgreSQL account state |
 | Editor keymap | Browser storage | Browser storage and PostgreSQL account state |
 | Complete run details | Current page memory only | PostgreSQL run-history record; current UI does not yet reload this history |
 | Theme and sound | Browser storage | Browser storage only |
 
-Local storage is scoped to the exact browser origin. For example, `127.0.0.1:8000` and `localhost:8000` have different local drafts. Account data is attached to the PostgreSQL database and can follow a learner to another deployment after they sign in there with the same account credentials.
+Local storage is scoped to the exact browser origin. For example, `127.0.0.1:8000` and `localhost:8000` have different local drafts. Within one origin, the app keeps an anonymous workspace and a separate local cache per account, so signing out does not expose one account's work to the next learner. Account data is attached to the PostgreSQL database and can follow a learner to another deployment after they sign in there with the same account credentials.
 
 ## Validate the repository
 
@@ -161,7 +189,7 @@ node --check python-runner-worker.mjs
 git diff --check
 ```
 
-`npm run validate` performs the deterministic offline checks for application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 tests, every solution-free starter, every tutorial and runbook phase, all 40 toolbox cards, coaching conversations, official-link allowlisting, and the complete deep-learning schema. `npm run validate:links` is the optional network check that verifies the curated Python documentation pages and fragment anchors still exist.
+`npm run validate` performs the deterministic offline checks for application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 exercise tests, every solution-free starter, every tutorial and runbook phase, all 40 toolbox cards, coaching conversations, and the complete deep-learning schema. It also checks all four assessment blocks, 60 theory questions, 20 practical tasks, 60 practical tests, absolute 20/60-minute limits, stable IDs, solution-free assessment starters, and official-link allowlisting. `npm run validate:links` is the optional network check that verifies all 60 curated Python documentation references and fragment anchors still exist.
 
 The release smoke flow also covers:
 
@@ -173,6 +201,7 @@ The release smoke flow also covers:
 - Local saving plus signed-in PostgreSQL and canonical chapter-file persistence.
 - All-green execution across visible and hidden tests.
 - Failure output with expected/actual fields and Python tracebacks.
+- Four assessment blocks with resumable absolute deadlines, exact-set theory scoring, five-task practical grading, automatic expiry submission, and saved attempt history.
 - Dark mode, copy/paste controls, ranks, badges, and local persistence.
 
 ## Repository map
@@ -184,6 +213,10 @@ The release smoke flow also covers:
 | `course-app.js` | Router, views, local/account persistence, profile, editor adapter, runner controls, and result rendering |
 | `learning-content.js` | Ranks, badges, tutorials, deep dives, checkpoints, and runbooks |
 | `learning-toolbox.js` | Per-chapter Python functionality guide with conversions, imports, results, cautions, and copyable examples |
+| `assessment-data.js` | Four assessment blocks, theory questions, practical contracts/tests, source notes, and official references |
+| `assessment-engine.js` | Assessment scoring, deadline, sanitization, history, and conflict-merge rules |
+| `assessment-room.js` | Assessment routes, timed-room controller, practical editor, submission flow, and results |
+| `assessment-ui.css` | Responsive light/dark assessment hub, room, editor, and result styling |
 | `exercise-data.js` | Chapters, prompts, topics, source paths, and hints |
 | `test-data/` | 186 visible and 95 hidden learning checks |
 | `starter-code.js` | Generated solution-free starters and public function signatures |
@@ -196,6 +229,8 @@ The release smoke flow also covers:
 | `server/submission-files.mjs` | Atomic, private per-user filesystem mirror with traversal and symlink protection |
 | `db/migrations/` | Ordered, checksum-protected PostgreSQL schema migrations |
 | `scripts/migrate.mjs` | Migration command used locally and during deployment |
+| `scripts/validate-assessment-data.mjs` | Assessment structure, timing, stable-ID, syntax, test, solution-leak, and official-link validation |
+| `docs/ASSESSMENTS.md` | Timed-room rules, chapter/PDF mapping, scoring, references, persistence, and security boundaries |
 | `docs/PERSISTENCE.md` | Account sync, deployment durability, backup/restore, and security guide |
 
 ## Content, privacy, and assessment transparency
@@ -203,6 +238,8 @@ The release smoke flow also covers:
 The repository contains Python solutions but not the original problem statements or tests. The teaching prompts, contracts, hints, tutorial content, and tests are learning-oriented reconstructions inferred from visible filenames, signatures, inputs, and solution behaviour. They are not official or verbatim course questions.
 
 Hidden cases stay masked in the interface until a complete run returns. Their JavaScript definitions remain inspectable in the browser, so they are useful learning checks rather than secure assessment secrets. A genuinely secret assessment would require server-side execution and server-held tests.
+
+The assessment practical prompts are independently paraphrased from four PDFs supplied by the project owner. PDF wording, screenshots, and reference solutions are excluded; the public examples and tests are independently authored. Theory questions and explanations are original course material. Assessment question data, answer indexes, hidden tests, scores, and timers are client-side and therefore inspectable or modifiable. These rooms are educational practice, not proctored or tamper-resistant examinations.
 
 `solution-code.js` supports local generation and validation only. It is not requested by `index.html`, `window.SOLUTION_CODE` is not created in the learner page, and editor resets restore a safe starter rather than an answer. The server uses a public-file allowlist, so the solution bundle, original `Py*/` sources, migrations, backend modules, and deployment secrets are not downloadable from the web application.
 

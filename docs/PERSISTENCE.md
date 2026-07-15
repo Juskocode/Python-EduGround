@@ -11,12 +11,17 @@ Without `DATABASE_URL`, the Node server still serves the curriculum and browser 
 - Exercise drafts.
 - Passed exercise IDs, stars, ranks, and badges derived from those passes.
 - Tutorial/runbook understanding markers.
+- Timed-assessment active deadlines, theory answers, practical drafts/check summaries, and the ten most recent results per room.
 - Sublime or Vim editor selection.
 - Theme, sound preference, and last exercise.
 
 Typing updates the local draft after a short debounce. **Save** flushes it immediately, and **Download .py** creates a normal file on the learner's computer. A database outage does not delete or disable this local copy.
 
 Local storage is origin-specific. `http://127.0.0.1:8000`, `http://localhost:8000`, and `https://learn.example.com` are three separate browser stores. Clearing site data or using another browser removes access to that local-only copy.
+
+Within one origin, learning data is divided into one anonymous workspace and one locally cached workspace per account. On the first sign-in from an anonymous workspace, its progress and drafts are merged into that account and the transferred anonymous workspace is cleared. This prevents the same anonymous work from being copied into several accounts. Signing out switches back to the anonymous workspace and does not expose the signed-in account's drafts, passes, guide markers, or assessment state. The account workspace remains cached locally and is merged with server state on a future sign-in.
+
+Theme and sound are device-wide preferences for the origin rather than learner-workspace data. During a signed-in session, the raw bearer token and authenticated user ID are also kept in origin-scoped browser storage so the app can restore the correct account workspace after a refresh. Both identity values are removed on sign-out or an authentication failure; the per-account workspace itself remains cached.
 
 ### Opt-in account sync
 
@@ -27,6 +32,8 @@ After sign-in:
 - Passed exercises and learning markers merge by union, so completed work is not removed by another device.
 - A local draft wins when both the current browser and the account contain a draft for the same exercise.
 - Drafts, passed IDs, learning markers, and editor mode are pushed as account state after changes.
+- Assessment deadlines, answers, practical drafts, visible-check summaries, bounded attempt histories, and monotonic pass/best-score summaries are included in account-state sync.
+- Account-state writes are merged while holding a PostgreSQL row lock. Passed IDs, per-chapter learning markers, and assessment histories/completions are unioned; fields from newer releases that an older client does not know about are retained. Incoming drafts, active work, and editor settings may still replace their previous values.
 - **Save** upserts the exact editor snapshot under the exercise's server-owned `exNN.py` name.
 - Every complete **Run tests** attempt saves the submitted snapshot before its pass/fail run history is recorded.
 - Each visible or complete test run records its result details, including expected/actual values, stdout, stderr, and tracebacks.
@@ -65,14 +72,16 @@ Migration [`db/migrations/001_initial.sql`](../db/migrations/001_initial.sql) cr
 | --- | --- | --- |
 | `users` | Normalized email, display name, scrypt password record, creation time | Parent learner record |
 | `sessions` | SHA-256 hashes of bearer tokens and expiry times | Cascades with the user |
-| `user_state` | JSON account state: passes, drafts, learning markers, editor mode | Cascades with the user |
+| `user_state` | Forward-compatible JSON account state: passes, drafts, learning markers, editor mode, and assessment progress | Cascades with the user |
 | `user_files` | One canonical `exNN.py` source snapshot per user/exercise | Cascades with the user |
 | `test_runs` | Append-only summaries and detailed result JSON for completed runs | Cascades with the user |
 | `schema_migrations` | Applied migration names and checksums | Operational metadata, not learner data |
 
-Current request limits are 384 KiB for account state, 256 KiB for one saved source file, and 256 KiB/250 items for one test-result payload. The server accepts one `user_files` row per learner and exercise.
+Current request limits are 384 KiB for both the incoming and merged account state, 256 KiB for one saved source file, and 256 KiB/250 items for one test-result payload. The server accepts one `user_files` row per learner and exercise.
 
 Test runs are persisted for signed-in learners, but the current UI does not retrieve or display historical runs after a reload. They are an operational record for future history UI, not currently a learner-facing archive.
+
+Timed-assessment results are different: their compact recent history and monotonic pass/best-score summary are part of `user_state`, and the assessment UI reloads both latest and lifetime-best status. Assessment practical code remains inside that state and does not create a `user_files` row or canonical chapter `exNN.py` file.
 
 ## Start the full stack with Docker Compose
 
@@ -102,7 +111,16 @@ Requirements: Docker with Compose v2. This workstation exposes it as `docker-com
 
 5. Open [http://127.0.0.1:8000](http://127.0.0.1:8000), open the profile, and choose **Create account** or **Sign in**.
 
-The `app` service waits for the `postgres` health check, runs `npm run migrate`, and then starts the same-origin web/API server. Re-running the migration command is safe.
+The `app` service waits for the `postgres` health check, runs `npm run migrate`, and then starts the same-origin web/API server. Re-running the migration command is safe. `/readyz` verifies the required application tables and recorded core migration in addition to testing the PostgreSQL connection, so a reachable but unmigrated database stays out of service.
+
+Compose now has a stable default project name, `fundamentos-de-programacao-playground`. This deliberately matches the historical volume prefix for this repository, so an in-place upgrade keeps using `fundamentos-de-programacao-playground_postgres_data` and `fundamentos-de-programacao-playground_submissions_data` even when the release is started from another directory. If an existing installation was originally launched with `-p`, `COMPOSE_PROJECT_NAME`, or a differently named checkout, keep using that same project name during and after the upgrade:
+
+```bash
+COMPOSE_PROJECT_NAME=the-existing-prefix docker-compose config
+COMPOSE_PROJECT_NAME=the-existing-prefix docker-compose up -d --build
+```
+
+Inspect `docker volume ls` before changing a project name. A new project name creates a separate empty pair of volumes; it does not migrate or delete the old pair.
 
 The Compose file uses `postgres_data` for database records and `submissions_data` for canonical Python files. These commands rebuild or replace the application container without deleting either volume:
 
@@ -113,6 +131,68 @@ docker-compose down
 ```
 
 Running `docker-compose down -v`, `docker volume rm`, or deleting the Docker/VM storage **does delete both named volumes**. Named volumes provide persistence across container replacement, not a backup.
+
+## Upgrade an existing installation
+
+A source update and a data migration are separate operations. `git pull` replaces tracked application files; it does not modify browser `localStorage`, a managed PostgreSQL database, or Docker named volumes. Progress remains reflected after an update when the deployment keeps the same storage identities:
+
+- Serve the updated app from the same scheme, hostname, and port for local-only browser progress.
+- Keep the same `DATABASE_URL` for signed-in account progress.
+- Keep the same Compose project name and `postgres_data` volume when PostgreSQL runs under Compose.
+- Keep the same `submissions_data` volume or persistent `SUBMISSIONS_DIR` mount when the physical `exNN.py` mirror must survive immediately.
+- Run every checked-in database migration before the new application receives traffic.
+
+Stable exercise IDs, stable tutorial marker IDs, and stable assessment block/question IDs let a newer release recognize existing progress. The account-state merge retains unknown top-level fields and completion evidence so an older client cannot silently erase fields introduced by a newer release. Active attempts, drafts, and editor settings are intentionally last-writer-wins; concurrent edits to those fields can still replace one another.
+
+### Local-only update
+
+Stop the old development server, update and validate the checkout, then restart on the same origin:
+
+```bash
+git pull --ff-only
+npm ci
+npm run validate
+npm run serve
+```
+
+Using another port, changing between `localhost` and `127.0.0.1`, switching HTTP to HTTPS, clearing site data, or using a new browser creates a different local-storage context. A Git checkout alone cannot move that browser-only data. Sign in before a domain change or download important `.py` files when a portable manual copy is needed.
+
+### Docker Compose update
+
+First identify the current Compose project and volumes, then create a PostgreSQL backup using the procedure below. Pull and rebuild without `-v`:
+
+```bash
+docker-compose config --format json
+docker-compose config --volumes
+docker volume ls
+git pull --ff-only
+docker-compose up -d --build
+curl --fail http://127.0.0.1:8000/healthz
+curl --fail http://127.0.0.1:8000/readyz
+```
+
+The app container runs `npm run migrate` before starting. `/readyz` reports ready only when PostgreSQL is reachable, all required application tables exist, and the core migration is recorded.
+
+If the installation historically used a custom project name, repeat it for every command:
+
+```bash
+COMPOSE_PROJECT_NAME=the-existing-prefix docker-compose config --format json
+COMPOSE_PROJECT_NAME=the-existing-prefix docker-compose up -d --build
+```
+
+Changing that prefix selects a new empty pair of volumes; it does not copy the previous data. Do not run `docker-compose down -v`, `docker volume rm`, or prune the active volumes during an update.
+
+### Managed PostgreSQL update
+
+Back up the database, deploy the new build against the same `DATABASE_URL`, and apply migrations before switching traffic:
+
+```bash
+npm ci --omit=dev
+npm run migrate
+npm run serve
+```
+
+Verify both `/healthz` and `/readyz`. Roll back application code only if necessary; never roll back by editing or deleting an applied migration. Add a forward migration for any schema correction.
 
 ## Use an existing or managed PostgreSQL database
 
@@ -156,6 +236,7 @@ Apply migrations before routing a new release to users. Migrations run in filena
 | `POSTGRES_USER` | `eduground` | Compose PostgreSQL role |
 | `POSTGRES_PASSWORD` | `change-me` | Compose-only development default; must be changed |
 | `POSTGRES_PORT` | `5432` | Host port published by the Compose PostgreSQL service |
+| `COMPOSE_PROJECT_NAME` | `fundamentos-de-programacao-playground` | Stable Compose resource/volume prefix; retain an existing deployment's prior value during upgrades |
 
 For a TLS-terminating reverse proxy, set both `APP_ORIGIN` to the exact public HTTPS origin and `TRUST_PROXY=true`. Only enable `TRUST_PROXY` when the app cannot be reached except through that trusted proxy.
 
@@ -166,13 +247,13 @@ The browser uses relative, same-origin endpoints. Authenticated calls carry `Aut
 | Method and path | Purpose |
 | --- | --- |
 | `GET /healthz` | Process liveness; does not require PostgreSQL |
-| `GET /readyz` or `GET /api/health` | Database configuration and readiness |
+| `GET /readyz` or `GET /api/health` | Database connectivity plus required-table and migration readiness |
 | `POST /api/auth/register` | Create an account and session; password minimum is 10 characters |
 | `POST /api/auth/login` | Create a new session for an existing account |
 | `POST /api/auth/logout` | Revoke the current session token |
 | `GET /api/me` | Restore the current signed-in identity |
 | `GET /api/state` | Read merged learner account state |
-| `PUT /api/state` | Replace the learner account-state document |
+| `PUT /api/state` | Transactionally merge learner state while retaining unknown fields and monotonic completion evidence |
 | `GET /api/files/:exerciseId` | Read a saved source and re-materialize its canonical chapter file when needed |
 | `PUT /api/files/:exerciseId` | Upsert source under the server-owned chapter and `exNN.py` mapping |
 | `POST /api/runs` | Append one detailed test-run record |
@@ -183,12 +264,12 @@ There is currently no API to list test runs, change/reset a password, verify ema
 
 Application containers are disposable; PostgreSQL is the durable boundary. To retain accounts during an upgrade:
 
-1. Keep the same managed `DATABASE_URL`, or keep the Compose `postgres_data` volume.
+1. Keep the same managed `DATABASE_URL`, or keep the Compose project name and `postgres_data` volume.
 2. Keep the `submissions_data` volume or attach the same private persistent disk at `SUBMISSIONS_DIR` when physical files must survive directly.
 3. Back up the database before the release.
 4. Deploy the new code and run `npm run migrate`.
 5. Set `APP_ORIGIN` to the new public origin and configure the reverse proxy correctly.
-6. Verify `/healthz` and `/readyz` before sending learners to the deployment.
+6. Verify `/healthz` and the schema-aware `/readyz` before sending learners to the deployment.
 
 Browser session tokens cannot cross domains because they live in origin-scoped browser storage. On a new hostname, the learner signs in again with the same email and password. The new app then reads the account state from the same PostgreSQL database. In a clean browser it also restores saved exercise files as their exercises are opened. If the physical mirror volume was not moved, opening or re-saving an exercise rebuilds that file from PostgreSQL.
 
@@ -252,6 +333,7 @@ The account backend is intentionally small and is not yet a complete public iden
 - Submission files use private per-user directories and are excluded from the static-file allowlist. Multiple app replicas must share one suitable persistent filesystem or disable the mirror and rely on PostgreSQL.
 - Client-submitted passes and run results are educational records, not tamper-resistant grading evidence.
 - Hidden tests are delivered to the browser and remain inspectable. This is not a secure examination system.
+- Timed-assessment questions, answer indexes, practical tests, scores, deadlines, and timer logic are client-side. The browser clock and stored deadline can be altered, so the 20/60-minute rooms are practice constraints rather than proctoring controls.
 - `APP_ORIGIN` checks help reject unwanted browser origins, but they do not replace authentication, TLS, proxy hardening, secret rotation, monitoring, or database access controls.
 - The Compose defaults are for development. Change credentials, restrict the published database port, and use managed secrets before any public deployment.
 
