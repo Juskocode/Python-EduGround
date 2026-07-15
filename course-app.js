@@ -1,0 +1,2557 @@
+(function () {
+  "use strict";
+
+  var STORAGE_KEYS = {
+    passed: "fp-playground.passed.v2",
+    drafts: "fp-playground.drafts.v2",
+    theme: "fp-playground.theme.v1",
+    lastExercise: "fp-playground.last-exercise.v2"
+  };
+
+  var elements = {
+    main: document.getElementById("app-main"),
+    status: document.getElementById("app-status"),
+    themeToggle: document.getElementById("theme-toggle"),
+    soundToggle: document.getElementById("sound-toggle"),
+    achievementToasts: document.getElementById("achievement-toasts"),
+    profileButton: document.getElementById("profile-button"),
+    profilePanel: document.getElementById("profile-panel"),
+    profileLevel: document.getElementById("profile-level-label"),
+    profileRank: document.getElementById("profile-rank-label")
+  };
+
+  var course = window.COURSE_DATA;
+  var testData = window.EXERCISE_TESTS || {};
+  var starterCode = window.STARTER_CODE || {};
+  var learning = window.LEARNING_CONTENT || {};
+  var audio = window.APP_AUDIO || createSilentAudio();
+
+  if (!course || !Array.isArray(course.chapters) || course.chapters.length === 0) {
+    renderDataError();
+    return;
+  }
+
+  var chapters = course.chapters.slice().sort(function (a, b) {
+    return Number(a.number) - Number(b.number);
+  });
+  var chapterById = new Map();
+  var exerciseById = new Map();
+  var chapterForExercise = new Map();
+  var validExerciseIds = new Set();
+
+  chapters.forEach(function (chapter) {
+    chapterById.set(String(chapter.id), chapter);
+    getExercises(chapter).forEach(function (exercise) {
+      var exerciseId = String(exercise.id);
+      exerciseById.set(exerciseId, exercise);
+      chapterForExercise.set(exerciseId, chapter);
+      validExerciseIds.add(exerciseId);
+    });
+  });
+
+  var passed = new Set(readPassedIds().filter(function (exerciseId) {
+    return validExerciseIds.has(exerciseId);
+  }));
+  var drafts = readDrafts();
+  var revealedHints = new Map();
+  var runResults = new Map();
+  var draftPersistTimer = null;
+  var activeEditor = null;
+  var activeRun = null;
+  var currentRoute = null;
+  var selectedBadgeId = null;
+  var pythonRunner = createPythonRunner();
+
+  persistPassed();
+  syncThemeButton();
+  syncSoundButton();
+  renderProfile();
+  renderRoute(false);
+
+  window.addEventListener("hashchange", function () {
+    renderRoute(true);
+  });
+  window.addEventListener("pagehide", flushDrafts);
+  elements.themeToggle.addEventListener("click", toggleTheme);
+  elements.soundToggle.addEventListener("click", toggleSound);
+  elements.profileButton.addEventListener("click", toggleProfile);
+  elements.profilePanel.addEventListener("click", handleProfileClick);
+  elements.main.addEventListener("click", handleMainClick);
+  document.addEventListener("click", handleDocumentClick);
+  document.addEventListener("pointerdown", unlockAudio, { once: true });
+  document.addEventListener("keydown", handleDocumentKeydown);
+
+  function renderRoute(announceChange) {
+    var parsed = parseRoute();
+
+    if (parsed.redirect) {
+      window.history.replaceState(null, "", parsed.redirect);
+      parsed = parseRoute();
+    }
+
+    disposeActiveEditor();
+    currentRoute = parsed;
+    closeProfile();
+
+    var view;
+    if (parsed.name === "chapter") {
+      view = renderChapterHub(parsed.chapter);
+      document.title = parsed.chapter.title + " · Python Foundations";
+    } else if (parsed.name === "exercises") {
+      view = renderExerciseCatalogue(parsed.chapter);
+      document.title = "Exercises · " + parsed.chapter.title;
+    } else if (parsed.name === "tutorial") {
+      view = renderTutorial(parsed.chapter);
+      document.title = "Runbook · " + parsed.chapter.title;
+    } else if (parsed.name === "exercise") {
+      view = renderExerciseWorkspace(parsed.exercise, parsed.chapter);
+      document.title = parsed.exercise.title + " · Python Exercise";
+    } else if (parsed.name === "badges") {
+      view = renderBadgesPage();
+      document.title = "Badges · Python Foundations";
+    } else {
+      view = renderDashboard();
+      document.title = "Python Foundations · Learning Path";
+    }
+
+    elements.main.replaceChildren(view);
+    renderProfile();
+
+    if (parsed.name === "exercise") {
+      window.requestAnimationFrame(function () {
+        initializeExerciseEditor(parsed.exercise);
+      });
+    }
+
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    if (announceChange) {
+      announce(getRouteAnnouncement(parsed));
+    }
+  }
+
+  function parseRoute() {
+    var rawHash = window.location.hash.slice(1);
+    var decoded;
+    try {
+      decoded = decodeURIComponent(rawHash);
+    } catch (error) {
+      decoded = rawHash;
+    }
+
+    decoded = decoded.replace(/^\/+|\/+$/g, "");
+    if (!decoded || decoded === "home") {
+      return { name: "home" };
+    }
+
+    if (chapterById.has(decoded)) {
+      return { redirect: "#chapter/" + encodeURIComponent(decoded) };
+    }
+
+    var parts = decoded.split("/");
+    if (parts[0] === "chapter" && chapterById.has(parts[1])) {
+      var chapter = chapterById.get(parts[1]);
+      if (!parts[2]) {
+        return { name: "chapter", chapter: chapter };
+      }
+      if (parts[2] === "exercises") {
+        return { name: "exercises", chapter: chapter };
+      }
+      if (parts[2] === "tutorials" || parts[2] === "tutorial" || parts[2] === "runbook") {
+        return { name: "tutorial", chapter: chapter };
+      }
+    }
+
+    if (parts[0] === "exercise" && exerciseById.has(parts[1])) {
+      return {
+        name: "exercise",
+        exercise: exerciseById.get(parts[1]),
+        chapter: chapterForExercise.get(parts[1])
+      };
+    }
+
+    if (decoded === "profile/badges") {
+      return { name: "badges" };
+    }
+
+    return { redirect: "#home" };
+  }
+
+  function getRouteAnnouncement(route) {
+    if (route.name === "chapter") {
+      return "Opened " + route.chapter.title + ".";
+    }
+    if (route.name === "exercises") {
+      return "Opened the " + route.chapter.title + " exercise list.";
+    }
+    if (route.name === "tutorial") {
+      return "Opened the " + route.chapter.title + " tutorial and runbook.";
+    }
+    if (route.name === "exercise") {
+      return "Opened " + route.exercise.title + ".";
+    }
+    if (route.name === "badges") {
+      return "Opened all badges.";
+    }
+    return "Opened the chapter dashboard.";
+  }
+
+  function renderDashboard() {
+    var wrapper = el("div", "page-shell dashboard-page");
+    var stats = getOverallStats();
+    var rank = getCurrentRank(stats);
+    var nextRank = getNextRank(rank);
+    var continueChapter = getContinueChapter();
+    var hero = el("section", "dashboard-hero");
+    var heroCopy = el("div", "dashboard-hero__copy");
+    var eyebrow = el("p", "eyebrow", "Python learning path");
+    var title = el("h1", null, "Build fluency, one green test at a time.");
+    var lede = el(
+      "p",
+      "dashboard-hero__lede",
+      "Explore 11 focused chapters, learn from practical runbooks, then solve every exercise in a real Python editor."
+    );
+    var heroActions = el("div", "button-row");
+    var continueLink = anchor(
+      "#chapter/" + encodeURIComponent(String(continueChapter.id)),
+      "button button--primary",
+      stats.passedExercises > 0 ? "Continue learning" : "Start the path"
+    );
+    var badgeLink = anchor("#profile/badges", "button button--quiet", "View badges");
+    var heroProgress = el("section", "dashboard-progress");
+    var progressTop = el("div", "dashboard-progress__top");
+    var progressLabel = el("div");
+    var progressEyebrow = el("span", "dashboard-progress__label", "Overall progress");
+    var progressTitle = el("strong", null, rank.name);
+    var progressPercent = el("strong", "dashboard-progress__percent", stats.progressPercent + "%");
+    var progress = progressElement(
+      stats.passedExercises,
+      stats.totalExercises,
+      stats.passedExercises + " of " + stats.totalExercises + " exercises passed"
+    );
+    var statGrid = el("div", "dashboard-stat-grid");
+
+    title.id = "dashboard-title";
+    hero.setAttribute("aria-labelledby", title.id);
+    heroActions.append(continueLink, badgeLink);
+    heroCopy.append(eyebrow, title, lede, heroActions);
+
+    progressLabel.append(progressEyebrow, progressTitle);
+    progressTop.append(progressLabel, progressPercent);
+    heroProgress.append(progressTop, progress);
+    statGrid.append(
+      renderStat("Collected stars", stats.earnedStars + " / " + stats.maxStars, "★"),
+      renderStat("Exercises passed", stats.passedExercises + " / " + stats.totalExercises, "✓"),
+      renderStat("Chapters mastered", stats.completedChapters + " / " + chapters.length, "◆")
+    );
+    heroProgress.append(statGrid);
+    if (nextRank) {
+      heroProgress.append(
+        el(
+          "p",
+          "dashboard-progress__next",
+          Math.max(0, nextRank.minStars - stats.earnedStars) + " stars to Level " + nextRank.level + " · " + nextRank.name
+        )
+      );
+    } else {
+      heroProgress.append(el("p", "dashboard-progress__next", "The full constellation is yours."));
+    }
+    hero.append(heroCopy, heroProgress);
+
+    var section = el("section", "chapter-map");
+    var headingRow = el("header", "section-heading section-heading--row");
+    var headingCopy = el("div");
+    var chapterTitle = el("h2", null, "Choose a chapter");
+    var chapterCopy = el("p", null, "Open a chapter to choose its exercises or guided runbook.");
+    var courseCount = el("span", "section-heading__count", chapters.length + " chapters");
+    var grid = el("div", "chapter-grid");
+
+    headingCopy.append(chapterTitle, chapterCopy);
+    headingRow.append(headingCopy, courseCount);
+    section.append(headingRow);
+    chapters.forEach(function (chapter, index) {
+      grid.append(renderChapterCard(chapter, index));
+    });
+    section.append(grid);
+
+    var note = el("aside", "source-note");
+    note.append(
+      el("span", "source-note__icon", "i"),
+      el("p", null, course.note || "Exercises are reconstructed from the solution files in this repository.")
+    );
+
+    wrapper.append(hero, section, note);
+    return wrapper;
+  }
+
+  function renderChapterCard(chapter, index) {
+    var progress = getChapterProgress(chapter);
+    var card = anchor(
+      "#chapter/" + encodeURIComponent(String(chapter.id)),
+      "chapter-card" + (progress.done === progress.total && progress.total ? " is-complete" : "")
+    );
+    var art = renderChapterArt(chapter, "chapter-card__art");
+    var body = el("div", "chapter-card__body");
+    var top = el("div", "chapter-card__top");
+    var number = el("span", "chapter-number", "Chapter " + padChapter(chapter.number));
+    var starCount = el("span", "chapter-card__stars", "★ " + progress.stars + " / " + progress.maxStars);
+    var title = el("h3", null, chapter.title);
+    var summary = el("p", "chapter-card__summary", chapter.summary);
+    var tags = renderTags(chapter.topics, 3);
+    var progressRow = el("div", "chapter-card__progress-row");
+    var progressLabel = el("span", null, progress.done + " / " + progress.total + " passed");
+    var progressPercent = el("strong", null, progress.percent + "%");
+    var open = el("span", "chapter-card__open", progress.done ? "Continue chapter →" : "Open chapter →");
+
+    card.style.setProperty("--card-delay", Math.min(index * 35, 280) + "ms");
+    top.append(number, starCount);
+    progressRow.append(progressLabel, progressPercent);
+    body.append(
+      top,
+      title,
+      summary,
+      tags,
+      progressRow,
+      progressElement(progress.done, progress.total, chapter.title + ": " + progress.done + " of " + progress.total + " passed"),
+      open
+    );
+    card.append(art, body);
+    return card;
+  }
+
+  function renderStat(label, value, symbol) {
+    var item = el("div", "dashboard-stat");
+    var icon = el("span", "dashboard-stat__icon", symbol);
+    icon.setAttribute("aria-hidden", "true");
+    item.append(icon, el("strong", null, value), el("span", null, label));
+    return item;
+  }
+
+  function renderChapterHub(chapter) {
+    var wrapper = el("div", "page-shell chapter-page");
+    var progress = getChapterProgress(chapter);
+    var hero = el("section", "chapter-hero");
+    var art = renderChapterArt(chapter, "chapter-hero__art");
+    var content = el("div", "chapter-hero__content");
+    var eyebrow = el("p", "eyebrow", "Chapter " + padChapter(chapter.number));
+    var title = el("h1", null, chapter.title);
+    var summary = el("p", "chapter-hero__summary", chapter.summary);
+    var progressPanel = el("div", "chapter-hero__progress");
+    var progressText = el("div", "chapter-hero__progress-text");
+
+    wrapper.append(renderBreadcrumbs([
+      { label: "Chapters", href: "#home" },
+      { label: chapter.title }
+    ]));
+
+    progressText.append(
+      el("strong", null, progress.percent + "% complete"),
+      el("span", null, progress.done + " of " + progress.total + " exercises · " + progress.stars + " of " + progress.maxStars + " stars")
+    );
+    progressPanel.append(
+      progressText,
+      progressElement(progress.done, progress.total, chapter.title + " progress")
+    );
+    content.append(eyebrow, title, summary, renderTags(chapter.topics), progressPanel);
+    hero.append(art, content);
+
+    var choiceSection = el("section", "chapter-choices");
+    var choiceHeading = el("header", "section-heading");
+    choiceHeading.append(
+      el("h2", null, "What would you like to do?"),
+      el("p", null, "Study the ideas first or jump into the exercises. Your progress stays in sync.")
+    );
+    var choiceGrid = el("div", "choice-grid");
+    var exercisesChoice = renderChoiceCard({
+      href: "#chapter/" + encodeURIComponent(String(chapter.id)) + "/exercises",
+      icon: ">_",
+      eyebrow: progress.done ? "Continue practising" : "Start practising",
+      title: "Exercises",
+      copy: "Solve " + progress.total + " challenges in the full Python editor, with visible examples and hidden tests.",
+      meta: progress.done + " passed · " + progress.stars + " stars earned",
+      action: "Browse exercises"
+    });
+    var chapterLearning = getChapterLearning(chapter);
+    var tutorialCount = chapterLearning && Array.isArray(chapterLearning.tutorial)
+      ? chapterLearning.tutorial.length
+      : 0;
+    var runbookChoice = renderChoiceCard({
+      href: "#chapter/" + encodeURIComponent(String(chapter.id)) + "/tutorials",
+      icon: "{ }",
+      eyebrow: "Learn the concepts",
+      title: "Runbook & tutorials",
+      copy: "Build a mental model with worked Python examples, common pitfalls, and a practical problem-solving sequence.",
+      meta: tutorialCount + " tutorials · 5 runbook phases",
+      action: "Open learning guide"
+    });
+    choiceGrid.append(exercisesChoice, runbookChoice);
+    choiceSection.append(choiceHeading, choiceGrid);
+
+    var nextExercise = getExercises(chapter).find(function (exercise) {
+      return !passed.has(String(exercise.id));
+    }) || getExercises(chapter)[0];
+    if (nextExercise) {
+      var continueStrip = el("aside", "continue-strip");
+      var continueCopy = el("div");
+      continueCopy.append(
+        el("span", "continue-strip__label", progress.done ? "Next exercise" : "Recommended first step"),
+        el("strong", null, nextExercise.title),
+        el("span", null, nextExercise.prompt)
+      );
+      continueStrip.append(
+        continueCopy,
+        anchor("#exercise/" + encodeURIComponent(String(nextExercise.id)), "button button--primary", "Open editor")
+      );
+      wrapper.append(hero, choiceSection, continueStrip);
+    } else {
+      wrapper.append(hero, choiceSection);
+    }
+    return wrapper;
+  }
+
+  function renderChoiceCard(config) {
+    var card = anchor(config.href, "choice-card");
+    var icon = el("span", "choice-card__icon", config.icon);
+    var copy = el("div", "choice-card__copy");
+    var action = el("span", "choice-card__action", config.action + " →");
+    icon.setAttribute("aria-hidden", "true");
+    copy.append(
+      el("span", "eyebrow", config.eyebrow),
+      el("h3", null, config.title),
+      el("p", null, config.copy),
+      el("span", "choice-card__meta", config.meta),
+      action
+    );
+    card.append(icon, copy);
+    return card;
+  }
+
+  function renderExerciseCatalogue(chapter) {
+    var wrapper = el("div", "page-shell catalogue-page");
+    var progress = getChapterProgress(chapter);
+    var header = el("header", "catalogue-header");
+    var heading = el("div", "catalogue-header__copy");
+    var title = el("h1", null, chapter.title + " exercises");
+    var progressBox = el("div", "catalogue-progress");
+
+    wrapper.append(renderBreadcrumbs([
+      { label: "Chapters", href: "#home" },
+      { label: chapter.title, href: "#chapter/" + encodeURIComponent(String(chapter.id)) },
+      { label: "Exercises" }
+    ]));
+
+    heading.append(
+      el("p", "eyebrow", "Chapter " + padChapter(chapter.number) + " · Practice"),
+      title,
+      el("p", null, "A green star means every visible and hidden test passed. Difficulty controls how many stars you collect.")
+    );
+    progressBox.append(
+      el("strong", null, progress.done + " / " + progress.total + " passed"),
+      el("span", null, "★ " + progress.stars + " / " + progress.maxStars),
+      progressElement(progress.done, progress.total, chapter.title + " exercise progress")
+    );
+    header.append(heading, progressBox);
+    wrapper.append(header);
+
+    var list = el("ol", "exercise-list");
+    getExercises(chapter).forEach(function (exercise, index) {
+      list.append(renderExerciseRow(exercise, chapter, index));
+    });
+    wrapper.append(list);
+    return wrapper;
+  }
+
+  function renderExerciseRow(exercise, chapter, index) {
+    var exerciseId = String(exercise.id);
+    var isPassed = passed.has(exerciseId);
+    var testSpec = testData[exerciseId] || {};
+    var tests = Array.isArray(testSpec.tests) ? testSpec.tests : [];
+    var visibleCount = tests.filter(function (test) { return !test.hidden; }).length;
+    var hiddenCount = tests.length - visibleCount;
+    var item = el("li", "exercise-list__item");
+    var card = anchor(
+      "#exercise/" + encodeURIComponent(exerciseId),
+      "exercise-row" + (isPassed ? " is-passed" : "")
+    );
+    var number = el("span", "exercise-row__number", String(index + 1).padStart(2, "0"));
+    var status = el("span", "exercise-row__status");
+    var copy = el("div", "exercise-row__copy");
+    var titleRow = el("div", "exercise-row__title-row");
+    var title = el("h2", null, exercise.title);
+    var meta = el("div", "exercise-row__meta");
+    var open = el("span", "exercise-row__open", "Open IDE →");
+    var statusStar = el("span", "exercise-row__status-star", isPassed ? "★" : "☆");
+    statusStar.setAttribute("aria-hidden", "true");
+    status.append(statusStar, el("span", null, isPassed ? "Passed" : drafts.has(exerciseId) ? "Draft saved" : "Not passed"));
+    titleRow.append(title, renderDifficultyStars(exercise, isPassed));
+    meta.append(
+      status,
+      el("span", null, visibleCount + " examples"),
+      el("span", null, hiddenCount + " hidden " + (hiddenCount === 1 ? "test" : "tests"))
+    );
+    copy.append(titleRow, el("p", null, exercise.prompt), renderTags(exercise.topics, 4), meta);
+    card.append(number, copy, open);
+    item.append(card);
+    return item;
+  }
+
+  function renderTutorial(chapter) {
+    var content = getChapterLearning(chapter);
+    var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
+    var runbook = content && Array.isArray(content.runbook) ? content.runbook : [];
+    var objectives = content && Array.isArray(content.objectives) ? content.objectives : [];
+    var wrapper = el("div", "page-shell tutorial-page");
+
+    wrapper.append(renderBreadcrumbs([
+      { label: "Chapters", href: "#home" },
+      { label: chapter.title, href: "#chapter/" + encodeURIComponent(String(chapter.id)) },
+      { label: "Runbook & tutorials" }
+    ]));
+
+    var hero = el("header", "tutorial-hero");
+    var heroCopy = el("div", "tutorial-hero__copy");
+    heroCopy.append(
+      el("p", "eyebrow", "Chapter " + padChapter(chapter.number) + " · Learning guide"),
+      el("h1", null, content && content.title ? content.title : chapter.title),
+      el("p", "tutorial-hero__subtitle", content && content.subtitle ? content.subtitle : chapter.summary)
+    );
+    var objectiveBox = el("section", "objective-box");
+    objectiveBox.append(el("h2", null, "You will learn to"));
+    var objectiveList = el("ul");
+    objectives.forEach(function (objective) {
+      objectiveList.append(el("li", null, objective));
+    });
+    if (!objectives.length) {
+      objectiveList.append(el("li", null, "Apply this chapter's ideas with a clear trace and a tested result."));
+    }
+    objectiveBox.append(objectiveList);
+    hero.append(heroCopy, objectiveBox);
+    var boundary = el("aside", "tutorial-boundary");
+    boundary.append(
+      el("span", "tutorial-boundary__icon", "◌"),
+      el("div", null),
+      anchor("#chapter/" + encodeURIComponent(String(chapter.id)) + "/exercises", "button button--quiet", "Open exercises")
+    );
+    boundary.children[1].append(
+      el("strong", null, "Learn the idea without seeing the answer"),
+      el("p", null, "Every example uses a different situation from the exercises. Transfer the concept yourself, then use hints and tests for feedback.")
+    );
+    var learningLoop = el("ol", "learning-loop");
+    [
+      ["1", "Understand", "Name the input, output, and rule."],
+      ["2", "Predict", "Trace a fresh example by hand."],
+      ["3", "Build", "Write the smallest working step."],
+      ["4", "Explain", "Use each test result as evidence."]
+    ].forEach(function (step) {
+      var item = el("li");
+      item.append(el("span", null, step[0]), el("strong", null, step[1]), el("small", null, step[2]));
+      learningLoop.append(item);
+    });
+    wrapper.append(hero, boundary, learningLoop);
+
+    var layout = el("div", "tutorial-layout");
+    var toc = el("nav", "tutorial-toc");
+    var tocTitle = el("strong", null, "On this page");
+    var tocList = el("ol");
+    toc.setAttribute("aria-label", "Tutorial contents");
+    tutorials.forEach(function (tutorial, index) {
+      var item = el("li");
+      var button = el("button", "tutorial-toc__button", String(index + 1).padStart(2, "0") + " · " + tutorial.title);
+      button.type = "button";
+      button.dataset.scrollTarget = "tutorial-section-" + index;
+      item.append(button);
+      tocList.append(item);
+    });
+    var runbookButtonItem = el("li");
+    var runbookButton = el("button", "tutorial-toc__button", "Runbook · Practice loop");
+    runbookButton.type = "button";
+    runbookButton.dataset.scrollTarget = "chapter-runbook";
+    runbookButtonItem.append(runbookButton);
+    tocList.append(runbookButtonItem);
+    toc.append(tocTitle, tocList);
+
+    var article = el("article", "tutorial-article");
+    if (!tutorials.length) {
+      article.append(renderFallbackTutorial(chapter));
+    } else {
+      tutorials.forEach(function (tutorial, index) {
+        article.append(renderTutorialSection(tutorial, index));
+      });
+    }
+    article.append(renderDeepRunbook(chapter, runbook));
+    layout.append(toc, article);
+    wrapper.append(layout);
+
+    var cta = el("aside", "tutorial-cta");
+    var ctaCopy = el("div");
+    ctaCopy.append(
+      el("span", "eyebrow", "Put the model to work"),
+      el("h2", null, "Ready for the exercises?"),
+      el("p", null, "Use the runbook while you trace examples, write code, and interpret failing tests.")
+    );
+    cta.append(
+      ctaCopy,
+      anchor("#chapter/" + encodeURIComponent(String(chapter.id)) + "/exercises", "button button--primary", "Browse exercises")
+    );
+    wrapper.append(cta);
+    return wrapper;
+  }
+
+  function renderTutorialSection(tutorial, index) {
+    var section = el("section", "tutorial-section");
+    var heading = el("header", "tutorial-section__heading");
+    var number = el("span", "tutorial-section__number", String(index + 1).padStart(2, "0"));
+    var title = el("h2", null, tutorial.title);
+    var codeBox = el("div", "tutorial-code");
+    var codeHeader = el("div", "tutorial-code__header");
+    var pre = el("pre");
+    var code = el("code", null, tutorial.exampleCode || "# Try a small example here.");
+    var checklist = el("section", "tutorial-checklist");
+    var checklistList = el("ul");
+    var takeaway = el("aside", "tutorial-takeaway");
+    var pitfall = el("aside", "tutorial-pitfall");
+
+    section.id = "tutorial-section-" + index;
+    heading.append(number, title);
+    var codeMeta = el("span", "tutorial-code__meta");
+    var copyButton = el("button", "tutorial-copy-button", "Copy example");
+    copyButton.type = "button";
+    copyButton.dataset.copySnippet = "true";
+    codeMeta.append(el("span", null, "Python 3"), copyButton);
+    codeHeader.append(el("span", null, "concept-example.py"), codeMeta);
+    pre.append(code);
+    codeBox.append(codeHeader, pre);
+
+    checklist.append(el("h3", null, "Check your understanding"));
+    (tutorial.checklist || []).forEach(function (item) {
+      checklistList.append(el("li", null, item));
+    });
+    checklist.append(checklistList);
+
+    takeaway.append(el("strong", null, "Key takeaway"), el("p", null, tutorial.takeaway));
+    pitfall.append(el("strong", null, "Common pitfall"), el("p", null, tutorial.commonPitfall));
+    section.append(heading, el("p", "tutorial-section__explanation", tutorial.explanation), codeBox, checklist, takeaway, pitfall);
+    return section;
+  }
+
+  function renderDeepRunbook(chapter, steps) {
+    var section = el("section", "runbook-section");
+    var heading = el("header", "tutorial-section__heading");
+    heading.append(el("span", "tutorial-section__number", "RB"), el("h2", null, "Problem-solving runbook"));
+    section.id = "chapter-runbook";
+    section.append(
+      heading,
+      el("p", "tutorial-section__explanation", "Use this repeatable loop when a problem feels vague or a test fails. Each phase ends with evidence you can inspect.")
+    );
+    var list = el("ol", "runbook-steps");
+    var sourceSteps = steps.length ? steps : (chapter.runbook || []).map(function (step, index) {
+      return { phase: String(index + 1), action: step.body, evidence: "A written trace or testable claim." };
+    });
+    sourceSteps.forEach(function (step) {
+      var item = el("li", "runbook-step");
+      var phase = el("div", "runbook-step__phase", step.phase);
+      var body = el("div", "runbook-step__body");
+      body.append(
+        el("p", null, step.action),
+        el("span", "runbook-step__evidence", "Evidence: " + step.evidence)
+      );
+      item.append(phase, body);
+      list.append(item);
+    });
+    section.append(list);
+    return section;
+  }
+
+  function renderFallbackTutorial(chapter) {
+    var section = el("section", "tutorial-section");
+    section.append(el("h2", null, "Start with a concrete trace"), el("p", null, chapter.summary));
+    return section;
+  }
+
+  function renderBadgesPage() {
+    var wrapper = el("div", "page-shell badges-page");
+    var stats = getOverallStats();
+    var rank = getCurrentRank(stats);
+    var badgeStates = getBadgeStates(stats);
+    var unlockedCount = badgeStates.filter(function (item) { return item.unlocked; }).length;
+
+    wrapper.append(renderBreadcrumbs([
+      { label: "Chapters", href: "#home" },
+      { label: "Badges" }
+    ]));
+
+    var hero = el("header", "badges-hero");
+    var heroCopy = el("div");
+    heroCopy.append(
+      el("p", "eyebrow", "Learner profile"),
+      el("h1", null, "Your Python constellation"),
+      el("p", null, "Ranks and badges are calculated from full test passes. Nothing leaves this browser.")
+    );
+    var heroStats = el("div", "badges-hero__stats");
+    heroStats.append(
+      renderStat("Current rank", "L" + rank.level, "⌁"),
+      renderStat("Collected stars", stats.earnedStars + " / " + stats.maxStars, "★"),
+      renderStat("Badges unlocked", unlockedCount + " / " + badgeStates.length, "◆")
+    );
+    hero.append(heroCopy, heroStats);
+    wrapper.append(hero);
+
+    var ranksSection = el("section", "rank-section");
+    var ranksHeading = el("header", "section-heading");
+    ranksHeading.append(el("h2", null, "Rank path"), el("p", null, "Eight Pythonic levels, from your first trace to full mastery."));
+    var rankList = el("ol", "rank-ladder");
+    getRanks().forEach(function (candidate) {
+      var isCurrent = candidate.level === rank.level;
+      var isReached = stats.earnedStars >= candidate.minStars && stats.passedExercises >= candidate.minExercises;
+      var item = el("li", "rank-card" + (isCurrent ? " is-current" : "") + (isReached ? " is-reached" : ""));
+      var level = el("span", "rank-card__level", "L" + candidate.level);
+      var copy = el("div", "rank-card__copy");
+      copy.append(
+        el("strong", null, candidate.name),
+        el("p", null, candidate.description),
+        el("span", null, candidate.minStars + " stars · " + candidate.minExercises + " exercises")
+      );
+      item.append(level, copy);
+      rankList.append(item);
+    });
+    ranksSection.append(ranksHeading, rankList);
+    wrapper.append(ranksSection);
+
+    var badgeSection = el("section", "badge-section");
+    var badgeHeading = el("header", "section-heading section-heading--row");
+    var badgeHeadingCopy = el("div");
+    badgeHeadingCopy.append(el("h2", null, "Badges"), el("p", null, "Select a badge to see exactly how to unlock it."));
+    badgeHeading.append(badgeHeadingCopy, el("span", "section-heading__count", unlockedCount + " unlocked"));
+    var badgeGrid = el("div", "badge-grid badge-grid--page");
+    badgeStates.forEach(function (badgeState) {
+      badgeGrid.append(renderBadgeButton(badgeState, true));
+    });
+    badgeSection.append(badgeHeading, badgeGrid);
+    wrapper.append(badgeSection, renderBadgeDialog());
+    return wrapper;
+  }
+
+  function renderExerciseWorkspace(exercise, chapter) {
+    var exerciseId = String(exercise.id);
+    var isPassed = passed.has(exerciseId);
+    var testSpec = testData[exerciseId] || {};
+    var tests = Array.isArray(testSpec.tests) ? testSpec.tests : [];
+    var visibleTests = tests.filter(function (test) { return !test.hidden; });
+    var hiddenCount = tests.length - visibleTests.length;
+    var chapterExercises = getExercises(chapter);
+    var exerciseIndex = chapterExercises.findIndex(function (candidate) {
+      return String(candidate.id) === exerciseId;
+    });
+    var wrapper = el("div", "exercise-page" + (isPassed ? " is-passed" : ""));
+    var shell = el("div", "page-shell exercise-page__shell");
+
+    shell.append(renderBreadcrumbs([
+      { label: "Chapters", href: "#home" },
+      { label: chapter.title, href: "#chapter/" + encodeURIComponent(String(chapter.id)) },
+      { label: "Exercises", href: "#chapter/" + encodeURIComponent(String(chapter.id)) + "/exercises" },
+      { label: exercise.title }
+    ]));
+
+    var problem = el("article", "problem-panel");
+    problem.dataset.exerciseRoot = exerciseId;
+    var problemHeader = el("header", "problem-panel__header");
+    var titleCopy = el("div", "problem-panel__title-copy");
+    var titleMeta = el("div", "problem-panel__meta");
+    var status = el("span", "pass-status" + (isPassed ? " is-passed" : ""));
+    status.dataset.exercisePassStatus = exerciseId;
+    status.append(el("span", null, isPassed ? "★" : "☆"), el("strong", null, isPassed ? "Passed" : "Not passed"));
+    titleMeta.append(
+      el("span", "eyebrow", "Exercise " + String(exerciseIndex + 1).padStart(2, "0") + " of " + chapterExercises.length),
+      renderDifficultyStars(exercise, isPassed),
+      status
+    );
+    titleCopy.append(titleMeta, el("h1", null, exercise.title), renderTags(exercise.topics));
+    problemHeader.append(titleCopy, renderExercisePager(chapterExercises, exerciseIndex));
+
+    var problemGrid = el("div", "problem-grid");
+    var brief = el("section", "problem-brief");
+    brief.append(
+      el("h2", null, "The challenge"),
+      el("p", "problem-brief__description", testSpec.description || exercise.prompt),
+      renderSpecBlock("Your task", exercise.prompt),
+      renderSpecBlock("Input / output contract", exercise.contract)
+    );
+    if (Array.isArray(testSpec.success) && testSpec.success.length) {
+      var success = el("section", "success-list");
+      success.append(el("h3", null, "Done when"));
+      var successList = el("ul");
+      testSpec.success.forEach(function (criterion) {
+        successList.append(el("li", null, criterion));
+      });
+      success.append(successList);
+      brief.append(success);
+    }
+
+    var hints = renderHintPanel(exercise);
+    problemGrid.append(brief, hints);
+    problem.append(problemHeader, problemGrid);
+
+    var examples = el("section", "examples-section");
+    var examplesHeading = el("header", "section-heading section-heading--row");
+    var examplesCopy = el("div");
+    examplesCopy.append(
+      el("h2", null, "Visible examples"),
+      el("p", null, "Use these to understand the contract before you run the complete hidden suite.")
+    );
+    examplesHeading.append(examplesCopy, el("span", "section-heading__count", visibleTests.length + " examples"));
+    examples.append(examplesHeading);
+    var exampleGrid = el("div", "example-grid");
+    if (visibleTests.length) {
+      visibleTests.forEach(function (test, index) {
+        exampleGrid.append(renderExampleCard(test, testSpec.mode, index));
+      });
+    } else {
+      exampleGrid.append(el("p", "empty-state", "No visible examples are available for this exercise."));
+    }
+    examples.append(exampleGrid);
+
+    var ide = renderIdeWorkspace(exercise, testSpec, visibleTests.length, hiddenCount);
+    shell.append(problem, examples, ide, renderExerciseBottomNavigation(chapterExercises, exerciseIndex, chapter));
+    wrapper.append(shell);
+    safeWrite(STORAGE_KEYS.lastExercise, exerciseId);
+    return wrapper;
+  }
+
+  function renderSpecBlock(label, value) {
+    var block = el("div", "spec-block");
+    block.append(el("span", "spec-block__label", label), el("p", null, value));
+    return block;
+  }
+
+  function renderExercisePager(exercises, index) {
+    var nav = el("nav", "exercise-pager");
+    nav.setAttribute("aria-label", "Previous and next exercise");
+    var previous = exercises[index - 1];
+    var next = exercises[index + 1];
+    if (previous) {
+      nav.append(anchor("#exercise/" + encodeURIComponent(String(previous.id)), "icon-button", "←", "Previous exercise"));
+    } else {
+      var disabledPrevious = el("span", "icon-button is-disabled", "←");
+      disabledPrevious.setAttribute("aria-hidden", "true");
+      nav.append(disabledPrevious);
+    }
+    nav.append(el("span", null, String(index + 1) + " / " + exercises.length));
+    if (next) {
+      nav.append(anchor("#exercise/" + encodeURIComponent(String(next.id)), "icon-button", "→", "Next exercise"));
+    } else {
+      var disabledNext = el("span", "icon-button is-disabled", "→");
+      disabledNext.setAttribute("aria-hidden", "true");
+      nav.append(disabledNext);
+    }
+    return nav;
+  }
+
+  function renderHintPanel(exercise) {
+    var exerciseId = String(exercise.id);
+    var hints = Array.isArray(exercise.hints) ? exercise.hints : [];
+    var count = Math.min(revealedHints.get(exerciseId) || 0, hints.length);
+    var panel = el("aside", "hint-panel");
+    var heading = el("div", "hint-panel__heading");
+    var icon = el("span", "hint-panel__icon", "?");
+    var headingCopy = el("div");
+    icon.setAttribute("aria-hidden", "true");
+    headingCopy.append(el("h2", null, "Need a nudge?"), el("p", null, "Reveal one hint at a time and keep the solution yours."));
+    heading.append(icon, headingCopy);
+    panel.append(heading);
+    panel.dataset.hintsId = exerciseId;
+
+    if (!hints.length) {
+      panel.append(el("p", "hint-panel__empty", "No hints are available for this exercise."));
+      return panel;
+    }
+
+    if (count) {
+      var list = el("ol", "hint-list");
+      hints.slice(0, count).forEach(function (hint, index) {
+        var item = el("li", "hint-list__item");
+        item.append(el("span", "hint-list__number", String(index + 1)), el("p", null, hint));
+        list.append(item);
+      });
+      panel.append(list);
+    } else {
+      panel.append(el("p", "hint-panel__empty", hints.length + " guided hints are available."));
+    }
+
+    if (count < hints.length) {
+      var button = el("button", "button button--quiet", "Reveal hint " + (count + 1) + " of " + hints.length);
+      button.type = "button";
+      button.dataset.revealHint = exerciseId;
+      panel.append(button);
+    } else {
+      panel.append(el("p", "hint-panel__complete", "All hints revealed. Trace one example before changing the code."));
+    }
+    return panel;
+  }
+
+  function renderExampleCard(test, mode, index) {
+    var card = el("article", "example-card");
+    var heading = el("header", "example-card__header");
+    heading.append(el("span", null, "Example " + (index + 1)), el("strong", null, test.name || "Visible case"));
+    card.append(
+      heading,
+      renderIoField(mode === "script" ? "Input" : "Call", formatTestInput(test, mode)),
+      renderIoField("Expected output", formatPlannedExpected(test, mode))
+    );
+    return card;
+  }
+
+  function renderIoField(label, value) {
+    var field = el("section", "io-field");
+    var pre = el("pre");
+    pre.append(el("code", null, value === "" ? "<empty>" : value));
+    field.append(el("span", "io-field__label", label), pre);
+    return field;
+  }
+
+  function renderIdeWorkspace(exercise, testSpec, visibleCount, hiddenCount) {
+    var exerciseId = String(exercise.id);
+    var tests = Array.isArray(testSpec.tests) ? testSpec.tests : [];
+    var section = el("section", "ide-section");
+    var heading = el("header", "section-heading section-heading--row ide-section__heading");
+    var headingCopy = el("div");
+    headingCopy.append(
+      el("p", "eyebrow", "Browser Python workspace"),
+      el("h2", null, "Write, run, and inspect"),
+      el("p", null, "Start from a clean template. Run checks visible examples; Run tests adds hidden cases and awards stars only when all pass.")
+    );
+    heading.append(headingCopy, el("span", "section-heading__count", visibleCount + " visible · " + hiddenCount + " hidden"));
+
+    var layout = el("div", "ide-layout");
+    var editorShell = el("section", "ide-editor-shell");
+    var topbar = el("header", "ide-topbar");
+    var windowControls = el("span", "ide-window-controls");
+    ["close", "minimize", "zoom"].forEach(function (name) {
+      var dot = el("span", "ide-window-dot ide-window-dot--" + name);
+      dot.setAttribute("aria-hidden", "true");
+      windowControls.append(dot);
+    });
+    var fileTab = el("span", "ide-file-tab");
+    var modified = el("span", "ide-file-tab__modified");
+    modified.dataset.editorModified = exerciseId;
+    modified.setAttribute("aria-label", "Starter code");
+    fileTab.append(el("span", "ide-file-tab__type", "PY"), el("span", null, getExerciseFileName(exercise)), modified);
+    var actions = el("div", "ide-actions");
+    var copyButton = el("button", "ide-button ide-button--quiet", "Copy");
+    var pasteButton = el("button", "ide-button ide-button--quiet", "Paste");
+    var resetButton = el("button", "ide-button ide-button--quiet", "Restart");
+    var runButton = el("button", "ide-button ide-button--run", "Run");
+    var testsButton = el("button", "ide-button ide-button--tests", "Run tests");
+    copyButton.type = "button";
+    copyButton.dataset.copyCode = exerciseId;
+    pasteButton.type = "button";
+    pasteButton.dataset.pasteCode = exerciseId;
+    resetButton.type = "button";
+    resetButton.dataset.resetCode = exerciseId;
+    runButton.type = "button";
+    runButton.dataset.runExercise = exerciseId;
+    runButton.dataset.runScope = "visible";
+    testsButton.type = "button";
+    testsButton.dataset.runExercise = exerciseId;
+    testsButton.dataset.runScope = "all";
+    runButton.disabled = !tests.some(function (test) { return !test.hidden; });
+    testsButton.disabled = !tests.length;
+    actions.append(copyButton, pasteButton, resetButton, runButton, testsButton);
+    topbar.append(windowControls, fileTab, actions);
+
+    var frame = el("div", "ide-editor-frame");
+    var textarea = el("textarea", "code-editor-fallback");
+    var aceHost = el("div", "ace-editor-host");
+    textarea.value = getStartingCode(exerciseId);
+    textarea.spellcheck = false;
+    textarea.setAttribute("autocapitalize", "off");
+    textarea.setAttribute("autocomplete", "off");
+    textarea.setAttribute("aria-label", "Python code editor for " + exercise.title);
+    textarea.dataset.codeEditor = exerciseId;
+    aceHost.id = "ace-editor-" + domId(exerciseId);
+    aceHost.dataset.aceHost = exerciseId;
+    aceHost.hidden = true;
+    aceHost.setAttribute("aria-label", "Python code editor for " + exercise.title);
+    frame.append(textarea, aceHost);
+
+    var statusbar = el("footer", "ide-statusbar");
+    var editorState = el("span", "ide-statusbar__state", "Clean starter · solution hidden");
+    var details = el("span", "ide-statusbar__details");
+    editorState.dataset.editorState = exerciseId;
+    details.append(
+      el("span", "ide-cursor-position", "Ln 1, Col 1"),
+      el("span", null, "Spaces: 4"),
+      el("span", null, "Python 3"),
+      el("span", "ide-shortcut", "Ctrl/⌘ + Enter · run tests")
+    );
+    statusbar.append(editorState, details);
+    editorShell.setAttribute("aria-label", "Python editor for " + exercise.title);
+    editorShell.append(topbar, frame, statusbar);
+
+    var plan = renderTestPlan(testSpec);
+    layout.append(editorShell, plan);
+
+    var runtime = el("p", "runtime-note");
+    runtime.append(
+      el("span", "runtime-note__dot"),
+      document.createTextNode(" Python loads in an isolated browser worker on the first run. Your draft saves locally; repository solutions are never loaded into this page.")
+    );
+    var results = el("section", "test-results");
+    results.dataset.testResults = exerciseId;
+    results.setAttribute("aria-live", "polite");
+    results.setAttribute("aria-label", "Test results for " + exercise.title);
+    if (runResults.has(exerciseId)) {
+      renderStoredResults(exercise, testSpec, runResults.get(exerciseId), results);
+    } else {
+      results.append(renderResultsEmpty());
+    }
+
+    section.append(heading, layout, runtime, results);
+    return section;
+  }
+
+  function renderTestPlan(testSpec) {
+    var aside = el("aside", "test-plan-panel");
+    var header = el("header", "test-plan-panel__header");
+    var tests = Array.isArray(testSpec.tests) ? testSpec.tests : [];
+    header.append(el("h3", null, "Test cases"), el("span", null, tests.length + " total"));
+    aside.append(header);
+    var list = el("ol", "test-plan-list");
+    tests.forEach(function (test, index) {
+      var item = el("li", "test-plan-case" + (test.hidden ? " is-hidden" : ""));
+      var heading = el("div", "test-plan-case__heading");
+      var number = el("span", "test-plan-case__number", String(index + 1));
+      var copy = el("div");
+      copy.append(el("strong", null, test.hidden ? "Hidden test" : test.name), el("span", null, test.hidden ? "Unlocks after Run tests" : "Visible example"));
+      heading.append(number, copy, el("span", "test-kind", test.hidden ? "Hidden" : "Visible"));
+      item.append(heading);
+      if (test.hidden) {
+        item.append(el("p", "test-plan-case__masked", "Input and expectation stay masked until the suite returns."));
+      } else {
+        item.append(
+          renderPlanDatum("Input", formatTestInput(test, testSpec.mode)),
+          renderPlanDatum("Expected", formatPlannedExpected(test, testSpec.mode))
+        );
+      }
+      list.append(item);
+    });
+    if (!tests.length) {
+      list.append(el("li", "empty-state", "No tests are defined for this exercise."));
+    }
+    aside.append(list);
+    return aside;
+  }
+
+  function renderPlanDatum(label, value) {
+    var datum = el("div", "test-plan-datum");
+    datum.append(el("span", null, label), el("code", null, value));
+    return datum;
+  }
+
+  function renderResultsEmpty() {
+    var empty = el("div", "results-empty");
+    empty.append(el("span", "results-empty__icon", "▶"), el("strong", null, "No results yet"), el("p", null, "Run an example or the full suite to see expected output, actual output, errors, and tracebacks here."));
+    return empty;
+  }
+
+  function renderExerciseBottomNavigation(exercises, index, chapter) {
+    var nav = el("nav", "exercise-bottom-nav");
+    nav.setAttribute("aria-label", "Exercise navigation");
+    var previous = exercises[index - 1];
+    var next = exercises[index + 1];
+    if (previous) {
+      var previousLink = anchor("#exercise/" + encodeURIComponent(String(previous.id)), "exercise-next-card exercise-next-card--previous");
+      previousLink.append(el("span", null, "← Previous"), el("strong", null, previous.title));
+      nav.append(previousLink);
+    }
+    if (next) {
+      var nextLink = anchor("#exercise/" + encodeURIComponent(String(next.id)), "exercise-next-card exercise-next-card--next");
+      nextLink.append(el("span", null, "Next →"), el("strong", null, next.title));
+      nav.append(nextLink);
+    } else {
+      var chapterLink = anchor("#chapter/" + encodeURIComponent(String(chapter.id)) + "/exercises", "exercise-next-card exercise-next-card--next");
+      chapterLink.append(el("span", null, "Back to"), el("strong", null, "All exercises"));
+      nav.append(chapterLink);
+    }
+    return nav;
+  }
+
+  function handleMainClick(event) {
+    var hintButton = event.target.closest("button[data-reveal-hint]");
+    var scrollButton = event.target.closest("button[data-scroll-target]");
+    var runButton = event.target.closest("button[data-run-exercise]");
+    var resetButton = event.target.closest("button[data-reset-code]");
+    var copyCodeButton = event.target.closest("button[data-copy-code]");
+    var pasteCodeButton = event.target.closest("button[data-paste-code]");
+    var copySnippetButton = event.target.closest("button[data-copy-snippet]");
+    var badgeButton = event.target.closest("button[data-open-badge]");
+    var closeDialogButton = event.target.closest("button[data-close-badge-dialog]");
+
+    if (hintButton) {
+      revealNextHint(hintButton.dataset.revealHint);
+      return;
+    }
+    if (scrollButton) {
+      var target = document.getElementById(scrollButton.dataset.scrollTarget);
+      if (target) {
+        target.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+      }
+      return;
+    }
+    if (runButton) {
+      runExerciseTests(runButton.dataset.runExercise, runButton.dataset.runScope, runButton);
+      return;
+    }
+    if (copyCodeButton) {
+      copyExerciseCode(copyCodeButton.dataset.copyCode, copyCodeButton);
+      return;
+    }
+    if (pasteCodeButton) {
+      pasteIntoExercise(pasteCodeButton.dataset.pasteCode, pasteCodeButton);
+      return;
+    }
+    if (copySnippetButton) {
+      copyTutorialSnippet(copySnippetButton);
+      return;
+    }
+    if (resetButton) {
+      resetExerciseCode(resetButton.dataset.resetCode);
+      return;
+    }
+    if (badgeButton) {
+      openBadgeDialog(badgeButton.dataset.openBadge);
+      return;
+    }
+    if (closeDialogButton) {
+      closeBadgeDialog();
+    }
+  }
+
+  function revealNextHint(exerciseId) {
+    var exercise = exerciseById.get(exerciseId);
+    var container = elements.main.querySelector("[data-hints-id='" + cssEscape(exerciseId) + "']");
+    if (!exercise || !container) {
+      return;
+    }
+    var hints = Array.isArray(exercise.hints) ? exercise.hints : [];
+    var nextCount = Math.min((revealedHints.get(exerciseId) || 0) + 1, hints.length);
+    revealedHints.set(exerciseId, nextCount);
+    var replacement = renderHintPanel(exercise);
+    container.replaceWith(replacement);
+    announce("Hint " + nextCount + " of " + hints.length + " revealed for " + exercise.title + ".");
+    window.requestAnimationFrame(function () {
+      var nextButton = replacement.querySelector("button[data-reveal-hint]");
+      if (nextButton) {
+        nextButton.focus();
+      } else {
+        replacement.scrollIntoView({ block: "nearest" });
+      }
+    });
+  }
+
+  async function copyExerciseCode(exerciseId, button) {
+    var code = getActiveCode(exerciseId);
+    if (code === null) {
+      return;
+    }
+    try {
+      await writeClipboardText(code);
+      if (activeEditor && activeEditor.exerciseId === exerciseId) {
+        activeEditor.focus();
+      }
+      showControlFeedback(button, "Copied", "Copy", 1400);
+      announce("Code copied to the clipboard.");
+    } catch (error) {
+      announce("Copy was blocked by the browser. Select the editor and use Ctrl or Command plus C.");
+    }
+  }
+
+  async function pasteIntoExercise(exerciseId, button) {
+    if (!activeEditor || activeEditor.exerciseId !== exerciseId) {
+      return;
+    }
+    try {
+      if (!navigator.clipboard || typeof navigator.clipboard.readText !== "function") {
+        throw new Error("Clipboard read is unavailable.");
+      }
+      var text = await promiseWithTimeout(navigator.clipboard.readText(), 1800, "Clipboard read timed out.");
+      if (!text) {
+        announce("The clipboard does not contain text.");
+        activeEditor.focus();
+        return;
+      }
+      activeEditor.insertText(text);
+      activeEditor.focus();
+      showControlFeedback(button, "Pasted", "Paste", 1400);
+      announce("Clipboard text inserted at the cursor.");
+    } catch (error) {
+      activeEditor.focus();
+      announce("Direct paste was blocked. The editor is focused; use Ctrl or Command plus V.");
+    }
+  }
+
+  async function copyTutorialSnippet(button) {
+    var code = button.closest(".tutorial-code").querySelector("code");
+    if (!code) {
+      return;
+    }
+    try {
+      await writeClipboardText(code.textContent);
+      showControlFeedback(button, "Copied", "Copy example", 1400);
+      announce("Concept example copied to the clipboard.");
+    } catch (error) {
+      announce("Copy was blocked by the browser. Select the example and copy it manually.");
+    }
+  }
+
+  function writeClipboardText(value) {
+    if (legacyCopyText(value)) {
+      return Promise.resolve();
+    }
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      return promiseWithTimeout(navigator.clipboard.writeText(value), 1600, "Clipboard write timed out.");
+    }
+    return Promise.reject(new Error("Clipboard write is unavailable."));
+  }
+
+  function legacyCopyText(value) {
+    var helper = el("textarea", "clipboard-helper");
+    helper.value = value;
+    helper.setAttribute("readonly", "");
+    document.body.append(helper);
+    helper.select();
+    try {
+      return Boolean(document.execCommand("copy"));
+    } catch (error) {
+      return false;
+    } finally {
+      helper.remove();
+    }
+  }
+
+  function promiseWithTimeout(promise, delay, message) {
+    return Promise.race([
+      promise,
+      new Promise(function (_resolve, reject) {
+        window.setTimeout(function () { reject(new Error(message)); }, delay);
+      })
+    ]);
+  }
+
+  function showControlFeedback(button, temporaryLabel, restingLabel, duration) {
+    button.textContent = temporaryLabel;
+    window.setTimeout(function () {
+      if (button.isConnected) {
+        button.textContent = restingLabel;
+      }
+    }, duration);
+  }
+
+  function initializeExerciseEditor(exercise) {
+    var exerciseId = String(exercise.id);
+    var textarea = elements.main.querySelector("textarea[data-code-editor='" + cssEscape(exerciseId) + "']");
+    var host = elements.main.querySelector("[data-ace-host='" + cssEscape(exerciseId) + "']");
+    var state = elements.main.querySelector("[data-editor-state='" + cssEscape(exerciseId) + "']");
+    var modified = elements.main.querySelector("[data-editor-modified='" + cssEscape(exerciseId) + "']");
+    var position = elements.main.querySelector(".ide-cursor-position");
+    var runTestsButton = elements.main.querySelector("button[data-run-exercise='" + cssEscape(exerciseId) + "'][data-run-scope='all']");
+
+    if (!textarea || !host || !state || !modified || !position) {
+      return;
+    }
+
+    textarea.addEventListener("input", function () {
+      scheduleDraftSave(exerciseId, textarea.value);
+      updateEditorChrome(exerciseId, textarea.value, state, modified);
+      updateTextareaPosition(textarea, position);
+    });
+    textarea.addEventListener("keyup", function () { updateTextareaPosition(textarea, position); });
+    textarea.addEventListener("click", function () { updateTextareaPosition(textarea, position); });
+    textarea.addEventListener("keydown", function (event) {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        if (runTestsButton && !runTestsButton.disabled) {
+          runTestsButton.click();
+        }
+      }
+    });
+
+    updateEditorChrome(exerciseId, textarea.value, state, modified);
+
+    if (!window.ace || typeof window.ace.edit !== "function") {
+      activeEditor = createTextareaAdapter(exerciseId, textarea, state, modified, position);
+      state.textContent = "Basic editor fallback";
+      return;
+    }
+
+    var aceEditor;
+    try {
+      window.ace.config.set("basePath", "assets/vendor/ace");
+      host.hidden = false;
+      aceEditor = window.ace.edit(host, {
+        value: textarea.value,
+        mode: "ace/mode/python",
+        theme: "ace/theme/monokai",
+        fontFamily: "SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
+        fontSize: window.matchMedia("(max-width: 640px)").matches ? "16px" : "15px",
+        tabSize: 4,
+        useSoftTabs: true,
+        navigateWithinSoftTabs: true,
+        useWorker: false,
+        useResizeObserver: true,
+        showPrintMargin: false,
+        showGutter: true,
+        displayIndentGuides: true,
+        highlightActiveLine: true,
+        highlightGutterLine: true,
+        highlightIndentGuides: true,
+        enableBasicAutocompletion: true,
+        enableLiveAutocompletion: false,
+        enableKeyboardAccessibility: true,
+        enableMobileMenu: true,
+        scrollPastEnd: 0.12,
+        wrap: window.matchMedia("(max-width: 640px)").matches,
+        textInputAriaLabel: "Python code editor for " + exercise.title
+      });
+      aceEditor.session.setUseWorker(false);
+      aceEditor.session.setNewLineMode("unix");
+      aceEditor.renderer.setPadding(16);
+      textarea.hidden = true;
+
+      aceEditor.commands.addCommand({
+        name: "runAllExerciseTests",
+        bindKey: { win: "Ctrl-Enter", mac: "Command-Enter" },
+        exec: function () {
+          if (runTestsButton && !runTestsButton.disabled) {
+            runTestsButton.click();
+          }
+        }
+      });
+      aceEditor.commands.addCommand({
+        name: "saveExerciseDraft",
+        bindKey: { win: "Ctrl-S", mac: "Command-S" },
+        exec: function () {
+          scheduleDraftSave(exerciseId, aceEditor.getValue(), true);
+          state.textContent = "Draft saved locally";
+          announce("Draft saved for " + exercise.title + ".");
+        }
+      });
+
+      function syncValue() {
+        var value = aceEditor.getValue();
+        textarea.value = value;
+        scheduleDraftSave(exerciseId, value);
+        updateEditorChrome(exerciseId, value, state, modified);
+      }
+
+      function syncPosition() {
+        var cursor = aceEditor.getCursorPosition();
+        position.textContent = "Ln " + (cursor.row + 1) + ", Col " + (cursor.column + 1);
+      }
+
+      aceEditor.session.on("change", syncValue);
+      aceEditor.selection.on("changeCursor", syncPosition);
+      syncPosition();
+
+      activeEditor = {
+        exerciseId: exerciseId,
+        getValue: function () { return aceEditor.getValue(); },
+        setValue: function (value) {
+          aceEditor.setValue(value, -1);
+          textarea.value = value;
+          updateEditorChrome(exerciseId, value, state, modified);
+          syncPosition();
+        },
+        insertText: function (value) {
+          aceEditor.insert(value);
+          syncValue();
+          syncPosition();
+        },
+        focus: function () { aceEditor.focus(); },
+        destroy: function () {
+          var value = aceEditor.getValue();
+          textarea.value = value;
+          scheduleDraftSave(exerciseId, value, true);
+          aceEditor.destroy();
+          host.replaceChildren();
+        }
+      };
+      aceEditor.resize(true);
+    } catch (error) {
+      if (aceEditor && typeof aceEditor.destroy === "function") {
+        aceEditor.destroy();
+      }
+      host.replaceChildren();
+      host.hidden = true;
+      textarea.hidden = false;
+      activeEditor = createTextareaAdapter(exerciseId, textarea, state, modified, position);
+      state.textContent = "Basic editor fallback";
+    }
+  }
+
+  function createTextareaAdapter(exerciseId, textarea, state, modified, position) {
+    return {
+      exerciseId: exerciseId,
+      getValue: function () { return textarea.value; },
+      setValue: function (value) {
+        textarea.value = value;
+        updateEditorChrome(exerciseId, value, state, modified);
+        updateTextareaPosition(textarea, position);
+      },
+      insertText: function (value) {
+        var start = textarea.selectionStart || 0;
+        var end = textarea.selectionEnd || start;
+        textarea.setRangeText(value, start, end, "end");
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+      focus: function () { textarea.focus(); },
+      destroy: function () {
+        scheduleDraftSave(exerciseId, textarea.value, true);
+      }
+    };
+  }
+
+  function disposeActiveEditor() {
+    if (activeEditor) {
+      activeEditor.destroy();
+      activeEditor = null;
+    }
+    flushDrafts();
+  }
+
+  function getActiveCode(exerciseId) {
+    if (activeEditor && activeEditor.exerciseId === exerciseId) {
+      return activeEditor.getValue();
+    }
+    var textarea = elements.main.querySelector("textarea[data-code-editor='" + cssEscape(exerciseId) + "']");
+    return textarea ? textarea.value : null;
+  }
+
+  function resetExerciseCode(exerciseId) {
+    if (!Object.prototype.hasOwnProperty.call(starterCode, exerciseId)) {
+      return;
+    }
+    var value = starterCode[exerciseId];
+    if (activeEditor && activeEditor.exerciseId === exerciseId) {
+      activeEditor.setValue(value);
+      activeEditor.focus();
+    }
+    discardDraft(exerciseId);
+    runResults.delete(exerciseId);
+    var results = elements.main.querySelector("[data-test-results='" + cssEscape(exerciseId) + "']");
+    if (results) {
+      results.replaceChildren(renderResultsEmpty());
+    }
+    announce("Clean starter restored for " + exerciseById.get(exerciseId).title + ".");
+  }
+
+  async function runExerciseTests(exerciseId, scope, button) {
+    var exercise = exerciseById.get(exerciseId);
+    var testSpec = testData[exerciseId];
+    var code = getActiveCode(exerciseId);
+    var allTests = testSpec && Array.isArray(testSpec.tests) ? testSpec.tests : [];
+    var selectedTests = scope === "visible"
+      ? allTests.filter(function (test) { return !test.hidden; })
+      : allTests;
+    var resultsContainer = elements.main.querySelector("[data-test-results='" + cssEscape(exerciseId) + "']");
+
+    if (!exercise || !testSpec || code === null || !selectedTests.length || !resultsContainer || button.disabled) {
+      return;
+    }
+    if (activeRun) {
+      announce("Wait for the current Python run to finish before starting another one.");
+      return;
+    }
+
+    var runToken = String(Date.now()) + "-" + exerciseId;
+    activeRun = { token: runToken, exerciseId: exerciseId };
+    audio.playSubmit();
+    setIdeControlsLocked(true);
+    button.textContent = scope === "visible" ? "Running…" : "Running tests…";
+    resultsContainer.setAttribute("aria-busy", "true");
+    renderRunStatus(
+      resultsContainer,
+      scope === "visible"
+        ? "Running " + selectedTests.length + " visible examples…"
+        : "Running " + selectedTests.length + " visible and hidden tests…",
+      false
+    );
+
+    try {
+      var results = await pythonRunner.run(code, testSpec.mode, selectedTests);
+      var stored = { scope: scope, results: results, tests: selectedTests, completedAt: Date.now() };
+      runResults.set(exerciseId, stored);
+
+      if (isCurrentExercise(exerciseId)) {
+        resultsContainer = elements.main.querySelector("[data-test-results='" + cssEscape(exerciseId) + "']");
+        if (resultsContainer) {
+          renderStoredResults(exercise, testSpec, stored, resultsContainer);
+        }
+      }
+
+      var allPassed = results.length === selectedTests.length && results.every(function (result) {
+        return result.passed;
+      });
+      if (allPassed) {
+        audio.playSuccess();
+      } else {
+        audio.playFailure();
+      }
+      if (scope === "all" && allPassed && selectedTests.length === allTests.length) {
+        markExercisePassed(exerciseId);
+      }
+    } catch (error) {
+      audio.playFailure();
+      if (isCurrentExercise(exerciseId)) {
+        resultsContainer = elements.main.querySelector("[data-test-results='" + cssEscape(exerciseId) + "']");
+        if (resultsContainer) {
+          renderRunStatus(resultsContainer, error instanceof Error ? error.message : String(error), true);
+        }
+      }
+    } finally {
+      if (activeRun && activeRun.token === runToken) {
+        activeRun = null;
+      }
+      if (isCurrentExercise(exerciseId)) {
+        resultsContainer = elements.main.querySelector("[data-test-results='" + cssEscape(exerciseId) + "']");
+        if (resultsContainer) {
+          resultsContainer.removeAttribute("aria-busy");
+        }
+        setIdeControlsLocked(false);
+      }
+      if (button.isConnected) {
+        button.textContent = scope === "visible" ? "Run" : "Run tests";
+      }
+    }
+  }
+
+  function isCurrentExercise(exerciseId) {
+    return currentRoute && currentRoute.name === "exercise" && String(currentRoute.exercise.id) === exerciseId;
+  }
+
+  function setIdeControlsLocked(locked) {
+    elements.main.querySelectorAll("button[data-run-exercise], button[data-reset-code], button[data-paste-code]").forEach(function (control) {
+      var exerciseId = control.dataset.runExercise || control.dataset.resetCode || control.dataset.pasteCode;
+      var testSpec = testData[exerciseId];
+      if (control.dataset.runExercise) {
+        var scope = control.dataset.runScope;
+        var tests = testSpec && Array.isArray(testSpec.tests) ? testSpec.tests : [];
+        var available = scope === "visible" ? tests.some(function (test) { return !test.hidden; }) : tests.length > 0;
+        control.disabled = locked || !available;
+      } else {
+        control.disabled = locked;
+      }
+    });
+  }
+
+  function renderRunStatus(container, message, isError) {
+    var status = el("div", "runner-status" + (isError ? " runner-status--error" : ""));
+    status.append(el("span", "runner-status__spinner", isError ? "!" : ""), el("strong", null, isError ? "Python could not finish the run" : message));
+    if (isError) {
+      var retry = el("button", "button button--primary", "Retry Python tests");
+      retry.type = "button";
+      if (currentRoute && currentRoute.name === "exercise") {
+        retry.dataset.runExercise = String(currentRoute.exercise.id);
+        retry.dataset.runScope = "all";
+      }
+      status.append(
+        el("p", null, message),
+        el(
+          "p",
+          null,
+          window.location.protocol === "file:"
+            ? "Start the documented local server and open http://127.0.0.1:8000 so the Python worker can load."
+            : "The runner will try a second pinned Python source automatically. Retry after checking the connection; infinite loops are stopped and restarted safely."
+        ),
+        retry
+      );
+    }
+    container.replaceChildren(status);
+  }
+
+  function renderStoredResults(exercise, testSpec, stored, container) {
+    var results = stored.results || [];
+    var passedCount = results.filter(function (result) { return result.passed; }).length;
+    var allPassed = results.length > 0 && passedCount === results.length;
+    var awardsProgress = stored.scope === "all";
+    var summary = el("header", "results-summary " + (allPassed ? "results-summary--pass" : "results-summary--fail"));
+    var icon = el("span", "results-summary__icon", allPassed ? "✓" : "×");
+    var copy = el("div", "results-summary__copy");
+    var title = allPassed
+      ? awardsProgress ? "All tests passed" : "All visible examples passed"
+      : passedCount + " of " + results.length + " tests passed";
+    var message = allPassed
+      ? awardsProgress
+        ? "Green result: this exercise now awards its difficulty stars."
+        : "The examples are green. Run the full suite to check hidden cases and collect stars."
+      : "Open each failed case to compare the expected value, actual value, and traceback.";
+    icon.setAttribute("aria-hidden", "true");
+    copy.append(el("strong", null, title), el("span", null, message));
+    summary.append(icon, copy, el("span", "results-summary__count", passedCount + " / " + results.length));
+    container.replaceChildren(summary);
+
+    var list = el("div", "result-list");
+    results.forEach(function (result, index) {
+      var definition = (stored.tests || []).find(function (test) { return test.id === result.id; }) || (stored.tests || [])[index];
+      list.append(renderTestResult(result, definition, testSpec.mode, index));
+    });
+    container.append(list);
+    announce(passedCount + " of " + results.length + " tests passed for " + exercise.title + ".");
+  }
+
+  function renderTestResult(result, definition, mode, index) {
+    var details = el("details", "test-result " + (result.passed ? "test-result--pass" : "test-result--fail"));
+    var summary = el("summary");
+    var icon = el("span", "test-result__icon", result.passed ? "✓" : "×");
+    var title = el("strong", null, result.name || "Test " + (index + 1));
+    var kind = el("span", "test-kind", result.hidden ? "Hidden" : "Visible");
+    var body = el("div", "test-result__body");
+    var expectedValue = result.expected;
+    if (expectedValue === "Not produced" && definition) {
+      expectedValue = formatPlannedExpected(definition, mode);
+    }
+    icon.setAttribute("aria-hidden", "true");
+    summary.append(icon, title, kind);
+    details.open = !result.passed;
+    details.append(summary);
+
+    body.append(
+      renderResultField("Test input", formatTestInput(definition || {}, mode)),
+      renderResultField("Expected", expectedValue),
+      renderResultField("Actual", result.actual)
+    );
+    if (mode !== "script" && result.stdout) {
+      body.append(renderResultField("Captured stdout", result.stdout));
+    }
+    if (result.stderr) {
+      body.append(renderResultField("Captured stderr", result.stderr));
+    }
+    if (result.traceback) {
+      body.append(renderResultField("Traceback", result.traceback, true));
+    }
+    details.append(body);
+    return details;
+  }
+
+  function renderResultField(label, value, traceback) {
+    var field = el("section", "result-field" + (traceback ? " result-field--traceback" : ""));
+    var pre = el("pre");
+    pre.append(el("code", null, value === "" ? "<empty>" : value));
+    field.append(el("h4", null, label), pre);
+    return field;
+  }
+
+  function markExercisePassed(exerciseId) {
+    var wasPassed = passed.has(exerciseId);
+    var beforeStats = getOverallStats();
+    var beforeRank = getCurrentRank(beforeStats);
+    var beforeBadges = getBadgeStates(beforeStats);
+    passed.add(exerciseId);
+    persistPassed();
+    renderProfile();
+    if (!wasPassed) {
+      updateCurrentPassedUi(exerciseId);
+      var exercise = exerciseById.get(exerciseId);
+      var awardedStars = getDifficulty(exercise);
+      announce(exercise.title + " passed. You collected " + awardedStars + " " + pluralize(awardedStars, "star") + ".");
+      celebrateNewAchievements(beforeRank, beforeBadges);
+    }
+  }
+
+  function celebrateNewAchievements(beforeRank, beforeBadges) {
+    var stats = getOverallStats();
+    var nextRank = getCurrentRank(stats);
+    var nextBadges = getBadgeStates(stats);
+    var unlockedBefore = new Set(beforeBadges.filter(function (state) {
+      return state.unlocked;
+    }).map(function (state) {
+      return state.badge.id;
+    }));
+    var achievements = nextBadges.filter(function (state) {
+      return state.unlocked && !unlockedBefore.has(state.badge.id);
+    }).map(function (state) {
+      return { icon: state.badge.icon, eyebrow: "Achievement unlocked", title: state.badge.name, detail: state.badge.description };
+    });
+
+    if (nextRank.level > beforeRank.level) {
+      achievements.unshift({
+        icon: "L" + nextRank.level,
+        eyebrow: "New Pythonic rank",
+        title: nextRank.name,
+        detail: nextRank.description
+      });
+    }
+
+    achievements.forEach(function (achievement, index) {
+      window.setTimeout(function () {
+        showAchievementToast(achievement);
+        audio.playAchievement();
+      }, 380 + index * 720);
+    });
+  }
+
+  function showAchievementToast(achievement) {
+    if (!elements.achievementToasts) {
+      return;
+    }
+    var toast = el("section", "achievement-toast");
+    var icon = el("span", "achievement-toast__icon", achievement.icon);
+    var copy = el("div");
+    var close = el("button", "achievement-toast__close", "×");
+    close.type = "button";
+    close.setAttribute("aria-label", "Dismiss achievement notification");
+    copy.append(
+      el("small", null, achievement.eyebrow),
+      el("strong", null, achievement.title),
+      el("p", null, achievement.detail)
+    );
+    close.addEventListener("click", function () { dismissAchievementToast(toast); });
+    toast.append(icon, copy, close);
+    elements.achievementToasts.append(toast);
+    window.requestAnimationFrame(function () { toast.classList.add("is-visible"); });
+    window.setTimeout(function () { dismissAchievementToast(toast); }, 6200);
+  }
+
+  function dismissAchievementToast(toast) {
+    if (!toast || !toast.isConnected) {
+      return;
+    }
+    toast.classList.remove("is-visible");
+    window.setTimeout(function () { toast.remove(); }, prefersReducedMotion() ? 0 : 240);
+  }
+
+  function updateCurrentPassedUi(exerciseId) {
+    var page = elements.main.querySelector(".exercise-page");
+    var status = elements.main.querySelector("[data-exercise-pass-status='" + cssEscape(exerciseId) + "']");
+    if (page) {
+      page.classList.add("is-passed", "is-celebrating");
+      window.setTimeout(function () {
+        if (page.isConnected) {
+          page.classList.remove("is-celebrating");
+        }
+      }, 900);
+    }
+    if (status) {
+      status.classList.add("is-passed");
+      status.replaceChildren(el("span", null, "★"), el("strong", null, "Passed"));
+    }
+    elements.main.querySelectorAll(".difficulty-stars").forEach(function (stars) {
+      stars.classList.add("is-passed");
+    });
+  }
+
+  function renderProfile() {
+    var stats = getOverallStats();
+    var rank = getCurrentRank(stats);
+    var nextRank = getNextRank(rank);
+    var badgeStates = getBadgeStates(stats);
+    var unlocked = badgeStates.filter(function (state) { return state.unlocked; }).length;
+    elements.profileLevel.textContent = "Level " + rank.level;
+    elements.profileRank.textContent = rank.name;
+
+    var panel = elements.profilePanel;
+    var header = el("header", "profile-panel__header");
+    var avatar = el("span", "profile-panel__avatar", "L" + rank.level);
+    var title = el("div");
+    title.append(el("span", null, "Current rank"), el("strong", null, rank.name), el("small", null, rank.description));
+    header.append(avatar, title);
+
+    var progress = el("section", "profile-panel__progress");
+    var progressTop = el("div");
+    progressTop.append(el("strong", null, stats.progressPercent + "% complete"), el("span", null, stats.passedExercises + " / " + stats.totalExercises));
+    progress.append(
+      progressTop,
+      progressElement(stats.passedExercises, stats.totalExercises, "Overall exercise progress"),
+      el("p", null, nextRank
+        ? Math.max(0, nextRank.minStars - stats.earnedStars) + " stars and " + Math.max(0, nextRank.minExercises - stats.passedExercises) + " exercises remain to " + nextRank.name + "."
+        : "Every rank requirement is complete.")
+    );
+
+    var metrics = el("div", "profile-panel__metrics");
+    metrics.append(
+      renderProfileMetric("★", stats.earnedStars + " / " + stats.maxStars, "Stars"),
+      renderProfileMetric("◆", unlocked + " / " + badgeStates.length, "Badges"),
+      renderProfileMetric("✓", stats.completedChapters + " / " + chapters.length, "Chapters")
+    );
+
+    var badges = el("section", "profile-panel__badges");
+    var badgesHeading = el("div", "profile-panel__section-heading");
+    badgesHeading.append(el("strong", null, "Badges"), anchor("#profile/badges", null, "View all"));
+    var grid = el("div", "profile-badge-grid");
+    badgeStates.slice(0, 8).forEach(function (state) {
+      grid.append(renderBadgeButton(state, false));
+    });
+    var detail = el("div", "profile-badge-detail");
+    detail.setAttribute("aria-live", "polite");
+    var selected = badgeStates.find(function (state) { return state.badge.id === selectedBadgeId; });
+    if (!selected) {
+      selected = badgeStates.find(function (state) { return state.unlocked; }) || badgeStates[0];
+    }
+    if (selected) {
+      selectedBadgeId = selected.badge.id;
+      detail.append(
+        el("strong", null, selected.badge.name + (selected.unlocked ? " · Unlocked" : " · Locked")),
+        el("p", null, selected.badge.description)
+      );
+    }
+    badges.append(badgesHeading, grid, detail);
+
+    var localNote = el("p", "profile-panel__local-note", "Profile, code, and progress are stored only in this browser.");
+    panel.replaceChildren(header, progress, metrics, badges, localNote);
+  }
+
+  function renderProfileMetric(icon, value, label) {
+    var metric = el("div", "profile-metric");
+    metric.append(el("span", "profile-metric__icon", icon), el("strong", null, value), el("small", null, label));
+    return metric;
+  }
+
+  function renderBadgeButton(state, large) {
+    var badge = state.badge;
+    var button = el("button", (large ? "badge-card" : "profile-badge") + (state.unlocked ? " is-unlocked" : " is-locked"));
+    button.type = "button";
+    if (large) {
+      button.dataset.openBadge = badge.id;
+      button.append(
+        el("span", "badge-card__icon", badge.icon),
+        el("span", "badge-card__copy", badge.name),
+        el("span", "badge-card__status", state.unlocked ? "Unlocked" : "Locked")
+      );
+      button.setAttribute("aria-label", badge.name + ", " + (state.unlocked ? "unlocked" : "locked") + ". Open details.");
+    } else {
+      button.dataset.profileBadge = badge.id;
+      button.setAttribute("aria-pressed", String(selectedBadgeId === badge.id));
+      button.append(el("span", null, badge.icon), el("small", null, badge.name));
+      button.setAttribute("aria-label", badge.name + ", " + (state.unlocked ? "unlocked" : "locked"));
+    }
+    return button;
+  }
+
+  function handleProfileClick(event) {
+    var badgeButton = event.target.closest("button[data-profile-badge]");
+    if (!badgeButton) {
+      if (event.target.closest("a")) {
+        closeProfile();
+      }
+      return;
+    }
+    selectedBadgeId = badgeButton.dataset.profileBadge;
+    var states = getBadgeStates(getOverallStats());
+    var selected = states.find(function (state) { return state.badge.id === selectedBadgeId; });
+    if (!selected) {
+      return;
+    }
+    elements.profilePanel.querySelectorAll("button[data-profile-badge]").forEach(function (button) {
+      button.setAttribute("aria-pressed", String(button === badgeButton));
+    });
+    var detail = elements.profilePanel.querySelector(".profile-badge-detail");
+    detail.replaceChildren(
+      el("strong", null, selected.badge.name + (selected.unlocked ? " · Unlocked" : " · Locked")),
+      el("p", null, selected.badge.description)
+    );
+  }
+
+  function renderBadgeDialog() {
+    var dialog = el("dialog", "badge-dialog");
+    dialog.id = "badge-dialog";
+    var card = el("div", "badge-dialog__card");
+    var close = el("button", "icon-button badge-dialog__close", "×");
+    close.type = "button";
+    close.dataset.closeBadgeDialog = "true";
+    close.setAttribute("aria-label", "Close badge details");
+    var content = el("div", "badge-dialog__content");
+    content.dataset.badgeDialogContent = "true";
+    card.append(close, content);
+    dialog.append(card);
+    dialog.addEventListener("click", function (event) {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+    return dialog;
+  }
+
+  function openBadgeDialog(badgeId) {
+    var dialog = document.getElementById("badge-dialog");
+    var content = dialog && dialog.querySelector("[data-badge-dialog-content]");
+    var state = getBadgeStates(getOverallStats()).find(function (candidate) {
+      return candidate.badge.id === badgeId;
+    });
+    if (!dialog || !content || !state) {
+      return;
+    }
+    content.replaceChildren(
+      el("span", "badge-dialog__icon " + (state.unlocked ? "is-unlocked" : "is-locked"), state.badge.icon),
+      el("p", "eyebrow", state.unlocked ? "Badge unlocked" : "Badge locked"),
+      el("h2", null, state.badge.name),
+      el("p", null, state.badge.description),
+      el("strong", "badge-dialog__requirement", getBadgeRequirementText(state.badge))
+    );
+    if (typeof dialog.showModal === "function") {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute("open", "");
+    }
+  }
+
+  function closeBadgeDialog() {
+    var dialog = document.getElementById("badge-dialog");
+    if (!dialog) {
+      return;
+    }
+    if (typeof dialog.close === "function") {
+      dialog.close();
+    } else {
+      dialog.removeAttribute("open");
+    }
+  }
+
+  function getBadgeRequirementText(badge) {
+    var criteria = badge.criteria || {};
+    if (criteria.metric === "passedExercises") {
+      return "Requirement: pass " + criteria.value + " exercise" + (criteria.value === 1 ? "" : "s") + ".";
+    }
+    if (criteria.metric === "completedChapters") {
+      return "Requirement: complete " + criteria.value + " chapter" + (criteria.value === 1 ? "" : "s") + ".";
+    }
+    if (criteria.metric === "earnedStars") {
+      return "Requirement: collect " + criteria.value + " difficulty stars.";
+    }
+    if (criteria.metric === "highestPassedDifficulty") {
+      return "Requirement: pass a difficulty " + criteria.value + " exercise.";
+    }
+    if (criteria.metric === "progressPercent") {
+      return "Requirement: reach " + criteria.value + "% overall completion.";
+    }
+    if (criteria.metric === "chaptersComplete") {
+      return "Requirement: complete the listed collection chapters.";
+    }
+    if (criteria.metric === "chapterComplete") {
+      var chapter = chapterById.get(criteria.chapterId);
+      return "Requirement: complete " + (chapter ? chapter.title : criteria.chapterId) + ".";
+    }
+    return "Requirement: continue passing the full exercise suites.";
+  }
+
+  function toggleProfile() {
+    var open = elements.profilePanel.hidden;
+    elements.profilePanel.hidden = !open;
+    elements.profileButton.setAttribute("aria-expanded", String(open));
+    if (open) {
+      renderProfile();
+    }
+  }
+
+  function closeProfile() {
+    elements.profilePanel.hidden = true;
+    elements.profileButton.setAttribute("aria-expanded", "false");
+  }
+
+  function handleDocumentClick(event) {
+    if (event.target.closest("a, button, summary")) {
+      audio.playClick();
+    }
+    if (!elements.profilePanel.hidden && !event.target.closest(".profile-menu")) {
+      closeProfile();
+    }
+  }
+
+  function handleDocumentKeydown(event) {
+    if (event.key !== "Escape") {
+      return;
+    }
+    if (!elements.profilePanel.hidden) {
+      closeProfile();
+      elements.profileButton.focus();
+    }
+  }
+
+  function toggleTheme() {
+    var current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+    var next = current === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    safeWrite(STORAGE_KEYS.theme, next);
+    syncThemeButton();
+    announce(next === "dark" ? "Dark mode enabled." : "Light mode enabled.");
+  }
+
+  async function toggleSound() {
+    var enabled = audio.toggle();
+    syncSoundButton();
+    if (enabled) {
+      await audio.unlock();
+      audio.playClick();
+    }
+    announce(enabled ? "Interface sounds enabled." : "Interface sounds muted.");
+  }
+
+  function syncSoundButton() {
+    var enabled = audio.enabled();
+    elements.soundToggle.setAttribute("aria-pressed", String(enabled));
+    elements.soundToggle.setAttribute("aria-label", enabled ? "Mute interface sounds" : "Enable interface sounds");
+  }
+
+  function unlockAudio() {
+    audio.unlock();
+  }
+
+  function syncThemeButton() {
+    var dark = document.documentElement.dataset.theme === "dark";
+    elements.themeToggle.setAttribute("aria-pressed", String(dark));
+    elements.themeToggle.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+  }
+
+  function getOverallStats() {
+    var totalExercises = validExerciseIds.size;
+    var passedExercises = passed.size;
+    var maxStars = Array.from(exerciseById.values()).reduce(function (sum, exercise) {
+      return sum + getDifficulty(exercise);
+    }, 0);
+    var earnedStars = Array.from(exerciseById.entries()).reduce(function (sum, entry) {
+      return sum + (passed.has(entry[0]) ? getDifficulty(entry[1]) : 0);
+    }, 0);
+    var completedChapterIds = chapters.filter(function (chapter) {
+      var progress = getChapterProgress(chapter);
+      return progress.total > 0 && progress.done === progress.total;
+    }).map(function (chapter) { return String(chapter.id); });
+    var highestPassedDifficulty = Array.from(exerciseById.entries()).reduce(function (max, entry) {
+      return passed.has(entry[0]) ? Math.max(max, getDifficulty(entry[1])) : max;
+    }, 0);
+    return {
+      totalExercises: totalExercises,
+      passedExercises: passedExercises,
+      maxStars: maxStars,
+      earnedStars: earnedStars,
+      completedChapters: completedChapterIds.length,
+      completedChapterIds: completedChapterIds,
+      highestPassedDifficulty: highestPassedDifficulty,
+      progressPercent: totalExercises ? Math.round((passedExercises / totalExercises) * 100) : 0
+    };
+  }
+
+  function getChapterProgress(chapter) {
+    var exercises = getExercises(chapter);
+    var done = 0;
+    var stars = 0;
+    var maxStars = 0;
+    exercises.forEach(function (exercise) {
+      var difficulty = getDifficulty(exercise);
+      maxStars += difficulty;
+      if (passed.has(String(exercise.id))) {
+        done += 1;
+        stars += difficulty;
+      }
+    });
+    return {
+      done: done,
+      total: exercises.length,
+      percent: exercises.length ? Math.round((done / exercises.length) * 100) : 0,
+      stars: stars,
+      maxStars: maxStars
+    };
+  }
+
+  function getRanks() {
+    var fallback = [
+      { level: 1, name: "PEP Explorer", minStars: 0, minExercises: 0, description: "Begin with precise traces and small programs." },
+      { level: 2, name: "Indent Apprentice", minStars: 8, minExercises: 3, description: "Build dependable first programs." },
+      { level: 3, name: "Loop Tamer", minStars: 27, minExercises: 10, description: "Control repetition with intention." },
+      { level: 4, name: "Function Forger", minStars: 55, minExercises: 22, description: "Shape reusable contracts." },
+      { level: 5, name: "Collection Alchemist", minStars: 91, minExercises: 36, description: "Transform Python collections cleanly." },
+      { level: 6, name: "Recursion Ranger", minStars: 132, minExercises: 52, description: "Navigate self-similar problems." },
+      { level: 7, name: "Algorithm Architect", minStars: 181, minExercises: 72, description: "Design with invariants and complexity in mind." },
+      { level: 8, name: "Pythonic Grandmaster", minStars: 239, minExercises: 92, description: "Every challenge is green." }
+    ];
+    var source = Array.isArray(learning.ranks) && learning.ranks.length === 8 ? learning.ranks : fallback;
+    return source.slice().sort(function (a, b) { return Number(a.level) - Number(b.level); }).map(function (rank, index) {
+      return {
+        level: Number(rank.level) || index + 1,
+        name: rank.name || fallback[index].name,
+        minStars: Number(rank.minStars) || 0,
+        minExercises: Number(rank.minExercises) || 0,
+        description: rank.description || fallback[index].description,
+        accent: rank.accent || null
+      };
+    });
+  }
+
+  function getCurrentRank(stats) {
+    return getRanks().reduce(function (current, candidate) {
+      if (stats.earnedStars >= candidate.minStars && stats.passedExercises >= candidate.minExercises) {
+        return candidate;
+      }
+      return current;
+    }, getRanks()[0]);
+  }
+
+  function getNextRank(rank) {
+    return getRanks().find(function (candidate) {
+      return candidate.level === rank.level + 1;
+    }) || null;
+  }
+
+  function getBadgeStates(stats) {
+    var badges = Array.isArray(learning.badges) ? learning.badges : [];
+    return badges.map(function (badge) {
+      return { badge: badge, unlocked: evaluateBadge(badge, stats) };
+    });
+  }
+
+  function evaluateBadge(badge, stats) {
+    var criteria = badge.criteria || {};
+    var actual;
+    if (criteria.metric === "passedExercises") {
+      actual = stats.passedExercises;
+    } else if (criteria.metric === "completedChapters") {
+      actual = stats.completedChapters;
+    } else if (criteria.metric === "earnedStars") {
+      actual = stats.earnedStars;
+    } else if (criteria.metric === "highestPassedDifficulty") {
+      actual = stats.highestPassedDifficulty;
+    } else if (criteria.metric === "progressPercent") {
+      actual = stats.progressPercent;
+    } else if (criteria.metric === "chaptersComplete") {
+      actual = stats.completedChapterIds;
+    } else if (criteria.metric === "chapterComplete") {
+      actual = stats.completedChapterIds.indexOf(String(criteria.chapterId)) >= 0;
+    } else {
+      return false;
+    }
+
+    if (criteria.operator === ">=") {
+      return Number(actual) >= Number(criteria.value);
+    }
+    if (criteria.operator === "==") {
+      return actual === criteria.value;
+    }
+    if (criteria.operator === "containsAll") {
+      return Array.isArray(actual) && Array.isArray(criteria.value) && criteria.value.every(function (item) {
+        return actual.indexOf(String(item)) >= 0;
+      });
+    }
+    return false;
+  }
+
+  function getContinueChapter() {
+    var lastExerciseId = safeRead(STORAGE_KEYS.lastExercise);
+    if (lastExerciseId && chapterForExercise.has(lastExerciseId)) {
+      return chapterForExercise.get(lastExerciseId);
+    }
+    return chapters.find(function (chapter) {
+      var progress = getChapterProgress(chapter);
+      return progress.done < progress.total;
+    }) || chapters[0];
+  }
+
+  function getChapterLearning(chapter) {
+    return learning.chapters && learning.chapters[String(chapter.id)]
+      ? learning.chapters[String(chapter.id)]
+      : null;
+  }
+
+  function renderBreadcrumbs(items) {
+    var nav = el("nav", "breadcrumbs");
+    var list = el("ol");
+    nav.setAttribute("aria-label", "Breadcrumb");
+    items.forEach(function (item, index) {
+      var entry = el("li");
+      if (item.href) {
+        entry.append(anchor(item.href, null, item.label));
+      } else {
+        var current = el("span", null, item.label);
+        current.setAttribute("aria-current", "page");
+        entry.append(current);
+      }
+      if (index < items.length - 1) {
+        entry.append(el("span", "breadcrumbs__separator", "/"));
+      }
+      list.append(entry);
+    });
+    nav.append(list);
+    return nav;
+  }
+
+  function renderChapterArt(chapter, className) {
+    var number = Math.max(1, Math.min(11, Number(chapter.number) || 1));
+    var index = number - 1;
+    var column = index % 4;
+    var row = Math.floor(index / 4);
+    var art = el("div", className);
+    var label = el("span", "chapter-art__label", "PY" + padChapter(number));
+    art.style.backgroundPosition = (column * 100 / 3) + "% " + (row * 100 / 2) + "%";
+    art.setAttribute("role", "img");
+    art.setAttribute("aria-label", "Illustration for " + chapter.title);
+    art.append(label);
+    return art;
+  }
+
+  function renderTags(topics, limit) {
+    var list = el("ul", "tag-list");
+    var values = Array.isArray(topics) ? topics : [];
+    if (limit) {
+      values = values.slice(0, limit);
+    }
+    values.forEach(function (topic) {
+      list.append(el("li", "tag", topic));
+    });
+    return list;
+  }
+
+  function renderDifficultyStars(exercise, isPassed) {
+    var difficulty = getDifficulty(exercise);
+    var wrapper = el("span", "difficulty-stars" + (isPassed ? " is-passed" : ""));
+    wrapper.setAttribute("role", "img");
+    wrapper.setAttribute(
+      "aria-label",
+      "Difficulty " + difficulty + " out of 5" + (isPassed ? ", " + difficulty + " " + pluralize(difficulty, "star") + " collected" : "")
+    );
+    for (var index = 1; index <= 5; index += 1) {
+      var star = el("span", index <= difficulty ? "is-filled" : "is-empty", index <= difficulty ? "★" : "☆");
+      star.setAttribute("aria-hidden", "true");
+      wrapper.append(star);
+    }
+    return wrapper;
+  }
+
+  function progressElement(value, max, label) {
+    var progress = el("progress", "progress-bar");
+    progress.max = Math.max(Number(max) || 0, 1);
+    progress.value = Math.min(Number(value) || 0, progress.max);
+    progress.setAttribute("aria-label", label);
+    return progress;
+  }
+
+  function getExercises(chapter) {
+    return chapter && Array.isArray(chapter.exercises) ? chapter.exercises : [];
+  }
+
+  function getDifficulty(exercise) {
+    return Math.min(5, Math.max(1, Number(exercise && exercise.difficulty) || 1));
+  }
+
+  function getExerciseFileName(exercise) {
+    var parts = String(exercise.file || "solution.py").split("/");
+    return parts[parts.length - 1] || "solution.py";
+  }
+
+  function getStartingCode(exerciseId) {
+    if (drafts.has(exerciseId)) {
+      return drafts.get(exerciseId);
+    }
+    if (Object.prototype.hasOwnProperty.call(starterCode, exerciseId)) {
+      return starterCode[exerciseId];
+    }
+    return "# Write your solution here.\n";
+  }
+
+  function updateEditorChrome(exerciseId, value, state, modified) {
+    var source = Object.prototype.hasOwnProperty.call(starterCode, exerciseId) ? starterCode[exerciseId] : "";
+    var changed = value !== source;
+    state.textContent = changed ? "Draft saved locally" : "Clean starter · solution hidden";
+    modified.classList.toggle("is-visible", changed);
+    modified.setAttribute("aria-label", changed ? "Draft differs from starter code" : "Starter code");
+  }
+
+  function updateTextareaPosition(textarea, position) {
+    var beforeCursor = textarea.value.slice(0, textarea.selectionStart || 0).split("\n");
+    position.textContent = "Ln " + beforeCursor.length + ", Col " + (beforeCursor[beforeCursor.length - 1].length + 1);
+  }
+
+  function formatTestInput(test, mode) {
+    if (mode === "script") {
+      var inputs = Array.isArray(test.input) ? test.input : [];
+      return inputs.length ? inputs.join("\n") : "<no input>";
+    }
+    return test.call || "<no call defined>";
+  }
+
+  function formatPlannedExpected(test, mode) {
+    if (mode === "script") {
+      return test.expectedOutput === undefined ? "<not defined>" : visibleWhitespace(String(test.expectedOutput));
+    }
+    return test.expected === undefined ? "<not defined>" : String(test.expected);
+  }
+
+  function visibleWhitespace(value) {
+    return value.endsWith("\n") ? value.slice(0, -1) + " ↵" : value;
+  }
+
+  function readPassedIds() {
+    var raw = safeRead(STORAGE_KEYS.passed);
+    if (!raw) {
+      return [];
+    }
+    try {
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function persistPassed() {
+    safeWrite(STORAGE_KEYS.passed, JSON.stringify(Array.from(passed).sort()));
+  }
+
+  function readDrafts() {
+    var raw = safeRead(STORAGE_KEYS.drafts);
+    var result = new Map();
+    if (!raw) {
+      return result;
+    }
+    try {
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return result;
+      }
+      Object.keys(parsed).forEach(function (exerciseId) {
+        if (
+          validExerciseIds.has(exerciseId) &&
+          typeof parsed[exerciseId] === "string" &&
+          parsed[exerciseId] !== starterCode[exerciseId]
+        ) {
+          result.set(exerciseId, parsed[exerciseId]);
+        }
+      });
+    } catch (error) {
+      return new Map();
+    }
+    return result;
+  }
+
+  function scheduleDraftSave(exerciseId, value, flushImmediately) {
+    window.clearTimeout(draftPersistTimer);
+    if (value === starterCode[exerciseId]) {
+      drafts.delete(exerciseId);
+    } else {
+      drafts.set(exerciseId, value);
+    }
+    if (flushImmediately) {
+      flushDrafts();
+      return;
+    }
+    draftPersistTimer = window.setTimeout(flushDrafts, 250);
+  }
+
+  function discardDraft(exerciseId) {
+    drafts.delete(exerciseId);
+    flushDrafts();
+  }
+
+  function flushDrafts() {
+    window.clearTimeout(draftPersistTimer);
+    draftPersistTimer = null;
+    var serialized = {};
+    drafts.forEach(function (value, exerciseId) {
+      serialized[exerciseId] = value;
+    });
+    safeWrite(STORAGE_KEYS.drafts, JSON.stringify(serialized));
+  }
+
+  function safeRead(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function createSilentAudio() {
+    return {
+      enabled: function () { return false; },
+      setEnabled: function () { return false; },
+      toggle: function () { return false; },
+      unlock: function () { return Promise.resolve(false); },
+      playClick: function () { return false; },
+      playSubmit: function () { return false; },
+      playFailure: function () { return false; },
+      playSuccess: function () { return false; },
+      playAchievement: function () { return false; }
+    };
+  }
+
+  function safeWrite(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {
+      // The app remains usable without persistent storage.
+    }
+  }
+
+  function announce(message) {
+    elements.status.textContent = "";
+    window.setTimeout(function () {
+      elements.status.textContent = message;
+    }, 0);
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function padChapter(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  function pluralize(value, singular) {
+    return Number(value) === 1 ? singular : singular + "s";
+  }
+
+  function domId(value) {
+    return String(value).toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === "function") {
+      return window.CSS.escape(String(value));
+    }
+    return String(value).replace(/["'\\]/g, "\\$&");
+  }
+
+  function el(tagName, className, textContent) {
+    var element = document.createElement(tagName);
+    if (className) {
+      element.className = className;
+    }
+    if (textContent !== undefined && textContent !== null) {
+      element.textContent = String(textContent);
+    }
+    return element;
+  }
+
+  function anchor(href, className, textContent, ariaLabel) {
+    var link = el("a", className, textContent);
+    link.href = href;
+    if (ariaLabel) {
+      link.setAttribute("aria-label", ariaLabel);
+    }
+    return link;
+  }
+
+  function createPythonRunner() {
+    var worker = null;
+    var readyPromise = null;
+    var readyResolve = null;
+    var readyReject = null;
+    var startupTimer = null;
+    var requestCounter = 0;
+    var pending = new Map();
+
+    function ensureReady() {
+      if (window.location.protocol === "file:") {
+        return Promise.reject(new Error("Python execution needs the local web server; module workers cannot start from a file:// page."));
+      }
+      if (readyPromise) {
+        return readyPromise;
+      }
+      readyPromise = new Promise(function (resolve, reject) {
+        readyResolve = resolve;
+        readyReject = reject;
+      });
+      try {
+        worker = new Worker("python-runner-worker.mjs", { type: "module" });
+      } catch (error) {
+        var failedReadyPromise = readyPromise;
+        readyReject(error);
+        resetWorker();
+        return failedReadyPromise;
+      }
+      startupTimer = window.setTimeout(function () {
+        var error = new Error("Python took too long to load. Check the network connection and try again.");
+        if (readyReject) {
+          readyReject(error);
+        }
+        resetWorker(error);
+      }, 90000);
+      worker.addEventListener("message", handleWorkerMessage);
+      worker.addEventListener("error", function (event) {
+        var error = new Error(event.message || "The Python worker could not start.");
+        if (readyReject) {
+          readyReject(error);
+        }
+        resetWorker(error);
+      });
+      return readyPromise;
+    }
+
+    function handleWorkerMessage(event) {
+      var message = event.data || {};
+      if (message.type === "ready") {
+        window.clearTimeout(startupTimer);
+        startupTimer = null;
+        if (readyResolve) {
+          readyResolve();
+        }
+        readyResolve = null;
+        readyReject = null;
+        return;
+      }
+      if (message.type === "startup-error") {
+        var startupError = new Error("Python could not load: " + message.error);
+        if (readyReject) {
+          readyReject(startupError);
+        }
+        resetWorker(startupError);
+        return;
+      }
+      var request = pending.get(message.id);
+      if (!request) {
+        return;
+      }
+      window.clearTimeout(request.timer);
+      pending.delete(message.id);
+      if (message.type === "result") {
+        request.resolve(message.results || []);
+      } else {
+        request.reject(new Error("Python runner error: " + (message.error || "Unknown error")));
+      }
+    }
+
+    function resetWorker(error) {
+      window.clearTimeout(startupTimer);
+      startupTimer = null;
+      if (worker) {
+        worker.terminate();
+      }
+      worker = null;
+      pending.forEach(function (request) {
+        window.clearTimeout(request.timer);
+        request.reject(error || new Error("The Python runner was restarted."));
+      });
+      pending.clear();
+      readyPromise = null;
+      readyResolve = null;
+      readyReject = null;
+    }
+
+    async function run(code, mode, tests) {
+      await ensureReady();
+      requestCounter += 1;
+      var requestId = "run-" + requestCounter;
+      return new Promise(function (resolve, reject) {
+        var timer = window.setTimeout(function () {
+          pending.delete(requestId);
+          var timeoutError = new Error("The test run exceeded 12 seconds. The runner restarted to stop a possible infinite loop.");
+          reject(timeoutError);
+          resetWorker(timeoutError);
+        }, 12000);
+        pending.set(requestId, { resolve: resolve, reject: reject, timer: timer });
+        worker.postMessage({ id: requestId, code: code, mode: mode, tests: tests });
+      });
+    }
+
+    return { run: run };
+  }
+
+  function renderDataError() {
+    var shell = el("div", "page-shell error-page");
+    var card = el("section", "error-card");
+    card.append(
+      el("span", "error-card__icon", "!"),
+      el("h1", null, "The course data could not be loaded"),
+      el("p", null, "Make sure exercise-data.js is beside index.html, then refresh the page.")
+    );
+    shell.append(card);
+    elements.main.replaceChildren(shell);
+    document.title = "Data unavailable · Python Foundations";
+  }
+})();

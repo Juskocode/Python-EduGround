@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A chapter-by-chapter Python learning path with tutorials, runnable exercises, hidden tests, badges, ranks, and saved progress."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <title>Python Foundations · Learning Path</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <script>
+      (() => {
+        try {
+          const savedTheme = localStorage.getItem("fp-playground.theme.v1");
+          const preferredTheme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.dataset.theme = savedTheme === "dark" || savedTheme === "light"
+            ? savedTheme
+            : preferredTheme;
+        } catch (error) {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="course-ui.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#app-main">Skip to learning content</a>
+
+    <header class="site-topbar">
+      <div class="page-shell site-topbar__inner">
+        <a class="site-brand" href="#home" aria-label="Python Foundations home">
+          <span class="site-brand__mark" aria-hidden="true"><span>&gt;</span>_</span>
+          <span class="site-brand__copy">
+            <strong>Python Foundations</strong>
+            <small>Learn · practise · level up</small>
+          </span>
+        </a>
+
+        <div class="site-actions">
+          <a class="topbar-home" href="#home" aria-label="Open chapter dashboard">
+            <span aria-hidden="true">⌂</span>
+            <span>Chapters</span>
+          </a>
+          <button
+            id="theme-toggle"
+            class="icon-button theme-toggle"
+            type="button"
+            aria-label="Switch to dark mode"
+            aria-pressed="false"
+          >
+            <span class="theme-toggle__sun" aria-hidden="true">☀</span>
+            <span class="theme-toggle__moon" aria-hidden="true">☾</span>
+          </button>
+          <button
+            id="sound-toggle"
+            class="icon-button sound-toggle"
+            type="button"
+            aria-label="Mute interface sounds"
+            aria-pressed="true"
+          >
+            <span class="sound-toggle__on" aria-hidden="true">♪</span>
+            <span class="sound-toggle__off" aria-hidden="true">×</span>
+          </button>
+
+          <div class="profile-menu">
+            <button
+              id="profile-button"
+              class="profile-button"
+              type="button"
+              aria-expanded="false"
+              aria-controls="profile-panel"
+            >
+              <span class="profile-button__avatar" aria-hidden="true">PY</span>
+              <span class="profile-button__copy">
+                <small id="profile-level-label">Level 1</small>
+                <strong id="profile-rank-label">Indent Initiate</strong>
+              </span>
+              <span class="profile-button__chevron" aria-hidden="true">⌄</span>
+            </button>
+            <aside id="profile-panel" class="profile-panel" aria-label="Learner profile" hidden></aside>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main id="app-main" class="app-main" tabindex="-1">
+      <div class="page-shell loading-state" role="status">
+        <span class="loading-state__mark" aria-hidden="true">&gt;_</span>
+        <p>Preparing your Python learning path…</p>
+      </div>
+    </main>
+
+    <p id="app-status" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
+    <div id="achievement-toasts" class="achievement-toasts" aria-live="polite" aria-atomic="false"></div>
+
+    <noscript>
+      <div class="noscript-message">
+        This learning path needs JavaScript for chapter navigation, the editor, tests, and saved progress.
+      </div>
+    </noscript>
+
+    <footer class="site-footer">
+      <div class="page-shell site-footer__inner">
+        <p><strong>Python Foundations</strong> · Built from the exercises in this repository.</p>
+        <p>Code drafts and progress stay in this browser.</p>
+      </div>
+    </footer>
+
+    <script src="exercise-data.js" defer></script>
+    <script src="starter-code.js" defer></script>
+    <script src="test-data/tests-py01-03.js" defer></script>
+    <script src="test-data/tests-py04-07.js" defer></script>
+    <script src="test-data/tests-py08-11.js" defer></script>
+    <script src="learning-content.js" defer></script>
+    <script src="assets/vendor/ace/ace.js" defer></script>
+    <script src="assets/vendor/ace/ext-language_tools.js" defer></script>
+    <script src="assets/vendor/ace/mode-python.js" defer></script>
+    <script src="assets/vendor/ace/theme-monokai.js" defer></script>
+    <script src="audio-feedback.js" defer></script>
+    <script src="course-app.js" defer></script>
+  </body>
+</html>
