@@ -35,11 +35,11 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 | Reference material | 66 glossary terms, 66 debugging checks, one checkpoint per chapter, and 38 curated official Python documentation links |
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, and progressive hints |
 | Editor | Vendored Ace with a persistent Sublime or Vim keymap, fixed Monokai theme, Python highlighting, autocomplete, search, folding, line numbers, and copy/paste controls |
-| Files | Automatic browser drafts, explicit **Save**, and a **Download .py** action for a real local file |
+| Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
 | Runner | Pyodide in an isolated browser worker; **Run** checks visible examples and **Run tests** adds hidden cases |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
 | Motivation | Chapter progress, difficulty stars, eight Pythonic ranks, ten badges, achievement toasts, and optional sound cues |
-| Persistence | Local browser storage by default; optional email/password account sync backed by PostgreSQL |
+| Persistence | Local browser storage by default; optional PostgreSQL account sync plus a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
 Every chapter guide combines five layers:
@@ -83,7 +83,7 @@ The shortest Docker-backed setup is:
 docker-compose up --build
 ```
 
-The Compose stack creates PostgreSQL storage, applies the checked-in migrations, and serves the app. For a manually managed or hosted database:
+The Compose stack creates durable PostgreSQL and submission-file volumes, applies the checked-in migrations, and serves the app. For a manually managed or hosted database:
 
 ```bash
 export DATABASE_URL='postgresql://eduground:change-this-password@127.0.0.1:5432/eduground'
@@ -112,21 +112,37 @@ Legacy routes such as `#py01` redirect to the corresponding chapter hub.
 
 - Choose **Sublime** or **Vim** from the **Keys** selector. The selection persists; the visual theme remains Monokai.
 - `Shift + Enter` runs the visible examples.
-- `Ctrl/Command + Enter` runs the complete visible and hidden suite.
+- `Ctrl/Command + Enter` runs the complete visible and hidden suite and, when signed in, saves that exact submitted snapshot.
 - `Ctrl/Command + S` performs the same explicit save as the **Save** button.
-- **Save** always flushes the browser draft and, when signed in, also saves that exercise file to the learner's PostgreSQL account.
+- **Save** always flushes the browser draft and, when signed in, stores the source in PostgreSQL and its canonical chapter file.
 - **Download .py** creates a normal Python file through the browser, whether signed in or not.
 - **Copy** and **Paste** complement normal editor or Vim/Sublime clipboard commands.
 - **Restart** restores the clean, solution-free starter for the current exercise.
 
-Typing is auto-saved to browser storage after a short delay. Signed-in progress and drafts are also synchronized in the background; the explicit **Save** action creates or updates the account's named exercise file.
+Typing is auto-saved to browser storage after a short delay. Signed-in progress and drafts are also synchronized in the background. Explicit **Save** and every complete **Run tests** attempt upsert the exact editor snapshot and materialize it under a stable zero-based name:
+
+```text
+submissions/<user UUID>/
+├── Py01 First Programs/
+│   ├── ex00.py
+│   ├── ex01.py
+│   └── ...
+├── Py02 Simple data/
+│   └── ...
+└── Py11 Divide and Conquer/
+    ├── ex00.py
+    ├── ex01.py
+    └── ex02.py
+```
+
+The server owns this 92-file mapping. Learner input cannot select a path, and these files never share the repository's original `Py*/` solution directories. PostgreSQL remains authoritative; reading a saved account file recreates a missing mirror.
 
 ## What is saved
 
 | Data | Unsigned learner | Signed-in learner |
 | --- | --- | --- |
 | Draft code | Browser storage | Browser storage and account state |
-| Explicitly saved exercise file | Browser draft; optional `.py` download | PostgreSQL `user_files` record and browser draft |
+| Explicit Save or complete test submission | Browser draft; optional `.py` download | PostgreSQL `user_files`, browser draft, and `<chapter>/exNN.py` mirror |
 | Passed exercises and stars | Browser storage | Browser storage and PostgreSQL account state |
 | Guide markers | Browser storage | Browser storage and PostgreSQL account state |
 | Editor keymap | Browser storage | Browser storage and PostgreSQL account state |
@@ -153,7 +169,7 @@ The release smoke flow also covers:
 - Guided-practice reveal and chapter checkpoint feedback.
 - Safe starter code with no repository answer loaded into the page.
 - Sublime/Vim switching, Monokai styling, and editor keyboard shortcuts.
-- Local and signed-in file saving.
+- Local saving plus signed-in PostgreSQL and canonical chapter-file persistence.
 - All-green execution across visible and hidden tests.
 - Failure output with expected/actual fields and Python tracebacks.
 - Dark mode, copy/paste controls, ranks, badges, and local persistence.
@@ -174,6 +190,8 @@ The release smoke flow also covers:
 | `python-runner-worker.mjs` | Isolated Python execution, output capture, timeout handling, and traceback capture |
 | `assets/vendor/ace/` | Pinned Ace 1.44.0 runtime, Monokai theme, Sublime/Vim keymaps, and license |
 | `server/` | Same-origin HTTP API, authentication, PostgreSQL access, security helpers, and static serving |
+| `server/exercise-manifest.mjs` | Stable 92-exercise mapping to chapter directories and zero-based `exNN.py` names |
+| `server/submission-files.mjs` | Atomic, private per-user filesystem mirror with traversal and symlink protection |
 | `db/migrations/` | Ordered, checksum-protected PostgreSQL schema migrations |
 | `scripts/migrate.mjs` | Migration command used locally and during deployment |
 | `docs/PERSISTENCE.md` | Account sync, deployment durability, backup/restore, and security guide |
@@ -186,7 +204,7 @@ Hidden cases stay masked in the interface until a complete run returns. Their Ja
 
 `solution-code.js` supports local generation and validation only. It is not requested by `index.html`, `window.SOLUTION_CODE` is not created in the learner page, and editor resets restore a safe starter rather than an answer. The server uses a public-file allowlist, so the solution bundle, original `Py*/` sources, migrations, backend modules, and deployment secrets are not downloadable from the web application.
 
-Unsigned use sends no learner code or progress to the application API. Creating an account opts into syncing drafts, saved files, progress, editor mode, and detailed test results to the configured PostgreSQL database. Python code still executes in the browser, not on the Node server. See [the persistence security notes](docs/PERSISTENCE.md#security-limitations) before exposing account sync publicly.
+Unsigned use sends no learner code or progress to the application API. Creating an account opts into syncing drafts, saved files, progress, editor mode, and detailed test results to PostgreSQL, plus the configured private submission-file mirror. Python code still executes in the browser, not on the Node server. See [the persistence security notes](docs/PERSISTENCE.md#security-limitations) before exposing account sync publicly.
 
 ## Refresh generated or vendored artifacts
 

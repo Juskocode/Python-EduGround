@@ -27,11 +27,35 @@ After sign-in:
 - Passed exercises and learning markers merge by union, so completed work is not removed by another device.
 - A local draft wins when both the current browser and the account contain a draft for the same exercise.
 - Drafts, passed IDs, learning markers, and editor mode are pushed as account state after changes.
-- **Save** also upserts a named Python file for the current exercise.
+- **Save** upserts the exact editor snapshot under the exercise's server-owned `exNN.py` name.
+- Every complete **Run tests** attempt saves the submitted snapshot before its pass/fail run history is recorded.
 - Each visible or complete test run records its result details, including expected/actual values, stdout, stderr, and tracebacks.
 - Theme and sound remain device-local.
 
 The server never receives repository solution code from the learner UI. Learner Python executes in the Pyodide browser worker, not in Node or PostgreSQL.
+
+### Canonical chapter files
+
+The trusted server manifest assigns all 92 exercises a permanent chapter directory and zero-based filename. The browser supplies only an exercise ID and source text; it cannot choose the server path.
+
+```text
+<SUBMISSIONS_DIR>/<user UUID>/
+├── Py01 First Programs/
+│   ├── ex00.py
+│   ├── ex01.py
+│   └── ex05.py
+├── Py08 Recursion/
+│   ├── ex00.py
+│   └── ex10.py
+└── Py11 Divide and Conquer/
+    ├── ex00.py
+    ├── ex01.py
+    └── ex02.py
+```
+
+Directories and files are created lazily when an exercise is explicitly saved or submitted through **Run tests**. Writes use a temporary file, filesystem synchronization, and an atomic rename. PostgreSQL row locking orders writes to the same learner/exercise across tabs and app replicas that share the same volume. Per-user and chapter directories reject symlinks and traversal. The configured root is also rejected when it sits under an original solution folder or a publicly served asset folder.
+
+PostgreSQL `user_files` is authoritative. If a mirror file disappears but the database row remains, `GET /api/files/:exerciseId` recreates the file from PostgreSQL. Set `SUBMISSIONS_DIR=off` when a deployment cannot provide private writable storage; account saving still works in PostgreSQL and the API reports that the physical mirror is disabled.
 
 ## Stored data
 
@@ -42,7 +66,7 @@ Migration [`db/migrations/001_initial.sql`](../db/migrations/001_initial.sql) cr
 | `users` | Normalized email, display name, scrypt password record, creation time | Parent learner record |
 | `sessions` | SHA-256 hashes of bearer tokens and expiry times | Cascades with the user |
 | `user_state` | JSON account state: passes, drafts, learning markers, editor mode | Cascades with the user |
-| `user_files` | One explicitly saved filename and source file per user/exercise | Cascades with the user |
+| `user_files` | One canonical `exNN.py` source snapshot per user/exercise | Cascades with the user |
 | `test_runs` | Append-only summaries and detailed result JSON for completed runs | Cascades with the user |
 | `schema_migrations` | Applied migration names and checksums | Operational metadata, not learner data |
 
@@ -80,7 +104,7 @@ Requirements: Docker with Compose v2. This workstation exposes it as `docker-com
 
 The `app` service waits for the `postgres` health check, runs `npm run migrate`, and then starts the same-origin web/API server. Re-running the migration command is safe.
 
-The Compose file uses the named `postgres_data` volume. These commands rebuild or replace the application container without deleting PostgreSQL data:
+The Compose file uses `postgres_data` for database records and `submissions_data` for canonical Python files. These commands rebuild or replace the application container without deleting either volume:
 
 ```bash
 docker-compose up -d --build
@@ -88,7 +112,7 @@ docker-compose up -d --build --force-recreate app
 docker-compose down
 ```
 
-Running `docker-compose down -v`, `docker volume rm`, or deleting the Docker/VM storage **does delete the database volume**. A named volume is persistence, not a backup.
+Running `docker-compose down -v`, `docker volume rm`, or deleting the Docker/VM storage **does delete both named volumes**. Named volumes provide persistence across container replacement, not a backup.
 
 ## Use an existing or managed PostgreSQL database
 
@@ -99,6 +123,7 @@ export DATABASE_URL='postgresql://app_user:encoded-password@db.example.net:5432/
 export DATABASE_SSL='require'
 export APP_ORIGIN='https://learn.example.com'
 export TRUST_PROXY='true'
+export SUBMISSIONS_DIR='/var/lib/python-eduground/submissions'
 export HOST='0.0.0.0'
 export PORT='8000'
 
@@ -121,6 +146,7 @@ Apply migrations before routing a new release to users. Migrations run in filena
 | `DATABASE_IDLE_TIMEOUT_MS` | `30000` | Idle connection timeout used by the pool |
 | `DATABASE_CONNECT_TIMEOUT_MS` | `3000` | API connection timeout; migrations default to 5000 ms |
 | `DATABASE_STATEMENT_TIMEOUT_MS` | `10000` | PostgreSQL statement timeout for API queries |
+| `SUBMISSIONS_DIR` | `./submissions` | Private writable root for per-user chapter files; set `off` to keep source only in PostgreSQL |
 | `SESSION_TTL_SECONDS` | `2592000` | Session lifetime; the server constrains it to 1 hour–180 days |
 | `APP_ORIGIN` | Unset | Comma-separated allowed browser origins for state-changing requests |
 | `TRUST_PROXY` | False | Trust forwarded protocol/IP headers; enable only behind a trusted reverse proxy |
@@ -147,8 +173,8 @@ The browser uses relative, same-origin endpoints. Authenticated calls carry `Aut
 | `GET /api/me` | Restore the current signed-in identity |
 | `GET /api/state` | Read merged learner account state |
 | `PUT /api/state` | Replace the learner account-state document |
-| `GET /api/files/:exerciseId` | Read the account's explicitly saved file for an exercise |
-| `PUT /api/files/:exerciseId` | Create or update that saved file |
+| `GET /api/files/:exerciseId` | Read a saved source and re-materialize its canonical chapter file when needed |
+| `PUT /api/files/:exerciseId` | Upsert source under the server-owned chapter and `exNN.py` mapping |
 | `POST /api/runs` | Append one detailed test-run record |
 
 There is currently no API to list test runs, change/reset a password, verify email, or delete an account.
@@ -158,12 +184,13 @@ There is currently no API to list test runs, change/reset a password, verify ema
 Application containers are disposable; PostgreSQL is the durable boundary. To retain accounts during an upgrade:
 
 1. Keep the same managed `DATABASE_URL`, or keep the Compose `postgres_data` volume.
-2. Back up the database before the release.
-3. Deploy the new code and run `npm run migrate`.
-4. Set `APP_ORIGIN` to the new public origin and configure the reverse proxy correctly.
-5. Verify `/healthz` and `/readyz` before sending learners to the deployment.
+2. Keep the `submissions_data` volume or attach the same private persistent disk at `SUBMISSIONS_DIR` when physical files must survive directly.
+3. Back up the database before the release.
+4. Deploy the new code and run `npm run migrate`.
+5. Set `APP_ORIGIN` to the new public origin and configure the reverse proxy correctly.
+6. Verify `/healthz` and `/readyz` before sending learners to the deployment.
 
-Browser session tokens cannot cross domains because they live in origin-scoped browser storage. On a new hostname, the learner signs in again with the same email and password. The new app then reads the account state from the same PostgreSQL database. In a clean browser it also restores saved exercise files as their exercises are opened.
+Browser session tokens cannot cross domains because they live in origin-scoped browser storage. On a new hostname, the learner signs in again with the same email and password. The new app then reads the account state from the same PostgreSQL database. In a clean browser it also restores saved exercise files as their exercises are opened. If the physical mirror volume was not moved, opening or re-saving an exercise rebuilds that file from PostgreSQL.
 
 If the new domain already has a local draft for an exercise, that local draft wins the merge. Use **Download .py** before signing in when a learner wants an extra manual copy of either side.
 
@@ -211,6 +238,8 @@ pg_restore --list python-eduground.dump > /dev/null
 
 Restore to a new empty database first, point a staging app at it, run the readiness and account checks, and only then decide whether to promote it. Provider-specific connection options and certificates take precedence over these generic commands.
 
+The Python-file volume is a derived mirror, so a verified PostgreSQL backup contains the authoritative source needed to rebuild files as learners open or re-save exercises. Back up `submissions_data` or the managed `SUBMISSIONS_DIR` disk as well when an immediately complete directory tree is operationally important.
+
 ## Security limitations
 
 The account backend is intentionally small and is not yet a complete public identity platform:
@@ -219,7 +248,8 @@ The account backend is intentionally small and is not yet a complete public iden
 - Registration/login rate limits are in process memory. They reset on restart and are not shared across replicas. Put production-grade rate limiting at a trusted gateway or shared store.
 - There is no email verification, password reset/change flow, MFA, account lockout, session list, or user-facing account deletion.
 - `DATABASE_SSL=require` currently enables encrypted transport with certificate verification disabled. Prefer a private provider network or extend the server to accept a trusted CA before high-assurance deployment.
-- Learner source, progress, and detailed result/traceback content are readable by the database operator and backups. The app does not add field-level encryption or a retention job.
+- Learner source, progress, and detailed result/traceback content are readable by the database operator and backups. When `SUBMISSIONS_DIR` is enabled, source is also readable by operators with access to that private disk. The app does not add field-level encryption or a retention job.
+- Submission files use private per-user directories and are excluded from the static-file allowlist. Multiple app replicas must share one suitable persistent filesystem or disable the mirror and rely on PostgreSQL.
 - Client-submitted passes and run results are educational records, not tamper-resistant grading evidence.
 - Hidden tests are delivered to the browser and remain inspectable. This is not a secure examination system.
 - `APP_ORIGIN` checks help reject unwanted browser origins, but they do not replace authentication, TLS, proxy hardening, secret rotation, monitoring, or database access controls.
@@ -227,7 +257,7 @@ The account backend is intentionally small and is not yet a complete public iden
 
 ## Data deletion caveats
 
-**Sign out does not delete learner data.** It revokes the current server session and removes the token from that browser, while local drafts/progress and PostgreSQL account records remain.
+**Sign out does not delete learner data.** It revokes the current server session and removes the token from that browser, while local drafts/progress, PostgreSQL account records, and mirrored Python files remain. There is no user-facing deletion endpoint yet; an administrative deletion must remove both the database user and that user's UUID directory under `SUBMISSIONS_DIR`.
 
 To remove local-only data, the learner must clear site data for that exact origin. There is no granular local reset UI yet.
 

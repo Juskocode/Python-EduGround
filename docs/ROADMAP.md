@@ -157,6 +157,7 @@ Acceptance criteria:
 - Search covers exercise title, topic, chapter, and prompt; filters cover difficulty, passed, not passed, and saved draft.
 - Search/filter state is keyboard accessible and reflected in the URL.
 - A versioned JSON export includes local or account progress, guide markers, settings, drafts, saved-file metadata, and optional run history.
+- A signed-in workspace lists the canonical chapter/`exNN.py` tree and can download one file or a private ZIP without exposing another learner's files.
 - Import validates and previews changes before merge or replace.
 - Learners can reset one exercise/chapter or delete the complete local/account profile with explicit confirmation.
 - Privacy documentation explains exactly what export, reset, and deletion do to database backups.
