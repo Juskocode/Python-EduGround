@@ -203,6 +203,12 @@ for (const chapter of window.COURSE_DATA.chapters) {
     }
   });
   for (const [index, tutorial] of content.tutorial.entries()) {
+    if (!/^[a-z0-9][a-z0-9-]{2,159}$/u.test(String(tutorial.id || ""))) {
+      errors.push(`${chapter.id}/tutorial-${index + 1}: missing stable tutorial ID.`);
+    }
+    if (content.tutorial.some((candidate, candidateIndex) => candidateIndex !== index && candidate.id === tutorial.id)) {
+      errors.push(`${chapter.id}/tutorial-${index + 1}: duplicate stable tutorial ID.`);
+    }
     for (const field of ["title", "explanation", "exampleCode", "takeaway", "commonPitfall"]) {
       if (typeof tutorial[field] !== "string" || tutorial[field].trim() === "") {
         errors.push(`${chapter.id}/tutorial-${index + 1}: missing ${field}.`);

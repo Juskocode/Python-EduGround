@@ -11,6 +11,10 @@ export const PUBLIC_ROOT_FILES = new Set([
   "index.html",
   "learning-content.js",
   "learning-toolbox.js",
+  "assessment-data.js",
+  "assessment-engine.js",
+  "assessment-room.js",
+  "assessment-ui.css",
   "python-runner-worker.mjs",
   "starter-code.js",
 ]);

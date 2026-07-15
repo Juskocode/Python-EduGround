@@ -7,8 +7,10 @@
     theme: "fp-playground.theme.v1",
     lastExercise: "fp-playground.last-exercise.v2",
     learning: "fp-playground.learning.v1",
+    assessments: "fp-playground.assessments.v1",
     editorMode: "fp-playground.editor-mode.v1",
-    authToken: "fp-playground.auth-token.v1"
+    authToken: "fp-playground.auth-token.v1",
+    authUser: "fp-playground.auth-user.v1"
   };
 
   var elements = {
@@ -28,6 +30,8 @@
   var starterCode = window.STARTER_CODE || {};
   var learning = window.LEARNING_CONTENT || {};
   var toolboxByChapter = window.LEARNING_TOOLBOX || {};
+  var assessmentData = window.ASSESSMENT_DATA || { version: 1, blocks: [] };
+  var assessmentEngine = window.ASSESSMENT_ENGINE || {};
   var audio = window.APP_AUDIO || createSilentAudio();
 
   if (!course || !Array.isArray(course.chapters) || course.chapters.length === 0) {
@@ -42,6 +46,7 @@
   var exerciseById = new Map();
   var chapterForExercise = new Map();
   var validExerciseIds = new Set();
+  var assessmentById = new Map();
 
   chapters.forEach(function (chapter) {
     chapterById.set(String(chapter.id), chapter);
@@ -52,14 +57,28 @@
       validExerciseIds.add(exerciseId);
     });
   });
+  (Array.isArray(assessmentData.blocks) ? assessmentData.blocks : []).forEach(function (block) {
+    assessmentById.set(String(block.id), block);
+  });
 
-  var passed = new Set(readPassedIds().filter(function (exerciseId) {
-    return validExerciseIds.has(exerciseId);
-  }));
+  var authToken = safeRead(STORAGE_KEYS.authToken) || "";
+  var authUserId = authToken ? (safeRead(STORAGE_KEYS.authUser) || "") : "";
+  if (!authToken) {
+    // A user workspace is only selected while its session is restorable. The
+    // scoped data remains on disk, but signed-out visitors see the anonymous
+    // workspace instead of the last account used on a shared browser.
+    safeRemove(STORAGE_KEYS.authUser);
+  }
+  var workspaceScope = authUserId ? "user." + authUserId : "";
+
+  // Keep IDs that are temporarily unknown to this release. They do not count
+  // toward visible progress, but preserving them prevents a pull that renames
+  // or briefly omits content from erasing a learner's history.
+  var passed = new Set(readPassedIds());
   var drafts = readDrafts();
   var learningProgress = readLearningProgress();
+  var assessmentProgress = readAssessmentProgress();
   var editorMode = readEditorMode();
-  var authToken = safeRead(STORAGE_KEYS.authToken) || "";
   var currentUser = null;
   var syncState = { kind: "idle", message: authToken ? "Restoring your session…" : "Local-only mode" };
   var revealedHints = new Map();
@@ -67,6 +86,7 @@
   var draftPersistTimer = null;
   var stateSyncTimer = null;
   var suppressStateSync = false;
+  var workspaceEpoch = 0;
   var remoteFilesLoaded = new Set();
   var accountFileSaves = new Map();
   var activeEditor = null;
@@ -74,8 +94,8 @@
   var currentRoute = null;
   var selectedBadgeId = null;
   var pythonRunner = createPythonRunner();
+  var assessmentRooms = createAssessmentRoomsController();
 
-  persistPassed();
   syncThemeButton();
   syncSoundButton();
   renderProfile();
@@ -84,7 +104,10 @@
   window.addEventListener("hashchange", function () {
     renderRoute(true);
   });
-  window.addEventListener("pagehide", flushDrafts);
+  window.addEventListener("pagehide", function () {
+    flushDrafts();
+    if (assessmentRooms) assessmentRooms.flush();
+  });
   elements.themeToggle.addEventListener("click", toggleTheme);
   elements.soundToggle.addEventListener("click", toggleSound);
   elements.profileButton.addEventListener("click", toggleProfile);
@@ -105,6 +128,7 @@
       parsed = parseRoute();
     }
 
+    if (assessmentRooms) assessmentRooms.dispose();
     disposeActiveEditor();
     currentRoute = parsed;
     closeProfile();
@@ -125,6 +149,15 @@
     } else if (parsed.name === "badges") {
       view = renderBadgesPage();
       document.title = "Badges · Python EduGround";
+    } else if (parsed.name === "assessments") {
+      view = assessmentRooms.renderHub();
+      document.title = "Timed Assessments · Python EduGround";
+    } else if (parsed.name === "assessment-block") {
+      view = assessmentRooms.renderBlock(parsed.block);
+      document.title = parsed.block.title + " · Assessments";
+    } else if (parsed.name === "assessment-mode") {
+      view = assessmentRooms.renderMode(parsed.block, parsed.mode);
+      document.title = (parsed.mode === "theory" ? "Theory" : "Practical") + " · " + parsed.block.title;
     } else {
       view = renderDashboard();
       document.title = "Python EduGround · Learning Path";
@@ -136,6 +169,11 @@
     if (parsed.name === "exercise") {
       window.requestAnimationFrame(function () {
         initializeExerciseEditor(parsed.exercise);
+      });
+    }
+    if (parsed.name === "assessment-mode") {
+      window.requestAnimationFrame(function () {
+        assessmentRooms.mount(parsed.block, parsed.mode);
       });
     }
 
@@ -190,6 +228,20 @@
       return { name: "badges" };
     }
 
+    if (decoded === "assessments") {
+      return { name: "assessments" };
+    }
+
+    if (parts[0] === "assessment" && assessmentById.has(parts[1])) {
+      var block = assessmentById.get(parts[1]);
+      if (!parts[2]) {
+        return { name: "assessment-block", block: block };
+      }
+      if (parts[2] === "theory" || parts[2] === "practical") {
+        return { name: "assessment-mode", block: block, mode: parts[2] };
+      }
+    }
+
     return { redirect: "#home" };
   }
 
@@ -208,6 +260,15 @@
     }
     if (route.name === "badges") {
       return "Opened all badges.";
+    }
+    if (route.name === "assessments") {
+      return "Opened the timed assessment rooms.";
+    }
+    if (route.name === "assessment-block") {
+      return "Opened " + route.block.title + ".";
+    }
+    if (route.name === "assessment-mode") {
+      return "Opened the " + route.mode + " room for " + route.block.title + ".";
     }
     return "Opened the chapter dashboard.";
   }
@@ -316,8 +377,28 @@
       el("p", null, course.note || "Exercises are reconstructed from the solution files in this repository.")
     );
 
-    wrapper.append(hero, section, note);
+    wrapper.append(hero, renderAssessmentDashboardCallout(), section, note);
     return wrapper;
+  }
+
+  function renderAssessmentDashboardCallout() {
+    var stats = getAssessmentStats();
+    var callout = anchor("#assessments", "dashboard-assessment-callout");
+    var copy = el("div");
+    var score = el("div", "dashboard-assessment-callout__score");
+    copy.append(
+      el("p", "eyebrow", "Timed checkpoints"),
+      el("h2", null, "Theory plus practical assessment rooms"),
+      el("p", null, "Every three-chapter stage ends with a 20-minute knowledge exam and a 60-minute five-task Python practical.")
+    );
+    score.append(
+      el("strong", null, stats.passedModes + " / " + stats.totalModes),
+      el("span", null, "rooms passed"),
+      el("small", null, "60/100 required · progress survives updates"),
+      el("span", "dashboard-assessment-callout__open", "Open assessments →")
+    );
+    callout.append(el("span", "dashboard-assessment-callout__icon", "◷"), copy, score);
+    return callout;
   }
 
   function renderChapterCard(chapter, index) {
@@ -422,6 +503,19 @@
       action: "Open learning guide"
     });
     choiceGrid.append(exercisesChoice, runbookChoice);
+    var assessmentBlock = getAssessmentEndingAtChapter(chapter);
+    if (assessmentBlock) {
+      var blockState = getAssessmentBlockStats(assessmentBlock);
+      choiceGrid.append(renderChoiceCard({
+        href: "#assessment/" + encodeURIComponent(assessmentBlock.id),
+        icon: "◷",
+        eyebrow: "Stage checkpoint",
+        title: "Timed assessment",
+        copy: "Take a 15-question theory exam and a five-task practical covering this chapter stage.",
+        meta: blockState.passedModes + " / 2 rooms passed · 60/100 required",
+        action: "Enter assessment room"
+      }));
+    }
     choiceSection.append(choiceHeading, choiceGrid);
 
     var nextExercise = getExercises(chapter).find(function (exercise) {
@@ -594,11 +688,12 @@
     toc.setAttribute("aria-label", "Tutorial contents");
     tutorials.forEach(function (tutorial, index) {
       var item = el("li");
+      var learningItemId = getTutorialItemId(tutorial, index);
       var button = el("button", "tutorial-toc__button", String(index + 1).padStart(2, "0") + " · " + tutorial.title);
       button.type = "button";
       button.dataset.scrollTarget = "tutorial-section-" + index;
-      button.dataset.learningToc = "tutorial-" + index;
-      button.classList.toggle("is-understood", isLearningUnderstood(chapter, "tutorial-" + index));
+      button.dataset.learningToc = learningItemId;
+      button.classList.toggle("is-understood", isLearningUnderstood(chapter, learningItemId));
       item.append(button);
       tocList.append(item);
     });
@@ -695,7 +790,7 @@
     var checklistList = el("ul");
     var takeaway = el("aside", "tutorial-takeaway");
     var pitfall = el("aside", "tutorial-pitfall");
-    var learningItemId = "tutorial-" + index;
+    var learningItemId = getTutorialItemId(tutorial, index);
 
     section.id = "tutorial-section-" + index;
     section.dataset.learningItem = learningItemId;
@@ -1272,7 +1367,7 @@
     var ide = renderIdeWorkspace(exercise, testSpec, visibleTests.length, hiddenCount);
     shell.append(problem, examples, ide, renderExerciseBottomNavigation(chapterExercises, exerciseIndex, chapter));
     wrapper.append(shell);
-    safeWrite(STORAGE_KEYS.lastExercise, exerciseId);
+    workspaceWrite(STORAGE_KEYS.lastExercise, exerciseId);
     return wrapper;
   }
 
@@ -1569,6 +1664,15 @@
   }
 
   function handleMainClick(event) {
+    var assessmentAction = event.target.closest(
+      "button[data-assessment-start], button[data-assessment-question], button[data-assessment-submit], " +
+      "button[data-assessment-run], button[data-assessment-copy], button[data-assessment-paste], " +
+      "button[data-assessment-reset], button[data-assessment-download]"
+    );
+    if (assessmentAction && assessmentRooms) {
+      assessmentRooms.handleClick(event);
+      return;
+    }
     var hintButton = event.target.closest("button[data-reveal-hint]");
     var scrollButton = event.target.closest("button[data-scroll-target]");
     var runButton = event.target.closest("button[data-run-exercise]");
@@ -1645,13 +1749,18 @@
   }
 
   function handleMainChange(event) {
+    var assessmentControl = event.target.closest("input[data-assessment-answer], select[data-assessment-editor-mode]");
+    if (assessmentControl && assessmentRooms) {
+      assessmentRooms.handleChange(event);
+      return;
+    }
     var selector = event.target.closest("select[data-editor-mode]");
     if (!selector) {
       return;
     }
     var nextMode = selector.value === "vim" ? "vim" : "sublime";
     editorMode = nextMode;
-    safeWrite(STORAGE_KEYS.editorMode, nextMode);
+    workspaceWrite(STORAGE_KEYS.editorMode, nextMode);
     if (activeEditor && activeEditor.exerciseId === selector.dataset.editorMode) {
       activeEditor.setKeyboardMode(nextMode);
       activeEditor.focus();
@@ -1703,11 +1812,15 @@
     if (!activeEditor || activeEditor.exerciseId !== exerciseId) {
       return;
     }
+    var pasteWorkspaceEpoch = workspaceEpoch;
     try {
       if (!navigator.clipboard || typeof navigator.clipboard.readText !== "function") {
         throw new Error("Clipboard read is unavailable.");
       }
       var text = await promiseWithTimeout(navigator.clipboard.readText(), 1800, "Clipboard read timed out.");
+      if (workspaceEpoch !== pasteWorkspaceEpoch || !activeEditor || activeEditor.exerciseId !== exerciseId) {
+        return;
+      }
       if (!text) {
         announce("The clipboard does not contain text.");
         activeEditor.focus();
@@ -1746,19 +1859,20 @@
     button.disabled = true;
     button.textContent = "Saving…";
     var saveSessionToken = authToken;
+    var saveWorkspaceEpoch = workspaceEpoch;
     setSyncStatus("working", "Saving your Python file…");
     setSubmissionSaveStatus(exerciseId, "working", "Saving this exact editor snapshot to your account…");
     try {
       var file = await persistAccountExerciseFile(exerciseId, code);
       var savedMessage = describeAccountFileSave(file, filename);
-      if (authToken !== saveSessionToken || !currentUser) {
+      if (workspaceEpoch !== saveWorkspaceEpoch || authToken !== saveSessionToken || !currentUser) {
         return;
       }
       setSyncStatus("success", savedMessage);
       setSubmissionSaveStatus(exerciseId, file.mirrorStatus === "saved" ? "success" : "account", savedMessage);
       announce(savedMessage);
     } catch (error) {
-      if (authToken !== saveSessionToken || !currentUser) {
+      if (workspaceEpoch !== saveWorkspaceEpoch || authToken !== saveSessionToken || !currentUser) {
         return;
       }
       setSyncStatus("error", "Cloud save failed. Your local draft is safe.");
@@ -2296,7 +2410,8 @@
     }
 
     var runToken = String(Date.now()) + "-" + exerciseId;
-    activeRun = { token: runToken, exerciseId: exerciseId };
+    var runWorkspaceEpoch = workspaceEpoch;
+    activeRun = { token: runToken, exerciseId: exerciseId, workspaceEpoch: runWorkspaceEpoch };
     var runSessionToken = authToken && currentUser ? authToken : "";
     var submissionSavePromise = null;
     if (scope === "all") {
@@ -2309,7 +2424,7 @@
         submissionSavePromise = persistAccountExerciseFile(exerciseId, code).then(
           function (file) {
             var message = describeAccountFileSave(file, submissionFilename);
-            if (authToken === submissionSessionToken && currentUser) {
+            if (workspaceEpoch === runWorkspaceEpoch && authToken === submissionSessionToken && currentUser) {
               setSyncStatus("success", message);
               setSubmissionSaveStatus(exerciseId, file.mirrorStatus === "saved" ? "success" : "account", message);
               announce("Test submission " + message.charAt(0).toLowerCase() + message.slice(1));
@@ -2317,7 +2432,7 @@
             return { file: file };
           },
           function (error) {
-            if (authToken === submissionSessionToken && currentUser) {
+            if (workspaceEpoch === runWorkspaceEpoch && authToken === submissionSessionToken && currentUser) {
               setSyncStatus("error", "Submission file could not sync. Your local draft is safe.");
               setSubmissionSaveStatus(
                 exerciseId,
@@ -2351,6 +2466,9 @@
 
     try {
       var results = await pythonRunner.run(code, testSpec.mode, selectedTests);
+      if (workspaceEpoch !== runWorkspaceEpoch) {
+        return;
+      }
       var stored = { scope: scope, results: results, tests: selectedTests, completedAt: Date.now() };
       runResults.set(exerciseId, stored);
 
@@ -2379,15 +2497,18 @@
         try {
           await persistRunDetails(exerciseId, scope, results, allPassed, stored.completedAt, runSessionToken);
         } catch (syncError) {
-          if (authToken === runSessionToken && currentUser) {
+          if (workspaceEpoch === runWorkspaceEpoch && authToken === runSessionToken && currentUser) {
             setSyncStatus("error", "Run finished locally, but its history could not sync.");
             announce("Tests finished and remain valid locally. Run history could not sync: " + getErrorMessage(syncError));
           }
         }
       }
     } catch (error) {
+      if (workspaceEpoch !== runWorkspaceEpoch) {
+        return;
+      }
       audio.playFailure();
-      if (isCurrentExercise(exerciseId)) {
+      if (workspaceEpoch === runWorkspaceEpoch && isCurrentExercise(exerciseId)) {
         resultsContainer = elements.main.querySelector("[data-test-results='" + cssEscape(exerciseId) + "']");
         if (resultsContainer) {
           renderRunStatus(resultsContainer, error instanceof Error ? error.message : String(error), true);
@@ -2856,26 +2977,43 @@
         body: body,
         authenticated: false
       });
-      authToken = String(response.token || "");
-      currentUser = response.user || null;
-      if (!authToken || !currentUser) {
+      var nextToken = String(response.token || "");
+      var nextUser = response.user || null;
+      if (!nextToken || !nextUser || !nextUser.id) {
         throw new Error("The server did not return a usable session.");
       }
+      // Anonymous work belongs to the person who signs in next. Move it once
+      // into that account, then clear the shared anonymous copy so a later
+      // account on this browser cannot inherit it.
+      switchWorkspace(String(nextUser.id), workspaceScope === "", workspaceScope === "");
+      authToken = nextToken;
+      authUserId = String(nextUser.id);
+      currentUser = nextUser;
+      var authenticatedWorkspaceEpoch = workspaceEpoch;
       accountFileSaves.clear();
       safeWrite(STORAGE_KEYS.authToken, authToken);
+      safeWrite(STORAGE_KEYS.authUser, authUserId);
       try {
         await syncFromServerAndPush();
       } catch (syncError) {
-        setSyncStatus("error", "Signed in, but sync is temporarily unavailable. Local work is safe.");
+        if (authToken === nextToken && workspaceEpoch === authenticatedWorkspaceEpoch && currentUser) {
+          setSyncStatus("error", "Signed in, but sync is temporarily unavailable. Local work is safe.");
+        }
+      }
+      if (authToken !== nextToken || workspaceEpoch !== authenticatedWorkspaceEpoch || !currentUser) {
+        return;
       }
       renderRoute(false);
       openProfile();
       announce("Signed in as " + (currentUser.displayName || currentUser.email) + ". Account sync is now enabled.");
     } catch (error) {
+      switchWorkspace("", false, false);
       authToken = "";
       currentUser = null;
+      authUserId = "";
       accountFileSaves.clear();
       safeRemove(STORAGE_KEYS.authToken);
+      safeRemove(STORAGE_KEYS.authUser);
       setSyncStatus("error", getErrorMessage(error));
       buttons.forEach(function (button) { button.disabled = false; });
     }
@@ -2885,25 +3023,41 @@
     if (!authToken) {
       return;
     }
+    var restoreToken = authToken;
+    var restoreWorkspaceEpoch = workspaceEpoch;
     try {
-      var response = await apiRequest("/api/me");
-      currentUser = response.user || null;
-      if (!currentUser) {
+      var response = await apiRequest("/api/me", { token: restoreToken });
+      if (authToken !== restoreToken || workspaceEpoch !== restoreWorkspaceEpoch) {
+        return;
+      }
+      var restoredUser = response.user || null;
+      if (!restoredUser || !restoredUser.id) {
         throw new Error("The saved session is no longer valid.");
       }
+      var isLegacyAnonymousSession = !authUserId && workspaceScope === "";
+      switchWorkspace(String(restoredUser.id), isLegacyAnonymousSession, isLegacyAnonymousSession);
+      // A legitimate legacy/mismatched-scope migration advances the epoch.
+      // Treat the new account workspace as this restore request's current
+      // target so a subsequent state-sync error is still handled correctly.
+      restoreWorkspaceEpoch = workspaceEpoch;
+      authUserId = String(restoredUser.id);
+      currentUser = restoredUser;
+      safeWrite(STORAGE_KEYS.authUser, authUserId);
       await syncFromServerAndPush();
+      if (authToken !== restoreToken || !currentUser || String(currentUser.id) !== String(restoredUser.id)) {
+        return;
+      }
       renderRoute(false);
     } catch (error) {
+      if (authToken !== restoreToken || workspaceEpoch !== restoreWorkspaceEpoch) {
+        return;
+      }
       if (error && error.status === 401) {
-        authToken = "";
-        currentUser = null;
-        accountFileSaves.clear();
-        safeRemove(STORAGE_KEYS.authToken);
-        setSyncStatus("error", "Your session expired. Local work is still safe; sign in again to resume sync.");
+        expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
       } else {
         setSyncStatus("error", "Cloud sync is unavailable. Local mode remains fully usable.");
       }
-      renderProfile();
+      renderRoute(false);
     }
   }
 
@@ -2912,15 +3066,31 @@
       return;
     }
     button.disabled = true;
+    var manualSyncToken = authToken;
+    var manualSyncEpoch = workspaceEpoch;
     setSyncStatus("working", "Merging local and account progress…");
     flushDrafts();
     try {
       await syncFromServerAndPush();
+      if (authToken !== manualSyncToken || workspaceEpoch !== manualSyncEpoch || !currentUser) {
+        return;
+      }
       renderRoute(false);
       openProfile();
       announce("Sync complete. Passed exercises and learning progress were merged safely.");
     } catch (error) {
-      setSyncStatus("error", "Sync failed. No local work was removed. " + getErrorMessage(error));
+      if (authToken !== manualSyncToken || workspaceEpoch !== manualSyncEpoch) {
+        return;
+      }
+      if (
+        error && error.status === 401 &&
+        authToken === manualSyncToken && workspaceEpoch === manualSyncEpoch
+      ) {
+        expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
+        renderRoute(false);
+      } else {
+        setSyncStatus("error", "Sync failed. No local work was removed. " + getErrorMessage(error));
+      }
       if (button.isConnected) {
         button.disabled = false;
       }
@@ -2938,11 +3108,14 @@
     } catch (error) {
       // Local sign-out must still succeed if the API is offline.
     } finally {
+      switchWorkspace("", false, false);
       authToken = "";
       currentUser = null;
+      authUserId = "";
       remoteFilesLoaded.clear();
       accountFileSaves.clear();
       safeRemove(STORAGE_KEYS.authToken);
+      safeRemove(STORAGE_KEYS.authUser);
       if (currentRoute && currentRoute.name === "exercise") {
         setSubmissionSaveStatus(
           String(currentRoute.exercise.id),
@@ -2951,27 +3124,51 @@
         );
       }
       setSyncStatus("idle", "Local-only mode");
-      renderProfile();
-      announce("Signed out. Your browser drafts and progress remain available locally.");
+      renderRoute(false);
+      announce("Signed out. Account work remains private and will return after you sign in again.");
     }
   }
 
+  function expireAuthenticatedSession(message) {
+    window.clearTimeout(stateSyncTimer);
+    stateSyncTimer = null;
+    switchWorkspace("", false, false);
+    authToken = "";
+    authUserId = "";
+    currentUser = null;
+    remoteFilesLoaded.clear();
+    accountFileSaves.clear();
+    safeRemove(STORAGE_KEYS.authToken);
+    safeRemove(STORAGE_KEYS.authUser);
+    setSyncStatus("error", message);
+  }
+
   async function syncFromServerAndPush() {
-    var response = await apiRequest("/api/state");
+    var syncToken = authToken;
+    var syncWorkspaceEpoch = workspaceEpoch;
+    var response = await apiRequest("/api/state", { token: syncToken });
+    if (authToken !== syncToken || workspaceEpoch !== syncWorkspaceEpoch || !currentUser) {
+      return null;
+    }
     mergeRemoteState(response && response.state);
-    await pushLocalState();
-    setSyncStatus("success", "Synced just now");
+    var saved = await pushLocalState(syncToken, syncWorkspaceEpoch);
+    if (authToken === syncToken && workspaceEpoch === syncWorkspaceEpoch && currentUser) {
+      setSyncStatus("success", "Synced just now");
+    }
+    return saved;
   }
 
   function mergeRemoteState(remoteState) {
     if (!remoteState || typeof remoteState !== "object" || Array.isArray(remoteState)) {
       return;
     }
+    var routeAtMerge = currentRoute;
+    var refreshAssessmentRoute = false;
     suppressStateSync = true;
     try {
       if (Array.isArray(remoteState.passedIds)) {
         remoteState.passedIds.map(String).forEach(function (exerciseId) {
-          if (validExerciseIds.has(exerciseId)) {
+          if (/^[a-z0-9][a-z0-9-]{0,127}$/u.test(exerciseId)) {
             passed.add(exerciseId);
           }
         });
@@ -2979,38 +3176,71 @@
       if (remoteState.drafts && typeof remoteState.drafts === "object" && !Array.isArray(remoteState.drafts)) {
         Object.keys(remoteState.drafts).forEach(function (exerciseId) {
           var value = remoteState.drafts[exerciseId];
-          if (validExerciseIds.has(exerciseId) && !drafts.has(exerciseId) && typeof value === "string" && value !== starterCode[exerciseId]) {
+          if (!drafts.has(exerciseId) && typeof value === "string" && value !== starterCode[exerciseId]) {
             drafts.set(exerciseId, value);
           }
         });
       }
       if (remoteState.learningProgress && typeof remoteState.learningProgress === "object" && !Array.isArray(remoteState.learningProgress)) {
         Object.keys(remoteState.learningProgress).forEach(function (chapterId) {
-          var chapter = chapterById.get(chapterId);
           var remoteItems = remoteState.learningProgress[chapterId];
-          if (!chapter || !Array.isArray(remoteItems)) {
+          if (!Array.isArray(remoteItems)) {
             return;
           }
-          var validItems = new Set(getLearningItemIds(chapter));
           var mergedItems = learningProgress.get(chapterId) || new Set();
           remoteItems.map(String).forEach(function (itemId) {
-            if (validItems.has(itemId)) {
-              mergedItems.add(itemId);
+            if (itemId.length <= 160) {
+              mergedItems.add(migrateLearningItemId(chapterId, itemId));
             }
           });
           learningProgress.set(chapterId, mergedItems);
         });
       }
-      if (!safeRead(STORAGE_KEYS.editorMode) && (remoteState.editorMode === "vim" || remoteState.editorMode === "sublime")) {
+      if (remoteState.assessmentProgress && typeof remoteState.assessmentProgress === "object") {
+        var nextAssessmentProgress = typeof assessmentEngine.mergeProgress === "function"
+          ? assessmentEngine.mergeProgress(assessmentProgress, remoteState.assessmentProgress, assessmentData)
+          : remoteState.assessmentProgress;
+        if (
+          routeAtMerge && routeAtMerge.name === "assessment-mode" &&
+          assessmentActiveSignature(assessmentProgress, routeAtMerge) !== assessmentActiveSignature(nextAssessmentProgress, routeAtMerge)
+        ) {
+          // Stop the mounted editor/timer while it still points at the old
+          // attempt. Disposing before assignment prevents an old practical
+          // editor from flushing its draft into the account's newer attempt.
+          if (assessmentRooms) assessmentRooms.dispose();
+          nextAssessmentProgress = typeof assessmentEngine.mergeProgress === "function"
+            ? assessmentEngine.mergeProgress(assessmentProgress, remoteState.assessmentProgress, assessmentData)
+            : remoteState.assessmentProgress;
+          refreshAssessmentRoute = true;
+        }
+        assessmentProgress = nextAssessmentProgress;
+      }
+      if (!workspaceRead(STORAGE_KEYS.editorMode) && (remoteState.editorMode === "vim" || remoteState.editorMode === "sublime")) {
         editorMode = remoteState.editorMode;
-        safeWrite(STORAGE_KEYS.editorMode, editorMode);
+        workspaceWrite(STORAGE_KEYS.editorMode, editorMode);
       }
       persistPassed();
       flushDrafts();
       persistLearningProgress();
+      persistAssessmentProgress();
     } finally {
       suppressStateSync = false;
     }
+    if (
+      refreshAssessmentRoute && currentRoute === routeAtMerge &&
+      currentRoute && currentRoute.name === "assessment-mode"
+    ) {
+      renderRoute(false);
+    }
+  }
+
+  function assessmentActiveSignature(progress, route) {
+    var active = progress && progress.blocks && route && route.block
+      ? progress.blocks[String(route.block.id)] &&
+        progress.blocks[String(route.block.id)][route.mode] &&
+        progress.blocks[String(route.block.id)][route.mode].active
+      : null;
+    return active ? String(active.id || "") + "|" + String(active.deadlineAt || "") : "";
   }
 
   function serializeLocalState() {
@@ -3023,21 +3253,35 @@
       serializedLearning[chapterId] = Array.from(items).sort();
     });
     return {
+      schemaVersion: 2,
+      contentVersion: "2026-07-assessments-v1",
       passedIds: Array.from(passed).sort(),
       drafts: serializedDrafts,
       learningProgress: serializedLearning,
+      assessmentProgress: assessmentProgress,
       editorMode: editorMode
     };
   }
 
-  async function pushLocalState() {
-    if (!authToken || !currentUser) {
+  async function pushLocalState(expectedToken, expectedEpoch) {
+    var requestToken = expectedToken === undefined ? authToken : expectedToken;
+    var requestEpoch = expectedEpoch === undefined ? workspaceEpoch : expectedEpoch;
+    if (!requestToken || !currentUser || authToken !== requestToken || workspaceEpoch !== requestEpoch) {
       return null;
     }
-    return apiRequest("/api/state", {
+    var response = await apiRequest("/api/state", {
       method: "PUT",
-      body: { state: serializeLocalState() }
+      body: { state: serializeLocalState() },
+      token: requestToken
     });
+    if (authToken !== requestToken || workspaceEpoch !== requestEpoch || !currentUser) {
+      return null;
+    }
+    // The server may have unioned a concurrent browser/device update. Apply
+    // that authoritative merged state immediately instead of waiting for the
+    // next page load or manual sync.
+    mergeRemoteState(response && response.state);
+    return response;
   }
 
   function queueStateSync() {
@@ -3047,12 +3291,24 @@
     window.clearTimeout(stateSyncTimer);
     stateSyncTimer = window.setTimeout(async function () {
       stateSyncTimer = null;
+      var queuedToken = authToken;
+      var queuedEpoch = workspaceEpoch;
       setSyncStatus("working", "Saving account progress…");
       try {
-        await pushLocalState();
-        setSyncStatus("success", "Changes synced");
+        await pushLocalState(queuedToken, queuedEpoch);
+        if (authToken === queuedToken && workspaceEpoch === queuedEpoch && currentUser) {
+          setSyncStatus("success", "Changes synced");
+        }
       } catch (error) {
-        setSyncStatus("error", "Cloud sync paused. Local changes are safe.");
+        if (
+          error && error.status === 401 &&
+          authToken === queuedToken && workspaceEpoch === queuedEpoch
+        ) {
+          expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
+          renderRoute(false);
+        } else {
+          setSyncStatus("error", "Cloud sync paused. Local changes are safe.");
+        }
       }
     }, 900);
   }
@@ -3061,8 +3317,13 @@
     if (!authToken || !currentUser || remoteFilesLoaded.has(exerciseId)) {
       return;
     }
+    var loadSessionToken = authToken;
+    var loadWorkspaceEpoch = workspaceEpoch;
     try {
-      var response = await apiRequest("/api/files/" + encodeURIComponent(exerciseId));
+      var response = await apiRequest("/api/files/" + encodeURIComponent(exerciseId), { token: loadSessionToken });
+      if (workspaceEpoch !== loadWorkspaceEpoch || authToken !== loadSessionToken || !currentUser) {
+        return;
+      }
       var file = response && response.file;
       if (!file || typeof file.content !== "string") {
         remoteFilesLoaded.add(exerciseId);
@@ -3091,6 +3352,14 @@
         announce("Your saved account file was restored without replacing a local draft.");
       }
     } catch (error) {
+      if (workspaceEpoch !== loadWorkspaceEpoch || authToken !== loadSessionToken) {
+        return;
+      }
+      if (error && error.status === 401) {
+        expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
+        renderRoute(false);
+        return;
+      }
       if (error && error.status === 404) {
         remoteFilesLoaded.add(exerciseId);
         return;
@@ -3350,7 +3619,9 @@
 
   function getOverallStats() {
     var totalExercises = validExerciseIds.size;
-    var passedExercises = passed.size;
+    var passedExercises = Array.from(validExerciseIds).filter(function (exerciseId) {
+      return passed.has(exerciseId);
+    }).length;
     var maxStars = Array.from(exerciseById.values()).reduce(function (sum, exercise) {
       return sum + getDifficulty(exercise);
     }, 0);
@@ -3374,6 +3645,37 @@
       highestPassedDifficulty: highestPassedDifficulty,
       progressPercent: totalExercises ? Math.round((passedExercises / totalExercises) * 100) : 0
     };
+  }
+
+  function getAssessmentStats() {
+    var blocks = Array.isArray(assessmentData.blocks) ? assessmentData.blocks : [];
+    var passedModes = blocks.reduce(function (total, block) {
+      return total + getAssessmentBlockStats(block).passedModes;
+    }, 0);
+    return { passedModes: passedModes, totalModes: blocks.length * 2 };
+  }
+
+  function getAssessmentBlockStats(block) {
+    var progressBlock = assessmentProgress && assessmentProgress.blocks
+      ? assessmentProgress.blocks[String(block.id)]
+      : null;
+    var passedModes = ["theory", "practical"].reduce(function (total, mode) {
+      var modeState = progressBlock && progressBlock[mode] ? progressBlock[mode] : null;
+      var history = modeState && Array.isArray(modeState.history)
+        ? modeState.history
+        : [];
+      return total + (modeState && modeState.completed || history.some(function (attempt) {
+        return Boolean(attempt.passed);
+      }) ? 1 : 0);
+    }, 0);
+    return { passedModes: passedModes };
+  }
+
+  function getAssessmentEndingAtChapter(chapter) {
+    return (Array.isArray(assessmentData.blocks) ? assessmentData.blocks : []).find(function (block) {
+      var chapterIds = Array.isArray(block.chapters) ? block.chapters : [];
+      return chapterIds.length && String(chapterIds[chapterIds.length - 1]) === String(chapter.id);
+    }) || null;
   }
 
   function getChapterProgress(chapter) {
@@ -3480,7 +3782,7 @@
   }
 
   function getContinueChapter() {
-    var lastExerciseId = safeRead(STORAGE_KEYS.lastExercise);
+    var lastExerciseId = workspaceRead(STORAGE_KEYS.lastExercise);
     if (lastExerciseId && chapterForExercise.has(lastExerciseId)) {
       return chapterForExercise.get(lastExerciseId);
     }
@@ -3499,11 +3801,29 @@
   function getLearningItemIds(chapter) {
     var content = getChapterLearning(chapter);
     var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
-    var itemIds = tutorials.map(function (_tutorial, index) {
-      return "tutorial-" + index;
+    var itemIds = tutorials.map(function (tutorial, index) {
+      return getTutorialItemId(tutorial, index);
     });
     itemIds.push("runbook");
     return itemIds;
+  }
+
+  function getTutorialItemId(tutorial, index) {
+    return tutorial && /^[a-z0-9][a-z0-9-]{2,159}$/u.test(String(tutorial.id || ""))
+      ? String(tutorial.id)
+      : "tutorial-" + index;
+  }
+
+  function migrateLearningItemId(chapterId, itemId) {
+    var match = /^tutorial-(\d+)$/u.exec(String(itemId));
+    var chapter = chapterById.get(String(chapterId));
+    if (!match || !chapter) {
+      return String(itemId);
+    }
+    var content = getChapterLearning(chapter);
+    var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
+    var index = Number(match[1]);
+    return tutorials[index] ? getTutorialItemId(tutorials[index], index) : String(itemId);
   }
 
   function getChapterLearningProgress(chapter) {
@@ -3526,7 +3846,7 @@
 
   function readLearningProgress() {
     var result = new Map();
-    var raw = safeRead(STORAGE_KEYS.learning);
+    var raw = workspaceRead(STORAGE_KEYS.learning);
     if (!raw) {
       return result;
     }
@@ -3536,12 +3856,13 @@
         return result;
       }
       Object.keys(parsed).forEach(function (chapterId) {
-        if (!chapterById.has(chapterId) || !Array.isArray(parsed[chapterId])) {
+        if (!Array.isArray(parsed[chapterId])) {
           return;
         }
-        var validIds = new Set(getLearningItemIds(chapterById.get(chapterId)));
         result.set(chapterId, new Set(parsed[chapterId].map(String).filter(function (itemId) {
-          return validIds.has(itemId);
+          return itemId.length <= 160;
+        }).map(function (itemId) {
+          return migrateLearningItemId(chapterId, itemId);
         })));
       });
       return result;
@@ -3555,7 +3876,30 @@
     learningProgress.forEach(function (items, chapterId) {
       serialized[chapterId] = Array.from(items).sort();
     });
-    safeWrite(STORAGE_KEYS.learning, JSON.stringify(serialized));
+    workspaceWrite(STORAGE_KEYS.learning, JSON.stringify(serialized));
+    queueStateSync();
+  }
+
+  function readAssessmentProgress() {
+    var empty = typeof assessmentEngine.createProgress === "function"
+      ? assessmentEngine.createProgress(assessmentData)
+      : { version: Number(assessmentData.version) || 1, blocks: {} };
+    var raw = workspaceRead(STORAGE_KEYS.assessments);
+    if (!raw) {
+      return empty;
+    }
+    try {
+      var parsed = JSON.parse(raw);
+      return typeof assessmentEngine.sanitizeProgress === "function"
+        ? assessmentEngine.sanitizeProgress(parsed, assessmentData)
+        : parsed;
+    } catch (error) {
+      return empty;
+    }
+  }
+
+  function persistAssessmentProgress() {
+    workspaceWrite(STORAGE_KEYS.assessments, JSON.stringify(assessmentProgress));
     queueStateSync();
   }
 
@@ -3653,7 +3997,7 @@
   }
 
   function readEditorMode() {
-    return safeRead(STORAGE_KEYS.editorMode) === "vim" ? "vim" : "sublime";
+    return workspaceRead(STORAGE_KEYS.editorMode) === "vim" ? "vim" : "sublime";
   }
 
   function getAceKeyboardHandler(mode) {
@@ -3703,7 +4047,7 @@
   }
 
   function readPassedIds() {
-    var raw = safeRead(STORAGE_KEYS.passed);
+    var raw = workspaceRead(STORAGE_KEYS.passed);
     if (!raw) {
       return [];
     }
@@ -3716,12 +4060,12 @@
   }
 
   function persistPassed() {
-    safeWrite(STORAGE_KEYS.passed, JSON.stringify(Array.from(passed).sort()));
+    workspaceWrite(STORAGE_KEYS.passed, JSON.stringify(Array.from(passed).sort()));
     queueStateSync();
   }
 
   function readDrafts() {
-    var raw = safeRead(STORAGE_KEYS.drafts);
+    var raw = workspaceRead(STORAGE_KEYS.drafts);
     var result = new Map();
     if (!raw) {
       return result;
@@ -3733,7 +4077,6 @@
       }
       Object.keys(parsed).forEach(function (exerciseId) {
         if (
-          validExerciseIds.has(exerciseId) &&
           typeof parsed[exerciseId] === "string" &&
           parsed[exerciseId] !== starterCode[exerciseId]
         ) {
@@ -3772,8 +4115,173 @@
     drafts.forEach(function (value, exerciseId) {
       serialized[exerciseId] = value;
     });
-    safeWrite(STORAGE_KEYS.drafts, JSON.stringify(serialized));
+    workspaceWrite(STORAGE_KEYS.drafts, JSON.stringify(serialized));
     queueStateSync();
+  }
+
+  function workspaceKey(key) {
+    return storageKeyForScope(key, workspaceScope);
+  }
+
+  function workspaceRead(key) {
+    return safeRead(workspaceKey(key));
+  }
+
+  function workspaceWrite(key, value) {
+    safeWrite(workspaceKey(key), value);
+  }
+
+  function storageKeyForScope(key, scope) {
+    return scope ? key + "." + scope : key;
+  }
+
+  function cloneAssessmentState(value) {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (error) {
+      return typeof assessmentEngine.createProgress === "function"
+        ? assessmentEngine.createProgress(assessmentData)
+        : { version: Number(assessmentData.version) || 1, blocks: {} };
+    }
+  }
+
+  function captureWorkspaceSnapshot() {
+    var learningSnapshot = new Map();
+    learningProgress.forEach(function (items, chapterId) {
+      learningSnapshot.set(chapterId, new Set(items));
+    });
+    return {
+      passed: new Set(passed),
+      drafts: new Map(drafts),
+      learning: learningSnapshot,
+      assessments: cloneAssessmentState(assessmentProgress),
+      editorMode: editorMode,
+      hasEditorMode: workspaceRead(STORAGE_KEYS.editorMode) !== null,
+      lastExercise: workspaceRead(STORAGE_KEYS.lastExercise)
+    };
+  }
+
+  function readWorkspaceSnapshot() {
+    var storedMode = workspaceRead(STORAGE_KEYS.editorMode);
+    return {
+      passed: new Set(readPassedIds()),
+      drafts: readDrafts(),
+      learning: readLearningProgress(),
+      assessments: readAssessmentProgress(),
+      editorMode: storedMode === "vim" ? "vim" : "sublime",
+      hasEditorMode: storedMode === "vim" || storedMode === "sublime",
+      lastExercise: workspaceRead(STORAGE_KEYS.lastExercise)
+    };
+  }
+
+  function mergeWorkspaceSnapshots(target, source) {
+    source.passed.forEach(function (exerciseId) { target.passed.add(exerciseId); });
+    // Anonymous code was edited most recently in the active browser session,
+    // so it wins only during its one-time transfer into the account workspace.
+    source.drafts.forEach(function (value, exerciseId) { target.drafts.set(exerciseId, value); });
+    source.learning.forEach(function (items, chapterId) {
+      var mergedItems = target.learning.get(chapterId) || new Set();
+      items.forEach(function (itemId) { mergedItems.add(itemId); });
+      target.learning.set(chapterId, mergedItems);
+    });
+    target.assessments = typeof assessmentEngine.mergeProgress === "function"
+      ? assessmentEngine.mergeProgress(target.assessments, source.assessments, assessmentData)
+      : cloneAssessmentState(source.assessments);
+    if (!target.hasEditorMode && source.hasEditorMode) {
+      target.editorMode = source.editorMode;
+      target.hasEditorMode = true;
+    }
+    if (!target.lastExercise && source.lastExercise) {
+      target.lastExercise = source.lastExercise;
+    }
+    return target;
+  }
+
+  function applyWorkspaceSnapshot(snapshot) {
+    passed = snapshot.passed;
+    drafts = snapshot.drafts;
+    learningProgress = snapshot.learning;
+    assessmentProgress = snapshot.assessments;
+    editorMode = snapshot.editorMode;
+  }
+
+  function persistWorkspaceSnapshot(snapshot) {
+    var serializedDrafts = {};
+    var serializedLearning = {};
+    snapshot.drafts.forEach(function (value, exerciseId) {
+      serializedDrafts[exerciseId] = value;
+    });
+    snapshot.learning.forEach(function (items, chapterId) {
+      serializedLearning[chapterId] = Array.from(items).sort();
+    });
+    workspaceWrite(STORAGE_KEYS.passed, JSON.stringify(Array.from(snapshot.passed).sort()));
+    workspaceWrite(STORAGE_KEYS.drafts, JSON.stringify(serializedDrafts));
+    workspaceWrite(STORAGE_KEYS.learning, JSON.stringify(serializedLearning));
+    workspaceWrite(STORAGE_KEYS.assessments, JSON.stringify(snapshot.assessments));
+    if (snapshot.hasEditorMode) {
+      workspaceWrite(STORAGE_KEYS.editorMode, snapshot.editorMode);
+    } else {
+      safeRemove(workspaceKey(STORAGE_KEYS.editorMode));
+    }
+    if (snapshot.lastExercise) {
+      workspaceWrite(STORAGE_KEYS.lastExercise, snapshot.lastExercise);
+    } else {
+      safeRemove(workspaceKey(STORAGE_KEYS.lastExercise));
+    }
+  }
+
+  function clearWorkspaceStorage(scope) {
+    [
+      STORAGE_KEYS.passed,
+      STORAGE_KEYS.drafts,
+      STORAGE_KEYS.learning,
+      STORAGE_KEYS.assessments,
+      STORAGE_KEYS.editorMode,
+      STORAGE_KEYS.lastExercise
+    ].forEach(function (key) {
+      safeRemove(storageKeyForScope(key, scope));
+    });
+  }
+
+  function switchWorkspace(userId, mergeCurrent, consumeCurrent) {
+    var targetScope = userId ? "user." + String(userId) : "";
+    if (targetScope === workspaceScope) {
+      return false;
+    }
+    workspaceEpoch += 1;
+    var previousSuppression = suppressStateSync;
+    var sourceScope = workspaceScope;
+    suppressStateSync = true;
+    try {
+      if (assessmentRooms) {
+        assessmentRooms.flush();
+        assessmentRooms.dispose();
+      }
+      disposeActiveEditor();
+      var source = captureWorkspaceSnapshot();
+      persistWorkspaceSnapshot(source);
+
+      workspaceScope = targetScope;
+      var target = readWorkspaceSnapshot();
+      if (mergeCurrent) {
+        target = mergeWorkspaceSnapshots(target, source);
+      }
+      applyWorkspaceSnapshot(target);
+      persistWorkspaceSnapshot(target);
+
+      if (consumeCurrent && sourceScope === "" && targetScope) {
+        clearWorkspaceStorage(sourceScope);
+      }
+      revealedHints.clear();
+      runResults.clear();
+      selectedBadgeId = null;
+      activeRun = null;
+      remoteFilesLoaded.clear();
+      accountFileSaves.clear();
+      return true;
+    } finally {
+      suppressStateSync = previousSuppression;
+    }
   }
 
   function safeRead(key) {
@@ -3862,6 +4370,37 @@
       link.setAttribute("aria-label", ariaLabel);
     }
     return link;
+  }
+
+  function createAssessmentRoomsController() {
+    if (!window.ASSESSMENT_ROOMS || typeof window.ASSESSMENT_ROOMS.create !== "function") {
+      return null;
+    }
+    return window.ASSESSMENT_ROOMS.create({
+      data: assessmentData,
+      engine: assessmentEngine,
+      getProgress: function () { return assessmentProgress; },
+      getWorkspaceEpoch: function () { return workspaceEpoch; },
+      saveProgress: function (nextProgress) {
+        assessmentProgress = nextProgress;
+        persistAssessmentProgress();
+      },
+      getChapterLabel: function (chapterId) {
+        var chapter = chapterById.get(String(chapterId));
+        return chapter ? "Chapter " + padChapter(chapter.number) + " · " + chapter.title : String(chapterId);
+      },
+      getEditorMode: function () { return editorMode; },
+      setEditorMode: function (nextMode) {
+        editorMode = nextMode === "vim" ? "vim" : "sublime";
+        workspaceWrite(STORAGE_KEYS.editorMode, editorMode);
+        queueStateSync();
+      },
+      preparePython: function () { return pythonRunner.prepare(); },
+      runPython: function (code, mode, tests) { return pythonRunner.run(code, mode, tests); },
+      requestRender: function () { renderRoute(false); },
+      announce: announce,
+      audio: audio
+    });
   }
 
   function createPythonRunner() {
@@ -3976,7 +4515,7 @@
       });
     }
 
-    return { run: run };
+    return { run: run, prepare: ensureReady };
   }
 
   function renderDataError() {

@@ -1,6 +1,13 @@
 (() => {
   "use strict";
 
+  const tutorialId = (title) => `tutorial-${title
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")}`;
+
   const section = (
     title,
     explanation,
@@ -9,6 +16,7 @@
     takeaway,
     commonPitfall,
   ) => ({
+    id: tutorialId(title),
     title,
     explanation,
     exampleCode,

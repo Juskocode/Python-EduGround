@@ -24,6 +24,7 @@
       })();
     </script>
     <link rel="stylesheet" href="course-ui.css" />
+    <link rel="stylesheet" href="assessment-ui.css" />
   </head>
   <body>
     <a class="skip-link" href="#app-main">Skip to learning content</a>
@@ -42,6 +43,10 @@
           <a class="topbar-home" href="#home" aria-label="Open chapter dashboard">
             <span aria-hidden="true">⌂</span>
             <span>Chapters</span>
+          </a>
+          <a class="topbar-home" href="#assessments" aria-label="Open timed assessment rooms">
+            <span aria-hidden="true">◷</span>
+            <span>Assessments</span>
           </a>
           <button
             id="theme-toggle"
@@ -115,6 +120,9 @@
     <script src="test-data/tests-py08-11.js" defer></script>
     <script src="learning-content.js" defer></script>
     <script src="learning-toolbox.js" defer></script>
+    <script src="assessment-data.js" defer></script>
+    <script src="assessment-engine.js" defer></script>
+    <script src="assessment-room.js" defer></script>
     <script src="assets/vendor/ace/ace.js" defer></script>
     <script src="assets/vendor/ace/ext-language_tools.js" defer></script>
     <script src="assets/vendor/ace/keybinding-sublime.js" defer></script>

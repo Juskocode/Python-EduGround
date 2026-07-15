@@ -17,6 +17,10 @@ test("required playground assets remain public", async () => {
     "/",
     "/course-app.js",
     "/learning-toolbox.js",
+    "/assessment-data.js",
+    "/assessment-engine.js",
+    "/assessment-room.js",
+    "/assessment-ui.css",
     "/starter-code.js",
     "/test-data/tests-py01-03.js",
     "/assets/vendor/ace/ace.js",
@@ -37,6 +41,19 @@ test("the toolbox data loads before the application reads it", async () => {
   assert.ok(learningContentPosition >= 0, "index should load learning-content.js");
   assert.ok(toolboxPosition > learningContentPosition, "toolbox data should load after the core learning content");
   assert.ok(applicationPosition > toolboxPosition, "toolbox data should load before course-app.js");
+});
+
+test("assessment data, engine, and room controller load before the application", async () => {
+  const index = await readFile(resolve(REPOSITORY_ROOT, "index.html"), "utf8");
+  const dataPosition = index.indexOf('src="assessment-data.js"');
+  const enginePosition = index.indexOf('src="assessment-engine.js"');
+  const roomPosition = index.indexOf('src="assessment-room.js"');
+  const applicationPosition = index.indexOf('src="course-app.js"');
+
+  assert.ok(dataPosition >= 0, "index should load assessment-data.js");
+  assert.ok(enginePosition > dataPosition, "assessment engine should load after its data");
+  assert.ok(roomPosition > enginePosition, "assessment room should load after its engine");
+  assert.ok(applicationPosition > roomPosition, "assessment scripts should load before course-app.js");
 });
 
 test("solutions and backend or deployment files are not served", async () => {

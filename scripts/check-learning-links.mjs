@@ -6,10 +6,15 @@ import { pathToFileURL } from "node:url";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 globalThis.window = {};
 await import(pathToFileURL(path.join(repoRoot, "learning-content.js")));
+await import(pathToFileURL(path.join(repoRoot, "assessment-data.js")));
 
-const resources = Object.entries(window.LEARNING_CONTENT.chapters).flatMap(([chapterId, chapter]) =>
+const chapterResources = Object.entries(window.LEARNING_CONTENT.chapters).flatMap(([chapterId, chapter]) =>
   (chapter.documentation || []).map((resource) => ({ chapterId, ...resource })),
 );
+const assessmentResources = (window.ASSESSMENT_DATA?.blocks || []).flatMap((block) =>
+  (block.references || []).map((resource) => ({ chapterId: `assessment/${block.id}`, ...resource })),
+);
+const resources = [...chapterResources, ...assessmentResources];
 const pageCache = new Map();
 const errors = [];
 
