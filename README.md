@@ -14,7 +14,7 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 
 ### Evidence-driven problem-solving runbook
 
-![Problem-solving runbook with why it matters, what to try when stuck, and evidence for every phase](docs/screenshots/runbook.jpg)
+![Problem-solving runbook with a learner and Python-coach conversation about input, integer conversion, and test debugging](docs/screenshots/runbook.jpg)
 
 ### Browser IDE and test feedback
 
@@ -31,8 +31,8 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 | Area | Included |
 | --- | --- |
 | Curriculum | 11 chapters, 92 exercises, 281 tests, and 239 collectible difficulty stars |
-| Guided learning | 44 tutorials, 55 runbook phases, 55 mental-model steps, and 22 guided practices |
-| Reference material | 66 glossary terms, 66 debugging checks, and one checkpoint per chapter |
+| Guided learning | 44 tutorials, 55 runbook phases, 55 mental-model steps, 22 guided practices, and 33 learner/coach exchanges |
+| Reference material | 66 glossary terms, 66 debugging checks, one checkpoint per chapter, and 38 curated official Python documentation links |
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, and progressive hints |
 | Editor | Vendored Ace with a persistent Sublime or Vim keymap, fixed Monokai theme, Python highlighting, autocomplete, search, folding, line numbers, and copy/paste controls |
 | Files | Automatic browser drafts, explicit **Save**, and a **Download .py** action for a real local file |
@@ -48,7 +48,7 @@ Every chapter guide combines five layers:
 2. A visual mental model that explains how values or control move through the chapter's topic.
 3. Two guided prediction practices with copyable safe starters and revealable coaching notes.
 4. A glossary, debugging checklist, and knowledge checkpoint.
-5. A five-phase runbook where every phase explains **why it matters**, **what to try when stuck**, and **what evidence proves the phase is complete**.
+5. A five-phase runbook with a conversational Python coach, **why it matters**, **what to try when stuck**, inspectable evidence, and topic-specific links to the official Python documentation.
 
 Guide sections can be marked understood. Their progress persists separately from graded exercise passes, so reading a tutorial never awards exercise stars.
 
@@ -139,11 +139,12 @@ Local storage is scoped to the exact browser origin. For example, `127.0.0.1:800
 
 ```bash
 npm run validate
+npm run validate:links
 node --check python-runner-worker.mjs
 git diff --check
 ```
 
-`npm run validate` checks application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 tests, every solution-free starter, every tutorial and runbook phase, and the complete deep-learning schema.
+`npm run validate` performs the deterministic offline checks for application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 tests, every solution-free starter, every tutorial and runbook phase, coaching conversations, official-link allowlisting, and the complete deep-learning schema. `npm run validate:links` is the optional network check that verifies the curated Python documentation pages and fragment anchors still exist.
 
 The release smoke flow also covers:
 
