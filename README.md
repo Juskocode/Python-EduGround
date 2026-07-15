@@ -31,8 +31,8 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 | Area | Included |
 | --- | --- |
 | Curriculum | 11 chapters, 92 exercises, 281 tests, and 239 collectible difficulty stars |
-| Guided learning | 44 tutorials, 55 runbook phases, 55 mental-model steps, 22 guided practices, and 33 learner/coach exchanges |
-| Reference material | 66 glossary terms, 66 debugging checks, one checkpoint per chapter, and 38 curated official Python documentation links |
+| Guided learning | 44 tutorials, 55 runbook phases, 55 mental-model steps, 22 guided practices, 37 learner/coach exchanges, and 40 choose-by-intent toolbox cards |
+| Reference material | 66 glossary terms, 66 debugging checks, one checkpoint per chapter, and 40 curated official Python documentation links |
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, and progressive hints |
 | Editor | Vendored Ace with a persistent Sublime or Vim keymap, fixed Monokai theme, Python highlighting, autocomplete, search, folding, line numbers, and copy/paste controls |
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
@@ -42,13 +42,14 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 | Persistence | Local browser storage by default; optional PostgreSQL account sync plus a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
-Every chapter guide combines five layers:
+Every chapter guide combines six layers:
 
 1. Four concept tutorials with unrelated examples, checklists, takeaways, and common pitfalls.
 2. A visual mental model that explains how values or control move through the chapter's topic.
 3. Two guided prediction practices with copyable safe starters and revealable coaching notes.
 4. A glossary, debugging checklist, and knowledge checkpoint.
-5. A five-phase runbook with a conversational Python coach, **why it matters**, **what to try when stuck**, inspectable evidence, and topic-specific links to the official Python documentation.
+5. A chapter-specific Python toolbox that explains syntax, return values, type conversions, imports, appropriate use, and common traps through copyable analogous examples.
+6. A five-phase runbook with a conversational Python coach, **why it matters**, **what to try when stuck**, inspectable evidence, and topic-specific links to the official Python documentation.
 
 Guide sections can be marked understood. Their progress persists separately from graded exercise passes, so reading a tutorial never awards exercise stars.
 
@@ -160,7 +161,7 @@ node --check python-runner-worker.mjs
 git diff --check
 ```
 
-`npm run validate` performs the deterministic offline checks for application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 tests, every solution-free starter, every tutorial and runbook phase, coaching conversations, official-link allowlisting, and the complete deep-learning schema. `npm run validate:links` is the optional network check that verifies the curated Python documentation pages and fragment anchors still exist.
+`npm run validate` performs the deterministic offline checks for application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 tests, every solution-free starter, every tutorial and runbook phase, all 40 toolbox cards, coaching conversations, official-link allowlisting, and the complete deep-learning schema. `npm run validate:links` is the optional network check that verifies the curated Python documentation pages and fragment anchors still exist.
 
 The release smoke flow also covers:
 
@@ -182,6 +183,7 @@ The release smoke flow also covers:
 | `course-ui.css` | Responsive light/dark UI, learning guide, account panel, runbook, and IDE layout |
 | `course-app.js` | Router, views, local/account persistence, profile, editor adapter, runner controls, and result rendering |
 | `learning-content.js` | Ranks, badges, tutorials, deep dives, checkpoints, and runbooks |
+| `learning-toolbox.js` | Per-chapter Python functionality guide with conversions, imports, results, cautions, and copyable examples |
 | `exercise-data.js` | Chapters, prompts, topics, source paths, and hints |
 | `test-data/` | 186 visible and 95 hidden learning checks |
 | `starter-code.js` | Generated solution-free starters and public function signatures |
