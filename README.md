@@ -1,6 +1,6 @@
 # Python EduGround
 
-Python EduGround turns the 11 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL.
+Python EduGround turns the 11 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL. The repository also ships a hardened container topology, secure-cookie account boundary, mandatory PostgreSQL integration gate, and reviewable CI/release pipeline.
 
 ## Product tour
 
@@ -42,10 +42,10 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, and progressive hints |
 | Editor | Vendored Ace with a persistent Sublime or Vim keymap, fixed Monokai theme, Python highlighting, autocomplete, search, folding, line numbers, and copy/paste controls |
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
-| Runner | Pyodide in an isolated browser worker; **Run** checks visible examples and **Run tests** adds hidden cases |
+| Runner | Pyodide in a dedicated browser worker; account APIs additionally require a tab-only capability never sent to that worker |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
 | Motivation | Chapter progress, difficulty stars, eight Pythonic ranks, ten badges, achievement toasts, and optional sound cues |
-| Persistence | Local browser storage by default; optional PostgreSQL account sync plus a durable per-user submission-file volume |
+| Persistence | Local browser storage by default; optional PostgreSQL sync with HttpOnly cookie sessions and a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
 Every chapter is presented as a complete class:
@@ -67,7 +67,8 @@ The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10�
 
 ## Run locally
 
-Requirements: a modern browser and Node.js 18 or newer.
+Requirements: a modern browser plus Node.js `22.23.1` through Node 26. CI validates
+the lowest supported Node 22 release and the Node 24 production line.
 
 ### Local-only mode
 
@@ -90,21 +91,48 @@ HTTP serving is required for the module-based Python worker. Ace is checked into
 
 ### PostgreSQL account sync
 
-The shortest Docker-backed setup is:
+Copy the environment template, generate two different file-backed secrets, and set
+the exact browser origin:
 
 ```bash
-docker-compose up --build
+cp .env.example .env
+npm run secrets:init
 ```
 
-The Compose stack creates durable PostgreSQL and submission-file volumes, applies the checked-in migrations, and serves the app. For a manually managed or hosted database:
+The generated owner and runtime credentials live in the Git-ignored `secrets/`
+directory with mode `0600`; move their durable copies into an approved secret
+manager. Set `APP_ORIGIN` in `.env`, then start the stack:
 
 ```bash
-export DATABASE_URL='postgresql://eduground:change-this-password@127.0.0.1:5432/eduground'
+docker compose config --quiet
+docker compose up -d --build
+curl --fail http://127.0.0.1:8000/readyz
+```
+
+The database is private, migrations run as a one-shot owner process, and the
+long-running app uses restricted role `eduground_app`. For a managed database,
+prefer `PG*` fields so reserved password characters need no URL encoding:
+
+```bash
+export PGHOST='db.example.net'
+export PGPORT='5432'
+export PGDATABASE='eduground'
+export PGUSER='eduground_owner'
+export PGPASSWORD_FILE='/run/secrets/eduground-owner-password'
+export DATABASE_SSL='require'
+export DATABASE_SSL_CA_FILE='/run/secrets/provider-root-ca.pem'
 npm run migrate
+
+export PGUSER='eduground_app'
+export PGPASSWORD_FILE='/run/secrets/eduground-runtime-password'
+export APP_ORIGIN='https://learn.example.com'
 npm run serve
 ```
 
-Database-backed saving is opt-in from the profile menu. Unsigned learners remain local-only. See [docs/PERSISTENCE.md](docs/PERSISTENCE.md) for the complete data model, environment reference, deployment, backup, restore, security, and deletion guidance.
+Database-backed saving is opt-in from the profile menu. Unsigned learners remain
+local-only. See [docs/PERSISTENCE.md](docs/PERSISTENCE.md) for the data model and
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment, backup,
+restore, proxy, and rollback procedures.
 
 ## Upgrade without losing progress
 
@@ -114,11 +142,19 @@ For an in-place Compose update, keep the same `COMPOSE_PROJECT_NAME` and named v
 
 ```bash
 git pull --ff-only
-docker-compose up -d --build
+docker compose up -d --build --force-recreate
 curl --fail http://127.0.0.1:8000/readyz
 ```
 
-The Compose file has a stable default project name, `fundamentos-de-programacao-playground`, so the historical `postgres_data` and `submissions_data` volumes continue to be selected even if the checkout directory is renamed. If an existing deployment used `-p` or a custom `COMPOSE_PROJECT_NAME`, continue using that exact value. The app service runs `npm run migrate` before startup; manually managed deployments must run it before routing traffic to the new release. Do not use `docker-compose down -v` during an upgrade. Follow the [upgrade, backup, and restore runbook](docs/PERSISTENCE.md#upgrade-an-existing-installation) before a production pull.
+The Compose file has a stable default project name,
+`fundamentos-de-programacao-playground`, so the historical `postgres_data` and
+`submissions_data` volumes continue to be selected even if the checkout directory
+is renamed. If an existing deployment used `-p` or a custom
+`COMPOSE_PROJECT_NAME`, continue using that exact value. The one-shot `migrate`
+service must succeed before the restricted app starts. Do not use
+`docker compose down -v` during an upgrade. Follow the complete
+[upgrade and recovery runbook](docs/DEPLOYMENT.md#upgrade-without-losing-learner-progress)
+before a production pull.
 
 ## Navigation
 
@@ -183,7 +219,7 @@ The server owns this 92-file mapping. Learner input cannot select a path, and th
 | Complete run details | Current page memory only | PostgreSQL run-history record; current UI does not yet reload this history |
 | Theme and sound | Browser storage | Browser storage only |
 
-Local storage is scoped to the exact browser origin. For example, `127.0.0.1:8000` and `localhost:8000` have different local drafts. Within one origin, the app keeps an anonymous workspace and a separate local cache per account, so signing out does not expose one account's work to the next learner. Account data is attached to the PostgreSQL database and can follow a learner to another deployment after they sign in there with the same account credentials.
+Local storage is scoped to the exact browser origin. For example, `127.0.0.1:8000` and `localhost:8000` have different local drafts. Within one origin, the app keeps an anonymous workspace and a separate local cache per account, but it selects an account cache only after the cookie and the tab-only capability are validated. Signing out or a failed session restore returns to the anonymous workspace instead of exposing the previous learner's drafts. Account data is attached to PostgreSQL and can follow a learner to another deployment after they sign in there with the same account credentials.
 
 ## Validate the repository
 
@@ -194,9 +230,33 @@ node --check python-runner-worker.mjs
 git diff --check
 ```
 
-`npm run validate` performs the deterministic offline checks for application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 exercise tests, every solution-free starter, every lesson section and runbook phase, all 11 concept clinics, the directed-rounding interactive lab, all 43 toolbox cards, coaching conversations, and the complete deep-learning schema. Classroom validation checks the exact 11-class coverage, 990-minute schedule, stable IDs, deep immutability, complete teaching schema, executable Python demonstrations, labelled output, and repository solution/prompt leakage. Component tests cover the documentation hierarchy, scoped IDs, copy controls, router-safe contents navigation, supplied lesson slots, and responsive navigation structure. It also checks all four assessment blocks, 60 theory questions, 20 practical tasks, 60 practical tests, absolute 20/60-minute limits, stable IDs, solution-free assessment starters, and official-link allowlisting. `npm run validate:links` is the optional network check that verifies all 62 curated Python documentation references and fragment anchors still exist.
+`npm run validate` performs the deterministic offline checks for application and
+backend syntax/tests, the security policy, all 11 chapter definitions, all 92
+exercise definitions, all 281 exercise tests, every solution-free starter, every
+lesson section and runbook phase, all concept clinics, the rounding lab, toolbox
+cards, and the complete classroom/assessment schema. It also verifies cookie/origin
+helpers, database TLS configuration, migration manifests, public-file isolation,
+and hardened container/workflow policy. `npm run validate:links` is the optional
+network check for curated Python documentation references.
 
-The release smoke flow also covers:
+Database and release candidates must additionally use an isolated PostgreSQL
+database:
+
+```bash
+export TEST_DATABASE_URL='postgresql://eduground_test:test-only@127.0.0.1:5432/eduground_test'
+npm run validate:integration
+# Before a release, use the complete gate:
+npm run validate:release
+```
+
+`validate:integration` fails closed when `TEST_DATABASE_URL` is missing, applies the
+real migrations, and tests cookie-plus-tab-capability sessions, worker-style
+capability rejection, origin enforcement, concurrent state and file persistence,
+canonical mirrors, run normalization, and bounded history.
+`validate:release` combines the deterministic and database gates with a
+high-severity dependency audit.
+
+Validation coverage includes:
 
 - Dashboard → chapter → class and exercise routes.
 - Persistent class-section understanding markers.
@@ -208,6 +268,11 @@ The release smoke flow also covers:
 - Failure output with expected/actual fields and Python tracebacks.
 - Four assessment blocks with resumable absolute deadlines, exact-set theory scoring, five-task practical grading, automatic expiry submission, and saved attempt history.
 - Dark mode, copy/paste controls, ranks, badges, and local persistence.
+
+The current CI does not yet run a full browser end-to-end or automated accessibility
+suite; those remain explicit roadmap items. CI boots the actual restricted Compose
+topology, verifies persistence across app recreation, smoke-tests the production
+image, and retains sanitized scan evidence.
 
 ## Repository map
 
@@ -235,19 +300,25 @@ The release smoke flow also covers:
 | `starter-code.js` | Generated solution-free starters and public function signatures |
 | `solution-code.js` | Build-time repository artifact that is deliberately not loaded by the learner page |
 | `audio-feedback.js` | Synthesized click, result, and achievement cues |
-| `python-runner-worker.mjs` | Isolated Python execution, output capture, timeout handling, and traceback capture |
+| `python-runner-worker.mjs` | Dedicated-worker Python execution, output capture, timeout handling, and traceback capture |
 | `assets/vendor/ace/` | Pinned Ace 1.44.0 runtime, Monokai theme, Sublime/Vim keymaps, and license |
 | `server/` | Same-origin HTTP API, authentication, PostgreSQL access, security helpers, and static serving |
 | `server/exercise-manifest.mjs` | Stable 92-exercise mapping to chapter directories and zero-based `exNN.py` names |
 | `server/submission-files.mjs` | Atomic, private per-user filesystem mirror with traversal and symlink protection |
+| `server/runtime-security.mjs` | Cookie, origin, trusted-proxy, browser-header, and HTTP resource policy |
+| `server/database-config.mjs` | Bounded `PG*`/URL configuration and verified PostgreSQL TLS |
 | `db/migrations/` | Ordered, checksum-protected PostgreSQL schema migrations |
 | `scripts/migrate.mjs` | Migration command used locally and during deployment |
+| `docker-compose.yml` / `docker/` | Private database, split owner/runtime roles, one-shot migration, and restricted app runtime |
+| `.github/workflows/` | CI, PostgreSQL integration, CodeQL, supply-chain, container, documentation, and release workflows |
 | `scripts/validate-assessment-data.mjs` | Assessment structure, timing, stable-ID, syntax, test, solution-leak, and official-link validation |
 | `server/tests/class-materials.test.mjs` | Classroom coverage, timing, executable demos, immutability, and solution/prompt leakage validation |
 | `server/tests/class-page.test.mjs` | Deterministic class-page hierarchy, navigation, accessibility, and fallback rendering validation |
 | `docs/CLASSROOM.md` | Learner-facing class sequence, authoring contract, solution boundary, rendering integration, and validation guide |
 | `docs/ASSESSMENTS.md` | Timed-room rules, chapter/PDF mapping, scoring, references, persistence, and security boundaries |
-| `docs/PERSISTENCE.md` | Account sync, deployment durability, backup/restore, and security guide |
+| `docs/PERSISTENCE.md` | Account sync, data model, storage bounds, migrations, and deletion behavior |
+| `docs/DEPLOYMENT.md` | First deploy, proxy, upgrade, backup/restore drill, image promotion, and rollback runbook |
+| `docs/SECURE_SDLC.md` | Trust boundaries, local/CI gates, release policy, incident response, and residual risks |
 
 ## Content, privacy, and assessment transparency
 
@@ -259,7 +330,7 @@ The assessment practical prompts are independently paraphrased from four PDFs su
 
 `solution-code.js` supports local generation and validation only. It is not requested by `index.html`, `window.SOLUTION_CODE` is not created in the learner page, and editor resets restore a safe starter rather than an answer. The server uses a public-file allowlist, so the solution bundle, original `Py*/` sources, migrations, backend modules, and deployment secrets are not downloadable from the web application.
 
-Unsigned use sends no learner code or progress to the application API. Creating an account opts into syncing drafts, saved files, progress, editor mode, and detailed test results to PostgreSQL, plus the configured private submission-file mirror. Python code still executes in the browser, not on the Node server. See [the persistence security notes](docs/PERSISTENCE.md#security-limitations) before exposing account sync publicly.
+Unsigned use sends no learner code or progress to the application API. Creating an account opts into syncing drafts, saved files, progress, editor mode, and detailed test results to PostgreSQL, plus the configured private submission-file mirror. Python code still executes in a browser worker, not on the Node server. The worker is not a safe sandbox for untrusted pasted code; it has a JavaScript bridge and network access to the CSP-allowed runtime origins. Account APIs require a separate tab capability that is never sent to the worker. Persisted run claims are explicitly labelled as learner-device evidence. See the [secure-SDLC trust boundaries](docs/SECURE_SDLC.md#security-objective) before exposing account sync publicly.
 
 ## Refresh generated or vendored artifacts
 
@@ -279,4 +350,9 @@ npm run vendor:ace
 
 ## Future improvements
 
-The prioritized, issue-ready backlog is in [docs/ROADMAP.md](docs/ROADMAP.md). It now treats editor modes, file downloads, and optional PostgreSQL sync as delivered foundations and focuses future work on production account security, conflict visibility, run-history UX, CI, accessibility, performance, offline use, data portability, and curriculum authoring.
+The prioritized, issue-ready backlog is in [docs/ROADMAP.md](docs/ROADMAP.md). It
+treats the cookie-plus-tab-capability boundary, PostgreSQL TLS, hardened Compose,
+CI, scanning, SBOM, and attested-release foundations as delivered, then focuses on
+account lifecycle, shared abuse controls, browser/accessibility gates, automated
+recovery evidence, conflict UX, performance, offline use, and secure hosted
+assessment.
