@@ -4,3 +4,8 @@ node_modules/
 .env.local
 .env.*.local
 submissions/
+backups/
+.compose-gate.*
+.credential-rotation.*
+.restore-drill-secrets.*
+secrets/
