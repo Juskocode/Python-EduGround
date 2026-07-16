@@ -1,0 +1,78 @@
+name: Bug report
+description: Report a reproducible product, content, or persistence problem.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Python EduGround. Do not include passwords,
+        session tokens, private learner code, database dumps, or vulnerability details.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dashboard or navigation
+        - Class material or runbook
+        - Exercise editor or Python runner
+        - Tests or result feedback
+        - Assessments
+        - Account sync or persistence
+        - Container or deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe the observable behavior without including sensitive data.
+      placeholder: Include the route, action, and exact non-sensitive error.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Start the app with ...
+        2. Open ...
+        3. Select ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: input
+    id: revision
+    attributes:
+      label: Revision
+      description: Commit SHA, release, or `git rev-parse --short HEAD`.
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, Node.js version, operating system, and local/Compose deployment.
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed credentials, tokens, learner code, and personal data.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

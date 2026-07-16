@@ -3,14 +3,27 @@
   "version": "1.0.0",
   "private": true,
   "description": "Interactive, solution-free Python learning path with browser execution.",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": ">=22.23.1 <27",
+    "npm": ">=10 <13"
+  },
   "scripts": {
+    "test": "npm run validate",
     "serve": "node scripts/serve.mjs",
     "migrate": "node scripts/migrate.mjs",
+    "secrets:init": "sh scripts/init-secrets.sh",
+    "db:backup": "sh scripts/backup-postgres.sh",
+    "db:restore": "sh scripts/restore-postgres.sh",
     "validate:backend": "node --test server/tests/*.test.mjs",
+    "validate:integration": "node scripts/validate-database-integration.mjs",
+    "validate:compose": "bash scripts/validate-compose-integration.sh",
+    "validate:security": "node scripts/validate-security.mjs",
+    "validate:release": "npm run validate && npm run validate:integration && npm audit --audit-level=high --ignore-scripts",
     "vendor:ace": "node scripts/vendor-ace.mjs",
     "build:starters": "node scripts/build-starter-bundle.mjs",
     "validate:links": "node scripts/check-learning-links.mjs",
-    "validate": "node --check course-app.js && node --check dashboard-model.js && node --check dashboard-view.js && node --check learning-content.js && node --check learning-toolbox.js && node --check learning-clinics.js && node --check concept-clinic.js && node --check class-materials.js && node --check class-page.js && node --check rounding-model.js && node --check rounding-lab.js && node --check assessment-data.js && node --check assessment-engine.js && node --check assessment-room.js && node --check audio-feedback.js && node scripts/validate-test-data.mjs && node scripts/validate-starter-data.mjs && node scripts/validate-learning-content.mjs && node scripts/validate-assessment-data.mjs && npm run validate:backend"
+    "validate": "node --check course-app.js && node --check theme-bootstrap.js && node --check dashboard-model.js && node --check dashboard-view.js && node --check learning-content.js && node --check learning-toolbox.js && node --check learning-clinics.js && node --check concept-clinic.js && node --check class-materials.js && node --check class-page.js && node --check rounding-model.js && node --check rounding-lab.js && node --check assessment-data.js && node --check assessment-engine.js && node --check assessment-room.js && node --check audio-feedback.js && node scripts/validate-test-data.mjs && node scripts/validate-starter-data.mjs && node scripts/validate-learning-content.mjs && node scripts/validate-assessment-data.mjs && npm run validate:backend && npm run validate:security"
   },
   "devDependencies": {
     "ace-builds": "1.44.0"

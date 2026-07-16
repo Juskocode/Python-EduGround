@@ -1,0 +1,330 @@
+name: Release container
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version for the candidate, for example v1.2.3
+        required: true
+        type: string
+      publish:
+        description: Publish the approved candidate to GHCR
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  NPM_CONFIG_AUDIT: "false"
+  NPM_CONFIG_FUND: "false"
+  NPM_CONFIG_UPDATE_NOTIFIER: "false"
+
+jobs:
+  release-candidate:
+    name: Validate release candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    outputs:
+      image_artifact: ${{ steps.release.outputs.artifact_name }}
+    env:
+      TEST_DATABASE_URL: postgresql://eduground_release:release-only-password@127.0.0.1:5432/eduground_release
+      DATABASE_SSL: "false"
+
+    services:
+      postgres:
+        image: postgres:16.14-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+        env:
+          POSTGRES_DB: eduground_release
+          POSTGRES_USER: eduground_release
+          POSTGRES_PASSWORD: release-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eduground_release -d eduground_release"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    steps:
+      - name: Validate release request
+        id: release
+        env:
+          PUBLISH: ${{ inputs.publish }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "version must be a semantic version beginning with v, such as v1.2.3" >&2
+            exit 1
+          fi
+          if [[ "$PUBLISH" == "true" && "$GITHUB_REF" != "refs/tags/$RELEASE_VERSION" ]]; then
+            echo "published releases must be dispatched from the matching Git tag refs/tags/$RELEASE_VERSION" >&2
+            exit 1
+          fi
+
+          image_ref="ghcr.io/${GITHUB_REPOSITORY,,}"
+          release_tag="${RELEASE_VERSION#v}"
+          sha_tag="sha-${GITHUB_SHA}"
+          {
+            echo "artifact_name=release-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            echo "image_ref=$image_ref"
+            echo "release_tag=$release_tag"
+            echo "sha_tag=$sha_tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22.23.1"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Run full validation with PostgreSQL
+        run: |
+          npm run validate:release
+          node --check python-runner-worker.mjs
+          git diff --check
+
+      - name: Build the release image once
+        env:
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          SHA_TAG: ${{ steps.release.outputs.sha_tag }}
+        run: |
+          docker build --pull \
+            --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --build-arg "VCS_REF=${GITHUB_SHA}" \
+            --build-arg "VERSION=${RELEASE_TAG}" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.version=${RELEASE_TAG}" \
+            --tag "$IMAGE_REF:$RELEASE_TAG" \
+            --tag "$IMAGE_REF:$SHA_TAG" \
+            .
+
+      - name: Start the release image
+        env:
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+        run: >-
+          docker run --detach
+          --name python-eduground-release
+          --publish 127.0.0.1:8000:8000
+          --read-only
+          --tmpfs /tmp:rw,noexec,nosuid,size=64m
+          --tmpfs /app/submissions:rw,noexec,nosuid,size=64m
+          --cap-drop ALL
+          --security-opt no-new-privileges
+          --env APP_ORIGIN=http://127.0.0.1:8000
+          "$IMAGE_REF:$RELEASE_TAG"
+
+      - name: Smoke-test the release image
+        run: |
+          curl --fail --silent --show-error \
+            --retry 20 --retry-delay 1 --retry-all-errors \
+            http://127.0.0.1:8000/healthz > release-healthz.json
+          curl --fail --silent --show-error \
+            http://127.0.0.1:8000/ > release-index.html
+          grep -Fq "Python EduGround" release-index.html
+
+      - name: Scan the release image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ${{ steps.release.outputs.image_ref }}:${{ steps.release.outputs.release_tag }}
+          format: table
+          output: release-trivy-report.txt
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+
+      - name: Generate the release SBOM
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ${{ steps.release.outputs.image_ref }}:${{ steps.release.outputs.release_tag }}
+          format: spdx-json
+          output: release-sbom.spdx.json
+          exit-code: "0"
+          scanners: vuln
+
+      - name: Save the validated image
+        env:
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          SHA_TAG: ${{ steps.release.outputs.sha_tag }}
+        run: docker save --output release-image.tar "$IMAGE_REF:$RELEASE_TAG" "$IMAGE_REF:$SHA_TAG"
+
+      - name: Collect release evidence
+        if: always()
+        env:
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+        run: |
+          docker logs python-eduground-release > release-container.log 2>&1 || true
+          docker inspect python-eduground-release > release-container-inspect.json 2>/dev/null || true
+          docker image inspect "$IMAGE_REF:$RELEASE_TAG" > release-image-inspect.json 2>/dev/null || true
+          touch \
+            release-container.log \
+            release-container-inspect.json \
+            release-healthz.json \
+            release-image-inspect.json \
+            release-index.html \
+            release-sbom.spdx.json \
+            release-trivy-report.txt
+
+      - name: Upload the validated release image
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.release.outputs.artifact_name }}
+          path: release-image.tar
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            release-container.log
+            release-container-inspect.json
+            release-healthz.json
+            release-image-inspect.json
+            release-index.html
+            release-sbom.spdx.json
+            release-trivy-report.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop the release container
+        if: always()
+        run: docker rm --force python-eduground-release 2>/dev/null || true
+
+  publish:
+    name: Publish approved image
+    needs:
+      - release-candidate
+    if: ${{ inputs.publish && github.ref == format('refs/tags/{0}', inputs.version) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: production
+    permissions:
+      attestations: write # Publish provenance for the pushed image digest.
+      contents: read
+      id-token: write # Exchange GitHub OIDC identity for the attestation.
+      packages: write # Push the approved image to this repository's GHCR namespace.
+
+    steps:
+      - name: Download the validated image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.release-candidate.outputs.image_artifact }}
+
+      - name: Load the validated image
+        run: docker load --input release-image.tar
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Refuse mutable release tags
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          image_ref="ghcr.io/${GITHUB_REPOSITORY,,}"
+          release_tag="${RELEASE_VERSION#v}"
+          sha_tag="sha-${GITHUB_SHA}"
+
+          assert_tag_absent() {
+            local tag="$1"
+            local output
+            if output="$(docker manifest inspect "$image_ref:$tag" 2>&1)"; then
+              echo "refusing to overwrite existing image tag $image_ref:$tag" >&2
+              exit 1
+            fi
+            if ! grep -Eiq 'manifest unknown|name unknown|no such manifest|not found' <<< "$output"; then
+              echo "could not prove that $image_ref:$tag is absent" >&2
+              printf '%s\n' "$output" >&2
+              exit 1
+            fi
+          }
+
+          assert_tag_absent "$release_tag"
+          assert_tag_absent "$sha_tag"
+
+      - name: Publish immutable release tags
+        id: push
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          image_ref="ghcr.io/${GITHUB_REPOSITORY,,}"
+          release_tag="${RELEASE_VERSION#v}"
+          sha_tag="sha-${GITHUB_SHA}"
+
+          push_output="$(docker push "$image_ref:$release_tag")"
+          printf '%s\n' "$push_output"
+          docker push "$image_ref:$sha_tag"
+
+          digest="$(
+            printf '%s\n' "$push_output" |
+              sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' |
+              tail -n 1
+          )"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "could not determine the published image digest" >&2
+            exit 1
+          fi
+
+          {
+            echo "image_ref=$image_ref"
+            echo "digest=$digest"
+            echo "release_tag=$release_tag"
+            echo "sha_tag=$sha_tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Attest published image provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-name: ${{ steps.push.outputs.image_ref }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Summarize publication
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          IMAGE_REF: ${{ steps.push.outputs.image_ref }}
+          RELEASE_TAG: ${{ steps.push.outputs.release_tag }}
+          SHA_TAG: ${{ steps.push.outputs.sha_tag }}
+        run: |
+          {
+            echo "## Published container"
+            echo
+            echo "- \`$IMAGE_REF:$RELEASE_TAG\`"
+            echo "- \`$IMAGE_REF:$SHA_TAG\`"
+            echo "- Digest: \`$DIGEST\`"
+            echo
+            echo "This workflow publishes an attested artifact; it does not deploy it."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log out of GHCR
+        if: always()
+        run: docker logout ghcr.io || true

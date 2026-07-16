@@ -1,0 +1,104 @@
+name: Container security
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "7 6 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-smoke-scan:
+    name: Build, smoke, and scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      IMAGE_NAME: python-eduground:ci-${{ github.sha }}
+      CONTAINER_NAME: python-eduground-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Build the production image
+        run: >-
+          docker build --pull
+          --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          --build-arg "VCS_REF=$GITHUB_SHA"
+          --build-arg "VERSION=ci-$GITHUB_SHA"
+          --tag "$IMAGE_NAME"
+          .
+
+      - name: Start the production image
+        run: >-
+          docker run --detach
+          --name "$CONTAINER_NAME"
+          --publish 127.0.0.1:8000:8000
+          --read-only
+          --tmpfs /tmp:rw,noexec,nosuid,size=64m
+          --tmpfs /app/submissions:rw,noexec,nosuid,size=64m
+          --cap-drop ALL
+          --security-opt no-new-privileges
+          --env APP_ORIGIN=http://127.0.0.1:8000
+          "$IMAGE_NAME"
+
+      - name: Verify liveness and public serving
+        run: |
+          curl --fail --silent --show-error \
+            --retry 20 --retry-delay 1 --retry-all-errors \
+            http://127.0.0.1:8000/healthz > healthz.json
+          curl --fail --silent --show-error \
+            http://127.0.0.1:8000/ > index-smoke.html
+          grep -Fq "Python EduGround" index-smoke.html
+
+      - name: Scan the image for high-impact vulnerabilities and secrets
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}
+          format: table
+          output: trivy-report.txt
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          docker logs "$CONTAINER_NAME" > container.log 2>&1 || true
+          docker inspect "$CONTAINER_NAME" > container-inspect.json 2>/dev/null || true
+          docker image inspect "$IMAGE_NAME" > image-inspect.json 2>/dev/null || true
+          touch healthz.json index-smoke.html trivy-report.txt
+
+      - name: Upload scan and smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: container-security-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            container.log
+            container-inspect.json
+            healthz.json
+            image-inspect.json
+            index-smoke.html
+            trivy-report.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Stop the container
+        if: always()
+        run: docker rm --force "$CONTAINER_NAME" 2>/dev/null || true
