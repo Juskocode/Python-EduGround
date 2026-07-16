@@ -1,7 +1,19 @@
+import { timingSafeEqual } from "node:crypto";
 import { DatabaseUnavailableError } from "./database.mjs";
 import { getExerciseFile } from "./exercise-manifest.mjs";
 import { HttpError, readJson, requireMethod, sendJson } from "./http.mjs";
 import { mergeLearnerState } from "./learner-state.mjs";
+import {
+  RequestPolicyError,
+  assertSameOrigin,
+  clearSessionCookies,
+  createSessionCookies,
+  isSecureRequest,
+  readBooleanSetting,
+  readIntegerSetting,
+  readSessionCookie,
+  requestClientIp,
+} from "./runtime-security.mjs";
 import {
   createSessionToken,
   createUserId,
@@ -17,8 +29,14 @@ const REGISTER_LIMIT = 8;
 const LOGIN_LIMIT = 20;
 const STATE_MAX_BYTES = 384 * 1024;
 const FILE_MAX_BYTES = 256 * 1024;
-const RESULTS_MAX_BYTES = 256 * 1024;
-const MAX_TEST_RESULTS = 250;
+const RESULTS_MAX_BYTES = 64 * 1024;
+const RESULT_TEXT_MAX_BYTES = 8 * 1024;
+const MAX_TEST_RESULTS = 100;
+const RATE_LIMIT_MAX_KEYS = 20_000;
+const AUTHENTICATED_MUTATION_LIMIT = 1_200;
+const RUN_SUBMISSION_LIMIT = 300;
+const CLIENT_CAPABILITY_HEADER = "x-eduground-client-capability";
+const CLIENT_CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{32,256}$/u;
 const EXERCISE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,127}$/u;
 const RUN_SCOPE_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/u;
 const DUMMY_PASSWORD_RECORD = [
@@ -93,19 +111,11 @@ function requireKnownExercise(value) {
   return exercise;
 }
 
-function requestIp(request, trustProxy) {
-  if (trustProxy) {
-    const forwarded = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
-    if (forwarded) return forwarded;
-  }
-  return request.socket?.remoteAddress || "unknown";
-}
-
 function createRateLimiter() {
   const attempts = new Map();
   let operations = 0;
 
-  return function check(key, limit, now = Date.now()) {
+  return function check(key, limit, now = Date.now(), windowMs = AUTH_WINDOW_MS) {
     operations += 1;
     if (operations % 100 === 0) {
       for (const [storedKey, entry] of attempts) {
@@ -115,7 +125,11 @@ function createRateLimiter() {
 
     const existing = attempts.get(key);
     if (!existing || existing.resetAt <= now) {
-      attempts.set(key, { count: 1, resetAt: now + AUTH_WINDOW_MS });
+      if (!existing && attempts.size >= RATE_LIMIT_MAX_KEYS) {
+        const oldestKey = attempts.keys().next().value;
+        if (oldestKey !== undefined) attempts.delete(oldestKey);
+      }
+      attempts.set(key, { count: 1, resetAt: now + windowMs });
       return;
     }
 
@@ -128,48 +142,50 @@ function createRateLimiter() {
   };
 }
 
-function configuredOrigins(environment) {
-  return new Set(
-    String(environment.APP_ORIGIN || "")
-      .split(",")
-      .map((value) => value.trim().replace(/\/$/u, ""))
-      .filter(Boolean)
-  );
-}
-
-function assertSameOrigin(request, environment) {
-  const origin = request.headers.origin;
-  if (!origin) return;
-
-  const allowed = configuredOrigins(environment);
-  const trustProxy = environment.TRUST_PROXY === "true" || environment.TRUST_PROXY === "1";
-  const forwardedProtocol = trustProxy
-    ? String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim()
-    : "";
-  if (allowed.size === 0) {
-    const protocol = forwardedProtocol || (request.socket?.encrypted ? "https" : "http");
-    const host = request.headers.host;
-    if (host) allowed.add(`${protocol}://${host}`);
-  }
-
-  if (origin === "null" || !allowed.has(String(origin).replace(/\/$/u, ""))) {
-    throw new HttpError(403, "ORIGIN_NOT_ALLOWED", "Request origin is not allowed.");
-  }
-}
-
-function bearerToken(request) {
+function bearerToken(request, { required = true } = {}) {
   const authorization = String(request.headers.authorization || "");
   const match = /^Bearer ([A-Za-z0-9_-]{32,256})$/u.exec(authorization);
   if (!match) {
+    if (!required && !authorization) return "";
     throw new HttpError(401, "AUTHENTICATION_REQUIRED", "Authentication is required.");
   }
   return match[1];
 }
 
+function requestSession(request) {
+  const cookieToken = readSessionCookie(request);
+  if (cookieToken) return { token: cookieToken, source: "cookie" };
+  return { token: bearerToken(request), source: "bearer" };
+}
+
+function requestClientCapability(request) {
+  const capability = String(request.headers[CLIENT_CAPABILITY_HEADER] || "");
+  if (!CLIENT_CAPABILITY_PATTERN.test(capability)) {
+    throw new HttpError(
+      403,
+      "CLIENT_CAPABILITY_REQUIRED",
+      "This browser tab is not authorized for the signed-in session."
+    );
+  }
+  return capability;
+}
+
+function capabilityMatches(capability, expectedHash) {
+  const actual = Buffer.from(hashSessionToken(capability), "utf8");
+  const expected = Buffer.from(String(expectedHash || ""), "utf8");
+  return (
+    actual.length === expected.length &&
+    actual.length > 0 &&
+    timingSafeEqual(actual, expected)
+  );
+}
+
 async function authenticate(request, database) {
-  const tokenHash = hashSessionToken(bearerToken(request));
+  const session = requestSession(request);
+  const tokenHash = hashSessionToken(session.token);
   const result = await database.query(
-    `SELECT users.id, users.email, users.display_name, users.created_at
+    `SELECT users.id, users.email, users.display_name, users.created_at,
+            sessions.client_capability_hash
        FROM sessions
        JOIN users ON users.id = sessions.user_id
       WHERE sessions.token_hash = $1
@@ -179,21 +195,41 @@ async function authenticate(request, database) {
   if (result.rowCount !== 1) {
     throw new HttpError(401, "AUTHENTICATION_REQUIRED", "Authentication is required.");
   }
-  return publicUser(result.rows[0]);
+  if (
+    session.source === "cookie" &&
+    !capabilityMatches(
+      requestClientCapability(request),
+      result.rows[0].client_capability_hash
+    )
+  ) {
+    throw new HttpError(
+      403,
+      "CLIENT_CAPABILITY_REQUIRED",
+      "This browser tab is not authorized for the signed-in session."
+    );
+  }
+  return { ...session, user: publicUser(result.rows[0]) };
 }
 
 async function createSession(client, userId, sessionTtlSeconds) {
   const token = createSessionToken();
+  const clientCapability = createSessionToken();
   await client.query(
-    `INSERT INTO sessions (token_hash, user_id, expires_at)
-     VALUES ($1, $2, NOW() + $3::interval)`,
-    [hashSessionToken(token), userId, `${sessionTtlSeconds} seconds`]
+    `INSERT INTO sessions
+       (token_hash, client_capability_hash, user_id, expires_at)
+     VALUES ($1, $2, $3, NOW() + $4::interval)`,
+    [
+      hashSessionToken(token),
+      hashSessionToken(clientCapability),
+      userId,
+      `${sessionTtlSeconds} seconds`,
+    ]
   );
-  return token;
+  return { token, clientCapability };
 }
 
 function errorResponse(error, logger, request) {
-  if (error instanceof HttpError) {
+  if (error instanceof HttpError || error instanceof RequestPolicyError) {
     return {
       status: error.status,
       headers: error.retryAfter ? { "Retry-After": String(error.retryAfter) } : null,
@@ -230,6 +266,57 @@ function sendApiError(response, result, method) {
   sendJson(response, result.status, result.payload, method);
 }
 
+function setSessionCookie(response, request, environment, token, sessionTtlSeconds) {
+  response.setHeader(
+    "Set-Cookie",
+    createSessionCookies(token, {
+      maximumAgeSeconds: sessionTtlSeconds,
+      secure: isSecureRequest(request, environment),
+    })
+  );
+}
+
+function sessionPayload(session, user, allowBearerTokens) {
+  return {
+    ...(allowBearerTokens ? { token: session.token } : {}),
+    clientCapability: session.clientCapability,
+    user,
+  };
+}
+
+function truncateUtf8(value, maximumBytes) {
+  const text = String(value ?? "");
+  const buffer = Buffer.from(text);
+  if (buffer.length <= maximumBytes) return text;
+  const truncated = buffer
+    .subarray(0, maximumBytes - Buffer.byteLength("…"))
+    .toString("utf8")
+    .replace(/\uFFFD$/u, "");
+  return `${truncated}…`;
+}
+
+function normalizeRunResult(value, index) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new HttpError(400, "INVALID_INPUT", `results[${index}] must be an object.`);
+  }
+  if (typeof value.passed !== "boolean") {
+    throw new HttpError(400, "INVALID_INPUT", `results[${index}].passed must be true or false.`);
+  }
+
+  const result = {
+    id: truncateUtf8(value.id || `case-${index + 1}`, 128),
+    name: truncateUtf8(value.name || `Test ${index + 1}`, 256),
+    hidden: Boolean(value.hidden),
+    passed: value.passed,
+  };
+  for (const field of ["expected", "actual", "stdout", "stderr", "traceback"]) {
+    if (value[field] !== undefined && value[field] !== null && String(value[field]) !== "") {
+      result[field] = truncateUtf8(value[field], RESULT_TEXT_MAX_BYTES);
+    }
+  }
+  return result;
+}
+
 export function createApiHandler({
   database,
   submissionFiles,
@@ -237,11 +324,27 @@ export function createApiHandler({
   logger = console,
 }) {
   const rateLimit = createRateLimiter();
-  const trustProxy = environment.TRUST_PROXY === "true" || environment.TRUST_PROXY === "1";
-  const configuredTtl = Number(environment.SESSION_TTL_SECONDS || 30 * 24 * 60 * 60);
-  const sessionTtlSeconds = Number.isSafeInteger(configuredTtl)
-    ? Math.min(Math.max(configuredTtl, 3_600), 180 * 24 * 60 * 60)
-    : 30 * 24 * 60 * 60;
+  const sessionTtlSeconds = readIntegerSetting(environment, "SESSION_TTL_SECONDS", {
+    fallback: 30 * 24 * 60 * 60,
+    minimum: 3_600,
+    maximum: 180 * 24 * 60 * 60,
+  });
+  const runHistoryLimit = readIntegerSetting(environment, "RUN_HISTORY_LIMIT", {
+    fallback: 500,
+    minimum: 10,
+    maximum: 5_000,
+  });
+  const allowBearerTokens = readBooleanSetting(
+    environment,
+    "ALLOW_BEARER_SESSION_TOKENS",
+    false
+  );
+
+  function limitAuthenticatedMutation(request, user, operation, limit) {
+    const clientIp = requestClientIp(request, environment);
+    rateLimit(`${operation}:user:${user.id}`, limit);
+    rateLimit(`${operation}:ip:${clientIp}`, limit * 3);
+  }
 
   return async function handleApi(request, response, requestUrl) {
     const pathname = requestUrl.pathname;
@@ -267,13 +370,20 @@ export function createApiHandler({
         return true;
       }
 
-      if (request.method === "POST" || request.method === "PUT" || request.method === "PATCH" || request.method === "DELETE") {
-        assertSameOrigin(request, environment);
+      if (
+        request.method === "POST" ||
+        request.method === "PUT" ||
+        request.method === "PATCH" ||
+        request.method === "DELETE"
+      ) {
+        assertSameOrigin(request, environment, {
+          required: Boolean(readSessionCookie(request)),
+        });
       }
 
       if (pathname === "/api/auth/register") {
         requireMethod(request, ["POST"]);
-        rateLimit(`register:${requestIp(request, trustProxy)}`, REGISTER_LIMIT);
+        rateLimit(`register:${requestClientIp(request, environment)}`, REGISTER_LIMIT);
         const body = await readJson(request, 32 * 1024);
         const email = normalizeEmail(body.email);
         if (!isValidEmail(email)) {
@@ -296,8 +406,8 @@ export function createApiHandler({
                RETURNING id, email, display_name, created_at`,
               [userId, email, displayName, passwordRecord]
             );
-            const token = await createSession(client, userId, sessionTtlSeconds);
-            return { token, user: publicUser(userResult.rows[0]) };
+            const session = await createSession(client, userId, sessionTtlSeconds);
+            return { session, user: publicUser(userResult.rows[0]) };
           });
         } catch (error) {
           if (error?.code === "23505") {
@@ -306,13 +416,25 @@ export function createApiHandler({
           throw error;
         }
 
-        sendJson(response, 201, created, request.method);
+        setSessionCookie(
+          response,
+          request,
+          environment,
+          created.session.token,
+          sessionTtlSeconds
+        );
+        sendJson(
+          response,
+          201,
+          sessionPayload(created.session, created.user, allowBearerTokens),
+          request.method
+        );
         return true;
       }
 
       if (pathname === "/api/auth/login") {
         requireMethod(request, ["POST"]);
-        rateLimit(`login:${requestIp(request, trustProxy)}`, LOGIN_LIMIT);
+        rateLimit(`login:${requestClientIp(request, environment)}`, LOGIN_LIMIT);
         const body = await readJson(request, 32 * 1024);
         const email = normalizeEmail(body.email);
         const password = typeof body.password === "string" ? body.password : "";
@@ -330,17 +452,31 @@ export function createApiHandler({
           throw new HttpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
         }
 
-        const token = await database.transaction(async (client) => {
+        const session = await database.transaction(async (client) => {
           await client.query("DELETE FROM sessions WHERE expires_at <= NOW()");
           return createSession(client, row.id, sessionTtlSeconds);
         });
-        sendJson(response, 200, { token, user: publicUser(row) }, request.method);
+        const user = publicUser(row);
+        setSessionCookie(
+          response,
+          request,
+          environment,
+          session.token,
+          sessionTtlSeconds
+        );
+        sendJson(
+          response,
+          200,
+          sessionPayload(session, user, allowBearerTokens),
+          request.method
+        );
         return true;
       }
 
       if (pathname === "/api/auth/logout") {
         requireMethod(request, ["POST"]);
-        const tokenHash = hashSessionToken(bearerToken(request));
+        const session = await authenticate(request, database);
+        const tokenHash = hashSessionToken(session.token);
         const result = await database.query(
           "DELETE FROM sessions WHERE token_hash = $1 AND expires_at > NOW() RETURNING user_id",
           [tokenHash]
@@ -348,6 +484,10 @@ export function createApiHandler({
         if (result.rowCount !== 1) {
           throw new HttpError(401, "AUTHENTICATION_REQUIRED", "Authentication is required.");
         }
+        response.setHeader(
+          "Set-Cookie",
+          clearSessionCookies({ secure: isSecureRequest(request, environment) })
+        );
         response.writeHead(204, {
           "Cache-Control": "no-store",
           "X-Content-Type-Options": "nosniff",
@@ -358,14 +498,14 @@ export function createApiHandler({
 
       if (pathname === "/api/me") {
         requireMethod(request, ["GET"]);
-        const user = await authenticate(request, database);
-        sendJson(response, 200, { user }, request.method);
+        const session = await authenticate(request, database);
+        sendJson(response, 200, { user: session.user }, request.method);
         return true;
       }
 
       if (pathname === "/api/state") {
         requireMethod(request, ["GET", "PUT"]);
-        const user = await authenticate(request, database);
+        const { user } = await authenticate(request, database);
         if (request.method === "GET") {
           const result = await database.query(
             "SELECT state, updated_at FROM user_state WHERE user_id = $1",
@@ -381,6 +521,12 @@ export function createApiHandler({
           return true;
         }
 
+        limitAuthenticatedMutation(
+          request,
+          user,
+          "state-write",
+          AUTHENTICATED_MUTATION_LIMIT
+        );
         const body = await readJson(request);
         if (!body.state || typeof body.state !== "object" || Array.isArray(body.state)) {
           throw new HttpError(400, "INVALID_INPUT", "state must be a JSON object.");
@@ -441,7 +587,7 @@ export function createApiHandler({
           throw error;
         }
         const exerciseId = exercise.exerciseId;
-        const user = await authenticate(request, database);
+        const { user } = await authenticate(request, database);
 
         const materialize = async (content) => {
           if (!submissionFiles?.save) {
@@ -458,62 +604,60 @@ export function createApiHandler({
         };
 
         if (request.method === "GET") {
-          const stored = await database.transaction(async (client) => {
-            const result = await client.query(
-              `SELECT exercise_id, filename, content, updated_at
-                 FROM user_files
-                WHERE user_id = $1 AND exercise_id = $2
-                FOR UPDATE`,
-              [user.id, exerciseId]
-            );
-            if (result.rowCount === 0) return null;
-            let row = result.rows[0];
-            if (row.filename !== exercise.filename) {
-              const canonicalized = await client.query(
-                `UPDATE user_files
-                    SET filename = $3
-                  WHERE user_id = $1 AND exercise_id = $2
-                  RETURNING exercise_id, filename, content, updated_at`,
-                [user.id, exerciseId, exercise.filename]
-              );
-              row = canonicalized.rows[0];
-            }
-            const mirror = await materialize(row.content);
-            return { row, mirror };
-          });
-          if (!stored) {
+          const result = await database.query(
+            `SELECT exercise_id, filename, content, updated_at
+               FROM user_files
+              WHERE user_id = $1 AND exercise_id = $2`,
+            [user.id, exerciseId]
+          );
+          if (result.rowCount === 0) {
             throw new HttpError(404, "FILE_NOT_FOUND", "No saved file exists for this exercise.");
           }
+          let row = result.rows[0];
+          if (row.filename !== exercise.filename) {
+            const canonicalized = await database.query(
+              `UPDATE user_files
+                  SET filename = $3
+                WHERE user_id = $1 AND exercise_id = $2
+                RETURNING exercise_id, filename, content, updated_at`,
+              [user.id, exerciseId, exercise.filename]
+            );
+            row = canonicalized.rows[0];
+          }
+          const mirror = await materialize(row.content);
           sendJson(
             response,
             200,
-            { file: publicFile(stored.row, stored.mirror, exercise) },
+            { file: publicFile(row, mirror, exercise) },
             request.method
           );
           return true;
         }
 
+        limitAuthenticatedMutation(
+          request,
+          user,
+          "file-write",
+          AUTHENTICATED_MUTATION_LIMIT
+        );
         const body = await readJson(request);
         const content = requireString(body.content, "content", { minimum: 0, maximum: FILE_MAX_BYTES });
         if (Buffer.byteLength(content) > FILE_MAX_BYTES) {
           throw new HttpError(413, "FILE_TOO_LARGE", "Saved code must be at most 256 KiB.");
         }
-        const stored = await database.transaction(async (client) => {
-          const result = await client.query(
-            `INSERT INTO user_files (user_id, exercise_id, filename, content, updated_at)
-             VALUES ($1, $2, $3, $4, NOW())
-             ON CONFLICT (user_id, exercise_id) DO UPDATE
-               SET filename = EXCLUDED.filename, content = EXCLUDED.content, updated_at = NOW()
-             RETURNING exercise_id, filename, content, updated_at`,
-            [user.id, exerciseId, exercise.filename, content]
-          );
-          const mirror = await materialize(result.rows[0].content);
-          return { row: result.rows[0], mirror };
-        });
+        const result = await database.query(
+          `INSERT INTO user_files (user_id, exercise_id, filename, content, updated_at)
+           VALUES ($1, $2, $3, $4, NOW())
+           ON CONFLICT (user_id, exercise_id) DO UPDATE
+             SET filename = EXCLUDED.filename, content = EXCLUDED.content, updated_at = NOW()
+           RETURNING exercise_id, filename, content, updated_at`,
+          [user.id, exerciseId, exercise.filename, content]
+        );
+        const mirror = await materialize(result.rows[0].content);
         sendJson(
           response,
           200,
-          { file: publicFile(stored.row, stored.mirror, exercise) },
+          { file: publicFile(result.rows[0], mirror, exercise) },
           request.method
         );
         return true;
@@ -521,7 +665,8 @@ export function createApiHandler({
 
       if (pathname === "/api/runs") {
         requireMethod(request, ["POST"]);
-        const user = await authenticate(request, database);
+        const { user } = await authenticate(request, database);
+        limitAuthenticatedMutation(request, user, "run-submit", RUN_SUBMISSION_LIMIT);
         const body = await readJson(request);
         const exerciseId = requireKnownExercise(body.exerciseId).exerciseId;
         const scope = requireString(body.scope, "scope", { minimum: 1, maximum: 32 });
@@ -542,18 +687,52 @@ export function createApiHandler({
         if (!Array.isArray(body.results) || body.results.length > MAX_TEST_RESULTS) {
           throw new HttpError(400, "INVALID_INPUT", `results must be an array of at most ${MAX_TEST_RESULTS} items.`);
         }
-        const serializedResults = JSON.stringify(body.results);
+        if (body.results.length !== totalCount) {
+          throw new HttpError(400, "INVALID_INPUT", "totalCount must match the number of results.");
+        }
+        const normalizedResults = body.results.map(normalizeRunResult);
+        const resultPassedCount = normalizedResults.filter((item) => item.passed).length;
+        if (resultPassedCount !== passedCount) {
+          throw new HttpError(400, "INVALID_INPUT", "passedCount must match the supplied results.");
+        }
+        const serializedResults = JSON.stringify(normalizedResults);
         if (Buffer.byteLength(serializedResults) > RESULTS_MAX_BYTES) {
           throw new HttpError(413, "RESULTS_TOO_LARGE", "Test results are too large to save.");
         }
 
-        const result = await database.query(
-          `INSERT INTO test_runs
-             (user_id, exercise_id, scope, passed_count, total_count, all_passed, results)
-           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
-           RETURNING id, created_at`,
-          [user.id, exerciseId, scope, passedCount, totalCount, body.allPassed, serializedResults]
-        );
+        const result = await database.transaction(async (client) => {
+          await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+            `test-runs:${user.id}`,
+          ]);
+          const inserted = await client.query(
+            `INSERT INTO test_runs
+               (user_id, exercise_id, scope, passed_count, total_count, all_passed, results)
+             VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+             RETURNING id, created_at`,
+            [
+              user.id,
+              exerciseId,
+              scope,
+              passedCount,
+              totalCount,
+              body.allPassed,
+              serializedResults,
+            ]
+          );
+          await client.query(
+            `DELETE FROM test_runs
+              WHERE user_id = $1
+                AND id IN (
+                  SELECT id
+                    FROM test_runs
+                   WHERE user_id = $1
+                   ORDER BY created_at DESC, id DESC
+                  OFFSET $2
+                )`,
+            [user.id, runHistoryLimit]
+          );
+          return inserted;
+        });
         sendJson(
           response,
           201,
@@ -565,6 +744,7 @@ export function createApiHandler({
               passedCount,
               totalCount,
               allPassed: body.allPassed,
+              verification: "learner-device",
               createdAt: asIsoString(result.rows[0].created_at),
             },
           },
@@ -575,7 +755,14 @@ export function createApiHandler({
 
       throw new HttpError(404, "API_NOT_FOUND", "API endpoint not found.");
     } catch (error) {
-      sendApiError(response, errorResponse(error, logger, request), request.method);
+      const result = errorResponse(error, logger, request);
+      if (result.status === 401 && readSessionCookie(request)) {
+        response.setHeader(
+          "Set-Cookie",
+          clearSessionCookies({ secure: isSecureRequest(request, environment) })
+        );
+      }
+      sendApiError(response, result, request.method);
       return true;
     }
   };

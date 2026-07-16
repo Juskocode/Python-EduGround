@@ -1,4 +1,9 @@
 import pg from "pg";
+import {
+  databaseConnectionOptions,
+  databasePoolOptions,
+} from "./database-config.mjs";
+import { loadMigrationManifest } from "./migration-manifest.mjs";
 
 const { Pool } = pg;
 
@@ -21,18 +26,12 @@ const REQUIRED_SCHEMA_RELATIONS = [
   "user_state",
   "users",
 ];
-const REQUIRED_SCHEMA_MIGRATIONS = ["001_initial.sql"];
 
 export class DatabaseUnavailableError extends Error {
   constructor(message = "Persistent storage is unavailable.", options = {}) {
     super(message, options);
     this.name = "DatabaseUnavailableError";
   }
-}
-
-function usesTls(environment) {
-  const value = environment.DATABASE_SSL?.trim().toLowerCase();
-  return value === "1" || value === "true" || value === "require";
 }
 
 function isConnectionError(error) {
@@ -45,7 +44,7 @@ function isConnectionError(error) {
 function unavailableDatabase() {
   const fail = async () => {
     throw new DatabaseUnavailableError(
-      "Persistent storage is not configured. Set DATABASE_URL and run the migrations."
+      "Persistent storage is not configured. Set DATABASE_URL or PostgreSQL PG* settings, then run the migrations."
     );
   };
 
@@ -58,7 +57,8 @@ function unavailableDatabase() {
         configured: false,
         available: false,
         schemaReady: false,
-        message: "DATABASE_URL is not configured.",
+        message:
+          "PostgreSQL is not configured. Set DATABASE_URL or PGHOST, PGDATABASE, and PGUSER.",
       };
     },
     async close() {},
@@ -66,19 +66,14 @@ function unavailableDatabase() {
 }
 
 export function createDatabase(environment = process.env, logger = console) {
-  const connectionString = environment.DATABASE_URL?.trim();
-  if (!connectionString) {
+  const connection = databaseConnectionOptions(environment);
+  if (!connection) {
     return unavailableDatabase();
   }
 
   const pool = new Pool({
-    connectionString,
-    max: Number(environment.DATABASE_POOL_SIZE || 10),
-    idleTimeoutMillis: Number(environment.DATABASE_IDLE_TIMEOUT_MS || 30_000),
-    connectionTimeoutMillis: Number(environment.DATABASE_CONNECT_TIMEOUT_MS || 3_000),
-    statement_timeout: Number(environment.DATABASE_STATEMENT_TIMEOUT_MS || 10_000),
-    application_name: "python-eduground",
-    ssl: usesTls(environment) ? { rejectUnauthorized: false } : undefined,
+    ...connection,
+    ...databasePoolOptions(environment),
   });
 
   pool.on("error", (error) => {
@@ -152,22 +147,25 @@ export function createDatabase(environment = process.env, logger = console) {
           };
         }
 
+        const requiredMigrations = await loadMigrationManifest();
         const migrationResult = await execute(() =>
-          pool.query(
-            "SELECT name FROM schema_migrations WHERE name = ANY($1::text[])",
-            [REQUIRED_SCHEMA_MIGRATIONS]
-          )
+          pool.query("SELECT name, checksum FROM schema_migrations ORDER BY name")
         );
-        const appliedMigrations = new Set(migrationResult.rows.map((row) => row.name));
-        const migrationsCurrent = REQUIRED_SCHEMA_MIGRATIONS.every((name) =>
-          appliedMigrations.has(name)
+        const appliedMigrations = new Map(
+          migrationResult.rows.map((row) => [row.name, row.checksum])
         );
+        const migrationsCurrent =
+          appliedMigrations.size === requiredMigrations.length &&
+          requiredMigrations.every(
+            ({ name, checksum }) => appliedMigrations.get(name) === checksum
+          );
         if (!migrationsCurrent) {
           return {
             configured: true,
             available: false,
             schemaReady: false,
-            message: "PostgreSQL is reachable, but required migrations are missing. Run npm run migrate.",
+            message:
+              "PostgreSQL is reachable, but required migrations are missing or do not match the repository. Run npm run migrate.",
           };
         }
 

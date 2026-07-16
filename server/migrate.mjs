@@ -1,20 +1,42 @@
-import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
 import pg from "pg";
+import {
+  databaseConnectionOptions,
+  parseBoundedDatabaseInteger,
+} from "./database-config.mjs";
+import {
+  DEFAULT_MIGRATIONS_DIRECTORY,
+  loadMigrationManifest,
+} from "./migration-manifest.mjs";
 
 const { Client } = pg;
-const SERVER_DIRECTORY = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_MIGRATIONS_DIRECTORY = resolve(SERVER_DIRECTORY, "../db/migrations");
-const MIGRATION_PATTERN = /^\d{3}_[a-z0-9_]+\.sql$/u;
-const LOCK_ID = 1_947_331_017;
+export const MIGRATION_LOCK_ID = 1_947_331_017;
 
-function tlsConfiguration(environment) {
-  const value = environment.DATABASE_SSL?.trim().toLowerCase();
-  return value === "1" || value === "true" || value === "require"
-    ? { rejectUnauthorized: false }
-    : undefined;
+export function assertSafeMigrationRole(roleName) {
+  if (String(roleName || "").toLowerCase() === "eduground_app") {
+    throw new Error(
+      "Migration owner must not be the reserved runtime role eduground_app. Use a separate owner credential for migrations."
+    );
+  }
+}
+
+async function acquireMigrationLock(client, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const result = await client.query(
+      "SELECT pg_try_advisory_lock($1) AS acquired",
+      [MIGRATION_LOCK_ID]
+    );
+    if (result.rows[0]?.acquired === true) return;
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error(
+        `Could not acquire the migration lock within ${timeoutMs}ms. Another migration may still be running.`
+      );
+    }
+    await delay(Math.min(250, remainingMs));
+  }
 }
 
 export async function runMigrations({
@@ -22,29 +44,29 @@ export async function runMigrations({
   migrationsDirectory = DEFAULT_MIGRATIONS_DIRECTORY,
   logger = console,
 } = {}) {
-  const connectionString = environment.DATABASE_URL?.trim();
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is required to run migrations.");
-  }
-
-  const filenames = (await readdir(migrationsDirectory))
-    .filter((filename) => MIGRATION_PATTERN.test(filename))
-    .sort();
-  if (filenames.length === 0) {
-    throw new Error(`No migration files were found in ${migrationsDirectory}.`);
-  }
-
-  const client = new Client({
-    connectionString,
-    connectionTimeoutMillis: Number(environment.DATABASE_CONNECT_TIMEOUT_MS || 5_000),
-    application_name: "python-eduground-migrate",
-    ssl: tlsConfiguration(environment),
+  const connection = databaseConnectionOptions(environment, {
+    applicationName: "python-eduground-migrate",
+    connectionTimeoutDefault: 5_000,
+    required: true,
   });
+  const lockTimeoutMs = parseBoundedDatabaseInteger(
+    environment,
+    "MIGRATION_LOCK_TIMEOUT_MS",
+    {
+      defaultValue: 30_000,
+      minimum: 1_000,
+      maximum: 300_000,
+    }
+  );
+  const migrations = await loadMigrationManifest(migrationsDirectory);
+  const client = new Client(connection);
 
   await client.connect();
   let locked = false;
   try {
-    await client.query("SELECT pg_advisory_lock($1)", [LOCK_ID]);
+    const identity = await client.query("SELECT current_user AS role_name");
+    assertSafeMigrationRole(identity.rows[0]?.role_name);
+    await acquireMigrationLock(client, lockTimeoutMs);
     locked = true;
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -54,10 +76,24 @@ export async function runMigrations({
       )
     `);
 
+    const knownMigrationNames = migrations.map((migration) => migration.name);
+    const unknownMigrations = await client.query(
+      `SELECT name
+         FROM schema_migrations
+        WHERE NOT (name = ANY($1::text[]))
+        ORDER BY name`,
+      [knownMigrationNames]
+    );
+    if (unknownMigrations.rowCount > 0) {
+      throw new Error(
+        `Database contains migrations not present in this release: ${unknownMigrations.rows
+          .map((row) => row.name)
+          .join(", ")}. Deploy a compatible release instead of rolling the schema backward.`
+      );
+    }
+
     let applied = 0;
-    for (const filename of filenames) {
-      const sql = await readFile(join(migrationsDirectory, filename), "utf8");
-      const checksum = createHash("sha256").update(sql).digest("hex");
+    for (const { name: filename, sql, checksum } of migrations) {
       const existing = await client.query(
         "SELECT checksum FROM schema_migrations WHERE name = $1",
         [filename]
@@ -86,11 +122,11 @@ export async function runMigrations({
     }
 
     logger.log(`Database is current (${applied} migration${applied === 1 ? "" : "s"} applied).`);
-    return { applied, total: filenames.length };
+    return { applied, total: migrations.length };
   } finally {
     if (locked) {
       try {
-        await client.query("SELECT pg_advisory_unlock($1)", [LOCK_ID]);
+        await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]);
       } catch {
         // Closing the session releases the lock as a final fallback.
       }

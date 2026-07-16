@@ -7,6 +7,11 @@ import { fileURLToPath } from "node:url";
 import { createApiHandler } from "../server/api.mjs";
 import { createDatabase } from "../server/database.mjs";
 import { listExerciseFiles } from "../server/exercise-manifest.mjs";
+import {
+  configureHttpServer,
+  securityHeaders,
+  validateRuntimeEnvironment,
+} from "../server/runtime-security.mjs";
 import { resolveRequestedFile, streamStaticFile } from "../server/static.mjs";
 import {
   createSubmissionFileStore,
@@ -79,12 +84,13 @@ function parseArguments(argumentsList) {
   return { host: host.trim(), port };
 }
 
-function setDevelopmentHeaders(response) {
+function setResponseHeaders(request, response) {
+  for (const [name, value] of Object.entries(securityHeaders(request, process.env))) {
+    response.setHeader(name, value);
+  }
   response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
   response.setHeader("Expires", "0");
   response.setHeader("Pragma", "no-cache");
-  response.setHeader("X-Content-Type-Options", "nosniff");
-  response.setHeader("Referrer-Policy", "same-origin");
 }
 
 function sendText(response, statusCode, message, method = "GET") {
@@ -99,36 +105,45 @@ function sendText(response, statusCode, message, method = "GET") {
 let configuration;
 try {
   configuration = parseArguments(process.argv.slice(2));
+  validateRuntimeEnvironment(process.env);
 } catch (error) {
   console.error(`Error: ${error.message}\n`);
   console.error(usage());
   process.exit(1);
 }
 
-const database = createDatabase(process.env, console);
-const submissionsDirectory = resolveSubmissionsDirectory(
-  process.env,
-  resolve(REPOSITORY_ROOT, "submissions")
-);
-const solutionDirectories = [
-  ...new Set(listExerciseFiles().map((exercise) => exercise.chapterDirectory)),
-].map((directory) => resolve(REPOSITORY_ROOT, directory));
-const publicAssetDirectories = ["assets", "test-data", "docs/screenshots"].map((directory) =>
-  resolve(REPOSITORY_ROOT, directory)
-);
-const submissionFiles = createSubmissionFileStore({
-  rootDirectory: submissionsDirectory,
-  forbiddenDirectories: [...solutionDirectories, ...publicAssetDirectories],
-  logger: console,
-});
-const handleApi = createApiHandler({
-  database,
-  submissionFiles,
-  environment: process.env,
-  logger: console,
-});
+let database;
+let submissionFiles;
+let handleApi;
+try {
+  database = createDatabase(process.env, console);
+  const submissionsDirectory = resolveSubmissionsDirectory(
+    process.env,
+    resolve(REPOSITORY_ROOT, "submissions")
+  );
+  const solutionDirectories = [
+    ...new Set(listExerciseFiles().map((exercise) => exercise.chapterDirectory)),
+  ].map((directory) => resolve(REPOSITORY_ROOT, directory));
+  const publicAssetDirectories = ["assets", "test-data", "docs/screenshots"].map((directory) =>
+    resolve(REPOSITORY_ROOT, directory)
+  );
+  submissionFiles = createSubmissionFileStore({
+    rootDirectory: submissionsDirectory,
+    forbiddenDirectories: [...solutionDirectories, ...publicAssetDirectories],
+    logger: console,
+  });
+  handleApi = createApiHandler({
+    database,
+    submissionFiles,
+    environment: process.env,
+    logger: console,
+  });
+} catch (error) {
+  console.error(`Configuration error: ${error?.message || error}`);
+  process.exit(1);
+}
 const server = createServer(async (request, response) => {
-  setDevelopmentHeaders(response);
+  setResponseHeaders(request, response);
 
   try {
     let requestUrl;
@@ -163,6 +178,12 @@ const server = createServer(async (request, response) => {
     else response.destroy(error);
   }
 });
+try {
+  configureHttpServer(server, process.env);
+} catch (error) {
+  console.error(`Configuration error: ${error?.message || error}`);
+  process.exit(1);
+}
 
 server.on("clientError", (_error, socket) => {
   socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");

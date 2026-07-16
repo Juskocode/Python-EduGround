@@ -9,9 +9,13 @@
     learning: "fp-playground.learning.v1",
     assessments: "fp-playground.assessments.v1",
     editorMode: "fp-playground.editor-mode.v1",
-    authToken: "fp-playground.auth-token.v1",
-    authUser: "fp-playground.auth-user.v1"
+    authSession: "fp-playground.auth-session.v2",
+    legacyAuthToken: "fp-playground.auth-token.v1",
+    authUser: "fp-playground.auth-user.v1",
+    authClientCapability: "fp-playground.auth-client-capability.v1",
+    authSignedOut: "fp-playground.auth-signed-out.v1"
   };
+  var COOKIE_SESSION_MARKER = "cookie-session";
 
   var elements = {
     main: document.getElementById("app-main"),
@@ -71,15 +75,30 @@
     assessmentById.set(String(block.id), block);
   });
 
-  var authToken = safeRead(STORAGE_KEYS.authToken) || "";
-  var authUserId = authToken ? (safeRead(STORAGE_KEYS.authUser) || "") : "";
-  if (!authToken) {
-    // A user workspace is only selected while its session is restorable. The
-    // scoped data remains on disk, but signed-out visitors see the anonymous
-    // workspace instead of the last account used on a shared browser.
+  var deliberateLocalSignOut = safeRead(STORAGE_KEYS.authSignedOut) === "1";
+  // The capability lives only in the top-level page's sessionStorage. Python
+  // executes in a Worker, where sessionStorage is unavailable, so learner code
+  // cannot replay cookie-authenticated account requests.
+  var clientCapability = deliberateLocalSignOut
+    ? ""
+    : safeSessionRead(STORAGE_KEYS.authClientCapability) || "";
+  var authToken = clientCapability ? COOKIE_SESSION_MARKER : "";
+  var authUserId = "";
+  if (deliberateLocalSignOut || !clientCapability) {
+    // The HttpOnly cookie is intentionally unreadable from JavaScript. Keep a
+    // local tombstone so an offline sign-out cannot silently re-authenticate
+    // this browser on the next reload.
+    safeRemove(STORAGE_KEYS.authSession);
+    safeRemove(STORAGE_KEYS.legacyAuthToken);
     safeRemove(STORAGE_KEYS.authUser);
   }
-  var workspaceScope = authUserId ? "user." + authUserId : "";
+  if (deliberateLocalSignOut) {
+    safeSessionRemove(STORAGE_KEYS.authClientCapability);
+  }
+  // Never select a remembered user's local storage before /api/me validates
+  // the HttpOnly session. This prevents account drafts from flashing on a
+  // shared browser while a restore request is pending or failing.
+  var workspaceScope = "";
 
   // Keep IDs that are temporarily unknown to this release. They do not count
   // toward visible progress, but preserving them prevents a pull that renames
@@ -90,7 +109,14 @@
   var assessmentProgress = readAssessmentProgress();
   var editorMode = readEditorMode();
   var currentUser = null;
-  var syncState = { kind: "idle", message: authToken ? "Restoring your session…" : "Local-only mode" };
+  var syncState = {
+    kind: "idle",
+    message: deliberateLocalSignOut
+      ? "Signed out on this device"
+      : authToken
+        ? "Restoring your session…"
+        : "Local-only mode"
+  };
   var revealedHints = new Map();
   var runResults = new Map();
   var draftPersistTimer = null;
@@ -103,6 +129,7 @@
   var activeRun = null;
   var currentRoute = null;
   var selectedBadgeId = null;
+  var signOutInProgress = false;
   var pythonRunner = createPythonRunner();
   var assessmentRooms = createAssessmentRoomsController();
 
@@ -128,7 +155,9 @@
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("pointerdown", unlockAudio, { once: true });
   document.addEventListener("keydown", handleDocumentKeydown);
-  restoreAuthenticatedSession();
+  if (!deliberateLocalSignOut && clientCapability) {
+    restoreAuthenticatedSession();
+  }
 
   function renderRoute(announceChange) {
     var parsed = parseRoute();
@@ -1577,7 +1606,7 @@
     var runtime = el("p", "runtime-note");
     runtime.append(
       el("span", "runtime-note__dot"),
-      document.createTextNode(" Python runs in an isolated browser worker. Drafts stay local by default; after sign-in, your own code and progress sync to your account. Repository solutions are never loaded into this page.")
+      document.createTextNode(" Python runs in a dedicated browser worker; only run code you trust. Account APIs require a tab key that is never sent to that worker. Drafts stay local by default; after sign-in, your own code and progress sync to your account. Repository solutions are never loaded into this page.")
     );
     var submissionSave = el(
       "p",
@@ -2893,6 +2922,13 @@
     loginButton.dataset.authAction = "login";
     registerButton.type = "submit";
     registerButton.dataset.authAction = "register";
+    if (signOutInProgress) {
+      nameInput.disabled = true;
+      emailInput.disabled = true;
+      passwordInput.disabled = true;
+      loginButton.disabled = true;
+      registerButton.disabled = true;
+    }
     actions.append(loginButton, registerButton);
     form.append(nameLabel, emailLabel, passwordLabel, actions);
     section.append(form, status);
@@ -2989,25 +3025,44 @@
         body: body,
         authenticated: false
       });
-      var nextToken = String(response.token || "");
       var nextUser = response.user || null;
-      if (!nextToken || !nextUser || !nextUser.id) {
+      var nextClientCapability = typeof response.clientCapability === "string"
+        ? response.clientCapability
+        : "";
+      if (!nextUser || !nextUser.id || nextClientCapability.length < 32) {
         throw new Error("The server did not return a usable session.");
       }
+      var nextToken = COOKIE_SESSION_MARKER;
       // Anonymous work belongs to the person who signs in next. Move it once
       // into that account, then clear the shared anonymous copy so a later
       // account on this browser cannot inherit it.
       switchWorkspace(String(nextUser.id), workspaceScope === "", workspaceScope === "");
       authToken = nextToken;
+      clientCapability = nextClientCapability;
       authUserId = String(nextUser.id);
       currentUser = nextUser;
+      deliberateLocalSignOut = false;
       var authenticatedWorkspaceEpoch = workspaceEpoch;
       accountFileSaves.clear();
-      safeWrite(STORAGE_KEYS.authToken, authToken);
+      safeRemove(STORAGE_KEYS.authSignedOut);
+      safeSessionWrite(STORAGE_KEYS.authClientCapability, clientCapability);
+      safeWrite(STORAGE_KEYS.authSession, authToken);
+      safeRemove(STORAGE_KEYS.legacyAuthToken);
       safeWrite(STORAGE_KEYS.authUser, authUserId);
       try {
         await syncFromServerAndPush();
       } catch (syncError) {
+        if (
+          isSessionAuthorizationError(syncError) &&
+          authToken === nextToken &&
+          workspaceEpoch === authenticatedWorkspaceEpoch
+        ) {
+          expireAuthenticatedSession(
+            "The new session could not be authorized. Account work remains hidden; sign in again."
+          );
+          renderRoute(false);
+          return;
+        }
         if (authToken === nextToken && workspaceEpoch === authenticatedWorkspaceEpoch && currentUser) {
           setSyncStatus("error", "Signed in, but sync is temporarily unavailable. Local work is safe.");
         }
@@ -3021,54 +3076,81 @@
     } catch (error) {
       switchWorkspace("", false, false);
       authToken = "";
+      clientCapability = "";
       currentUser = null;
       authUserId = "";
       accountFileSaves.clear();
-      safeRemove(STORAGE_KEYS.authToken);
+      safeRemove(STORAGE_KEYS.authSession);
+      safeRemove(STORAGE_KEYS.legacyAuthToken);
       safeRemove(STORAGE_KEYS.authUser);
+      safeSessionRemove(STORAGE_KEYS.authClientCapability);
       setSyncStatus("error", getErrorMessage(error));
       buttons.forEach(function (button) { button.disabled = false; });
     }
   }
 
   async function restoreAuthenticatedSession() {
-    if (!authToken) {
+    if (deliberateLocalSignOut || !clientCapability) {
       return;
     }
+    var requestToken = authToken || COOKIE_SESSION_MARKER;
     var restoreToken = authToken;
+    var restoreClientCapability = clientCapability;
     var restoreWorkspaceEpoch = workspaceEpoch;
     try {
-      var response = await apiRequest("/api/me", { token: restoreToken });
-      if (authToken !== restoreToken || workspaceEpoch !== restoreWorkspaceEpoch) {
+      var response = await apiRequest("/api/me", {
+        token: requestToken,
+        clientCapability: restoreClientCapability
+      });
+      if (
+        authToken !== restoreToken ||
+        clientCapability !== restoreClientCapability ||
+        workspaceEpoch !== restoreWorkspaceEpoch
+      ) {
         return;
       }
       var restoredUser = response.user || null;
       if (!restoredUser || !restoredUser.id) {
         throw new Error("The saved session is no longer valid.");
       }
-      var isLegacyAnonymousSession = !authUserId && workspaceScope === "";
-      switchWorkspace(String(restoredUser.id), isLegacyAnonymousSession, isLegacyAnonymousSession);
-      // A legitimate legacy/mismatched-scope migration advances the epoch.
+      // Automatic restoration never consumes or merges the shared anonymous
+      // workspace. Only an explicit sign-in can assign anonymous work to an
+      // account selected by the learner.
+      switchWorkspace(String(restoredUser.id), false, false);
+      // Selecting the validated account workspace advances the epoch.
       // Treat the new account workspace as this restore request's current
       // target so a subsequent state-sync error is still handled correctly.
       restoreWorkspaceEpoch = workspaceEpoch;
+      authToken = COOKIE_SESSION_MARKER;
+      restoreToken = authToken;
       authUserId = String(restoredUser.id);
       currentUser = restoredUser;
+      safeWrite(STORAGE_KEYS.authSession, authToken);
+      safeRemove(STORAGE_KEYS.legacyAuthToken);
       safeWrite(STORAGE_KEYS.authUser, authUserId);
       await syncFromServerAndPush();
-      if (authToken !== restoreToken || !currentUser || String(currentUser.id) !== String(restoredUser.id)) {
+      if (
+        authToken !== restoreToken ||
+        clientCapability !== restoreClientCapability ||
+        !currentUser ||
+        String(currentUser.id) !== String(restoredUser.id)
+      ) {
         return;
       }
       renderRoute(false);
     } catch (error) {
-      if (authToken !== restoreToken || workspaceEpoch !== restoreWorkspaceEpoch) {
+      if (
+        authToken !== restoreToken ||
+        clientCapability !== restoreClientCapability ||
+        workspaceEpoch !== restoreWorkspaceEpoch
+      ) {
         return;
       }
-      if (error && error.status === 401) {
-        expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
-      } else {
-        setSyncStatus("error", "Cloud sync is unavailable. Local mode remains fully usable.");
-      }
+      expireAuthenticatedSession(
+        isSessionAuthorizationError(error)
+          ? "Your session expired. Account work remains hidden; sign in again to resume it."
+          : "Cloud session could not be verified. Account work remains hidden; sign in again when online."
+      );
       renderRoute(false);
     }
   }
@@ -3095,10 +3177,10 @@
         return;
       }
       if (
-        error && error.status === 401 &&
+        isSessionAuthorizationError(error) &&
         authToken === manualSyncToken && workspaceEpoch === manualSyncEpoch
       ) {
-        expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
+        expireAuthenticatedSession("Your session expired. Account work remains hidden; sign in again to resume it.");
         renderRoute(false);
       } else {
         setSyncStatus("error", "Sync failed. No local work was removed. " + getErrorMessage(error));
@@ -3110,34 +3192,59 @@
   }
 
   async function signOut() {
+    if (signOutInProgress) {
+      return;
+    }
     window.clearTimeout(stateSyncTimer);
     stateSyncTimer = null;
-    setSyncStatus("working", "Signing out…");
+    var shouldRevokeServerSession = Boolean(authToken || currentUser);
+    var revocationCapability = clientCapability;
+    signOutInProgress = true;
+    deliberateLocalSignOut = true;
+    safeWrite(STORAGE_KEYS.authSignedOut, "1");
+    switchWorkspace("", false, false);
+    authToken = "";
+    clientCapability = "";
+    currentUser = null;
+    authUserId = "";
+    remoteFilesLoaded.clear();
+    accountFileSaves.clear();
+    safeRemove(STORAGE_KEYS.authSession);
+    safeRemove(STORAGE_KEYS.legacyAuthToken);
+    safeRemove(STORAGE_KEYS.authUser);
+    safeSessionRemove(STORAGE_KEYS.authClientCapability);
+    if (currentRoute && currentRoute.name === "exercise") {
+      setSubmissionSaveStatus(
+        String(currentRoute.exercise.id),
+        "local",
+        "Local draft only. Sign in from your profile to create a durable chapter exNN.py file."
+      );
+    }
+    setSyncStatus(
+      "working",
+      shouldRevokeServerSession ? "Signed out locally. Revoking the server session…" : "Signed out on this device"
+    );
+    renderRoute(false);
     try {
-      if (authToken) {
-        await apiRequest("/api/auth/logout", { method: "POST", timeoutMs: 3000 });
+      if (shouldRevokeServerSession) {
+        await apiRequest("/api/auth/logout", {
+          method: "POST",
+          token: COOKIE_SESSION_MARKER,
+          clientCapability: revocationCapability,
+          timeoutMs: 3000
+        });
       }
+      setSyncStatus("idle", "Signed out on this device and server");
+      announce("Signed out. The server session was revoked and account work remains private.");
     } catch (error) {
-      // Local sign-out must still succeed if the API is offline.
+      setSyncStatus(
+        "error",
+        "Signed out on this device, but the server session could not be revoked. Reconnect before using this shared browser."
+      );
+      announce("Local sign-out is complete, but server sign-out failed. This browser will not restore the session automatically.");
     } finally {
-      switchWorkspace("", false, false);
-      authToken = "";
-      currentUser = null;
-      authUserId = "";
-      remoteFilesLoaded.clear();
-      accountFileSaves.clear();
-      safeRemove(STORAGE_KEYS.authToken);
-      safeRemove(STORAGE_KEYS.authUser);
-      if (currentRoute && currentRoute.name === "exercise") {
-        setSubmissionSaveStatus(
-          String(currentRoute.exercise.id),
-          "local",
-          "Local draft only. Sign in from your profile to create a durable chapter exNN.py file."
-        );
-      }
-      setSyncStatus("idle", "Local-only mode");
-      renderRoute(false);
-      announce("Signed out. Account work remains private and will return after you sign in again.");
+      signOutInProgress = false;
+      renderProfile();
     }
   }
 
@@ -3146,12 +3253,15 @@
     stateSyncTimer = null;
     switchWorkspace("", false, false);
     authToken = "";
+    clientCapability = "";
     authUserId = "";
     currentUser = null;
     remoteFilesLoaded.clear();
     accountFileSaves.clear();
-    safeRemove(STORAGE_KEYS.authToken);
+    safeRemove(STORAGE_KEYS.authSession);
+    safeRemove(STORAGE_KEYS.legacyAuthToken);
     safeRemove(STORAGE_KEYS.authUser);
+    safeSessionRemove(STORAGE_KEYS.authClientCapability);
     setSyncStatus("error", message);
   }
 
@@ -3313,10 +3423,10 @@
         }
       } catch (error) {
         if (
-          error && error.status === 401 &&
+          isSessionAuthorizationError(error) &&
           authToken === queuedToken && workspaceEpoch === queuedEpoch
         ) {
-          expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
+          expireAuthenticatedSession("Your session expired. Account work remains hidden; sign in again to resume it.");
           renderRoute(false);
         } else {
           setSyncStatus("error", "Cloud sync paused. Local changes are safe.");
@@ -3367,8 +3477,8 @@
       if (workspaceEpoch !== loadWorkspaceEpoch || authToken !== loadSessionToken) {
         return;
       }
-      if (error && error.status === 401) {
-        expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
+      if (isSessionAuthorizationError(error)) {
+        expireAuthenticatedSession("Your session expired. Account work remains hidden; sign in again to resume it.");
         renderRoute(false);
         return;
       }
@@ -3418,14 +3528,25 @@
       headers["Content-Type"] = "application/json";
     }
     var requestToken = Object.prototype.hasOwnProperty.call(config, "token") ? config.token : authToken;
-    if (config.authenticated !== false && requestToken) {
+    var requestClientCapability = Object.prototype.hasOwnProperty.call(config, "clientCapability")
+      ? config.clientCapability
+      : clientCapability;
+    if (
+      config.authenticated !== false &&
+      requestToken &&
+      requestToken !== COOKIE_SESSION_MARKER
+    ) {
       headers.Authorization = "Bearer " + requestToken;
+    }
+    if (config.authenticated !== false && requestClientCapability) {
+      headers["X-EduGround-Client-Capability"] = requestClientCapability;
     }
     try {
       var response = await fetch(path, {
         method: config.method || "GET",
         headers: headers,
         body: config.body === undefined ? undefined : JSON.stringify(config.body),
+        credentials: "same-origin",
         signal: controller.signal
       });
       var payload = null;
@@ -3465,6 +3586,13 @@
 
   function getErrorMessage(error) {
     return error instanceof Error ? error.message : String(error || "Unknown error");
+  }
+
+  function isSessionAuthorizationError(error) {
+    return Boolean(
+      error &&
+      (error.status === 401 || error.code === "CLIENT_CAPABILITY_REQUIRED")
+    );
   }
 
   function getUserInitials(user) {
@@ -4300,6 +4428,14 @@
     }
   }
 
+  function safeSessionRead(key) {
+    try {
+      return window.sessionStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
   function createSilentAudio() {
     return {
       enabled: function () { return false; },
@@ -4322,11 +4458,27 @@
     }
   }
 
+  function safeSessionWrite(key, value) {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch (error) {
+      // A session without the page-only capability cannot enable cloud sync.
+    }
+  }
+
   function safeRemove(key) {
     try {
       window.localStorage.removeItem(key);
     } catch (error) {
       // Signing out still clears the in-memory token when storage is unavailable.
+    }
+  }
+
+  function safeSessionRemove(key) {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch (error) {
+      // In-memory authentication state is still cleared below every caller.
     }
   }
 

@@ -29,6 +29,7 @@ export const PUBLIC_ROOT_FILES = new Set([
   "assessment-ui.css",
   "python-runner-worker.mjs",
   "starter-code.js",
+  "theme-bootstrap.js",
 ]);
 
 const PUBLIC_DIRECTORIES = new Set(["assets", "test-data"]);

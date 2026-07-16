@@ -10,19 +10,7 @@
     <meta name="color-scheme" content="light dark" />
     <title>Python EduGround · Learning Path</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <script>
-      (() => {
-        try {
-          const savedTheme = localStorage.getItem("fp-playground.theme.v1");
-          const preferredTheme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-          document.documentElement.dataset.theme = savedTheme === "dark" || savedTheme === "light"
-            ? savedTheme
-            : preferredTheme;
-        } catch (error) {
-          document.documentElement.dataset.theme = "light";
-        }
-      })();
-    </script>
+    <script src="theme-bootstrap.js"></script>
     <link rel="stylesheet" href="course-ui.css" />
     <link rel="stylesheet" href="dashboard-ui.css" />
     <link rel="stylesheet" href="learning-clinic.css" />

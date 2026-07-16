@@ -6,17 +6,19 @@ import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
-import { runMigrations } from "../migrate.mjs";
+import { MIGRATION_LOCK_ID, runMigrations } from "../migrate.mjs";
 
 const { Client } = pg;
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL?.trim();
+const sessionCapabilities = new Map();
 
 async function startServer(extraEnvironment = {}) {
   const child = spawn(process.execPath, ["scripts/serve.mjs", "--port", "0"], {
     cwd: REPOSITORY_ROOT,
     env: {
       ...process.env,
+      NODE_ENV: "test",
       DATABASE_URL: TEST_DATABASE_URL,
       APP_ORIGIN: "",
       ...extraEnvironment,
@@ -41,9 +43,29 @@ async function startServer(extraEnvironment = {}) {
   return { child, url };
 }
 
-async function request(url, path, { method = "GET", token, body } = {}) {
+async function request(
+  url,
+  path,
+  { method = "GET", cookie, capability, origin, body } = {}
+) {
   const headers = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (cookie) headers.Cookie = cookie;
+  const clientCapability =
+    typeof capability === "string"
+      ? capability
+      : capability === false
+        ? ""
+        : sessionCapabilities.get(cookie);
+  if (clientCapability) {
+    headers["X-EduGround-Client-Capability"] = clientCapability;
+  }
+  if (
+    cookie &&
+    ["POST", "PUT", "PATCH", "DELETE"].includes(method) &&
+    origin !== false
+  ) {
+    headers.Origin = typeof origin === "string" ? origin : new URL(url).origin;
+  }
   if (body) headers["Content-Type"] = "application/json";
   const response = await fetch(`${url}${path}`, {
     method,
@@ -51,16 +73,29 @@ async function request(url, path, { method = "GET", token, body } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const payload = response.status === 204 ? null : await response.json();
-  return { response, payload };
+  const setCookie = response.headers.get("set-cookie") || "";
+  const responseCookie = setCookie ? setCookie.split(";", 1)[0] : "";
+  if (responseCookie && payload?.clientCapability) {
+    sessionCapabilities.set(responseCookie, payload.clientCapability);
+  }
+  return {
+    response,
+    payload,
+    cookie: responseCookie,
+    setCookie,
+  };
 }
 
 test(
   "PostgreSQL stores accounts, progress, files, test runs, and revocable sessions",
-  { skip: !TEST_DATABASE_URL, timeout: 30_000 },
+  { skip: !TEST_DATABASE_URL, timeout: 45_000 },
   async (context) => {
     await runMigrations({ environment: { ...process.env, DATABASE_URL: TEST_DATABASE_URL } });
     const submissionsDirectory = await mkdtemp(join(tmpdir(), "eduground-integration-files-"));
-    const { child, url } = await startServer({ SUBMISSIONS_DIR: submissionsDirectory });
+    const { child, url } = await startServer({
+      SUBMISSIONS_DIR: submissionsDirectory,
+      RUN_HISTORY_LIMIT: "10",
+    });
     context.after(async () => {
       if (child.exitCode === null) {
         child.kill("SIGTERM");
@@ -88,22 +123,57 @@ test(
     });
     assert.equal(registered.response.status, 201);
     assert.equal(registered.payload.user.email, email);
+    assert.equal(Object.hasOwn(registered.payload, "token"), false);
+    assert.match(registered.payload.clientCapability, /^[A-Za-z0-9_-]{32,256}$/u);
+    assert.match(registered.setCookie, /^eduground_session=/u);
+    assert.match(registered.setCookie, /HttpOnly/u);
+    assert.match(registered.setCookie, /SameSite=Strict/u);
     const userId = registered.payload.user.id;
-    const token = registered.payload.token;
+    const cookie = registered.cookie;
 
-    const me = await request(url, "/api/me", { token });
+    const workerStyleRead = await request(url, "/api/state", {
+      cookie,
+      capability: false,
+    });
+    assert.equal(workerStyleRead.response.status, 403);
+    assert.equal(
+      workerStyleRead.payload.error.code,
+      "CLIENT_CAPABILITY_REQUIRED"
+    );
+    assert.doesNotMatch(workerStyleRead.setCookie, /Max-Age=0/u);
+
+    const wrongCapability = await request(url, "/api/me", {
+      cookie,
+      capability: "A".repeat(43),
+    });
+    assert.equal(wrongCapability.response.status, 403);
+    assert.equal(
+      wrongCapability.payload.error.code,
+      "CLIENT_CAPABILITY_REQUIRED"
+    );
+
+    const me = await request(url, "/api/me", { cookie });
     assert.equal(me.response.status, 200);
     assert.equal(me.payload.user.displayName, "Test Learner");
+
+    const missingOrigin = await request(url, "/api/state", {
+      method: "PUT",
+      cookie,
+      origin: false,
+      body: { state: { passedIds: ["py01-first-programs"] } },
+    });
+    assert.equal(missingOrigin.response.status, 403);
+    assert.equal(missingOrigin.payload.error.code, "ORIGIN_REQUIRED");
 
     const state = { passedIds: ["py01-first-programs"], editorMode: "vim" };
     const savedState = await request(url, "/api/state", {
       method: "PUT",
-      token,
+      cookie,
       body: { state },
     });
     assert.equal(savedState.response.status, 200);
     assert.deepEqual(savedState.payload.state, state);
-    assert.deepEqual((await request(url, "/api/state", { token })).payload.state, state);
+    assert.deepEqual((await request(url, "/api/state", { cookie })).payload.state, state);
 
     const assessmentProgress = {
       version: 1,
@@ -129,7 +199,7 @@ test(
       (
         await request(url, "/api/state", {
           method: "PUT",
-          token,
+          cookie,
           body: {
             state: {
               assessmentProgress,
@@ -144,7 +214,7 @@ test(
     const concurrentStateUpdates = await Promise.all([
       request(url, "/api/state", {
         method: "PUT",
-        token,
+        cookie,
         body: {
           state: {
             passedIds: ["py01-diagram"],
@@ -154,7 +224,7 @@ test(
       }),
       request(url, "/api/state", {
         method: "PUT",
-        token,
+        cookie,
         body: {
           state: {
             passedIds: ["py01-avoid-sums"],
@@ -164,7 +234,7 @@ test(
       }),
     ]);
     concurrentStateUpdates.forEach(({ response }) => assert.equal(response.status, 200));
-    const mergedState = (await request(url, "/api/state", { token })).payload.state;
+    const mergedState = (await request(url, "/api/state", { cookie })).payload.state;
     assert.deepEqual(mergedState.passedIds, [
       "py01-avoid-sums",
       "py01-diagram",
@@ -176,7 +246,7 @@ test(
 
     const savedFile = await request(url, "/api/files/py01-first-programs", {
       method: "PUT",
-      token,
+      cookie,
       body: { filename: "first-programs.py", content: "print('practice')\n" },
     });
     assert.equal(savedFile.response.status, 200);
@@ -207,7 +277,7 @@ test(
       concurrentContents.map((concurrentContent) =>
         request(url, "/api/files/py01-fixme", {
           method: "PUT",
-          token,
+          cookie,
           body: { content: concurrentContent },
         })
       )
@@ -227,12 +297,12 @@ test(
       [userId, "py01-first-programs", "legacy-first-programs.py"]
     );
     await rm(mirroredFile);
-    const restoredFile = await request(url, "/api/files/py01-first-programs", { token });
+    const restoredFile = await request(url, "/api/files/py01-first-programs", { cookie });
     assert.equal(restoredFile.response.status, 200);
     assert.equal(restoredFile.payload.file.mirrorStatus, "saved");
     assert.equal(await readFile(mirroredFile, "utf8"), "print('practice')\n");
     assert.equal(
-      (await request(url, "/api/files/py01-first-programs", { token })).payload.file.filename,
+      (await request(url, "/api/files/py01-first-programs", { cookie })).payload.file.filename,
       "ex00.py"
     );
     const canonicalizedDatabaseFile = await verificationClient.query(
@@ -240,11 +310,10 @@ test(
       [userId, "py01-first-programs"]
     );
     assert.equal(canonicalizedDatabaseFile.rows[0].filename, "ex00.py");
-    await verificationClient.end();
 
     const unknownExercise = await request(url, "/api/files/py99-not-real", {
       method: "PUT",
-      token,
+      cookie,
       body: { filename: "../../escape.py", content: "unsafe\n" },
     });
     assert.equal(unknownExercise.response.status, 404);
@@ -252,28 +321,115 @@ test(
 
     const run = await request(url, "/api/runs", {
       method: "POST",
-      token,
+      cookie,
       body: {
         exerciseId: "py01-first-programs",
         scope: "all",
-        passedCount: 3,
-        totalCount: 3,
+        passedCount: 1,
+        totalCount: 1,
         allPassed: true,
-        results: [{ name: "greeting", passed: true }],
+        results: [{ name: "greeting", passed: true, ignored: "not persisted" }],
       },
     });
     assert.equal(run.response.status, 201);
     assert.equal(run.payload.run.allPassed, true);
+    assert.equal(run.payload.run.verification, "learner-device");
+    const storedRun = await verificationClient.query(
+      "SELECT results FROM test_runs WHERE id = $1 AND user_id = $2",
+      [run.payload.run.id, userId]
+    );
+    assert.deepEqual(storedRun.rows[0].results, [
+      {
+        id: "case-1",
+        name: "greeting",
+        hidden: false,
+        passed: true,
+      },
+    ]);
 
-    const logout = await request(url, "/api/auth/logout", { method: "POST", token });
+    const concurrentRuns = await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        request(url, "/api/runs", {
+          method: "POST",
+          cookie,
+          body: {
+            exerciseId: "py01-first-programs",
+            scope: "all",
+            passedCount: index % 2,
+            totalCount: 1,
+            allPassed: index % 2 === 1,
+            results: [{ name: `bounded run ${index}`, passed: index % 2 === 1 }],
+          },
+        })
+      )
+    );
+    concurrentRuns.forEach(({ response }) => assert.equal(response.status, 201));
+    const retainedRuns = await verificationClient.query(
+      "SELECT COUNT(*)::integer AS count FROM test_runs WHERE user_id = $1",
+      [userId]
+    );
+    assert.equal(retainedRuns.rows[0].count, 10);
+
+    const migrationLockClient = new Client({ connectionString: TEST_DATABASE_URL });
+    await migrationLockClient.connect();
+    await migrationLockClient.query("SELECT pg_advisory_lock($1)", [
+      MIGRATION_LOCK_ID,
+    ]);
+    try {
+      await assert.rejects(
+        runMigrations({
+          environment: {
+            ...process.env,
+            DATABASE_URL: TEST_DATABASE_URL,
+            MIGRATION_LOCK_TIMEOUT_MS: "1000",
+          },
+        }),
+        /Could not acquire the migration lock within 1000ms/u
+      );
+    } finally {
+      await migrationLockClient.query("SELECT pg_advisory_unlock($1)", [
+        MIGRATION_LOCK_ID,
+      ]);
+      await migrationLockClient.end();
+    }
+
+    await verificationClient.query(
+      "INSERT INTO schema_migrations (name, checksum) VALUES ($1, $2)",
+      ["999_future_release.sql", "0".repeat(64)]
+    );
+    try {
+      await assert.rejects(
+        runMigrations({
+          environment: { ...process.env, DATABASE_URL: TEST_DATABASE_URL },
+        }),
+        /migrations not present in this release/u
+      );
+      const schemaAhead = await request(url, "/readyz");
+      assert.equal(schemaAhead.response.status, 503);
+      assert.equal(schemaAhead.payload.database.schemaReady, false);
+    } finally {
+      await verificationClient.query(
+        "DELETE FROM schema_migrations WHERE name = $1",
+        ["999_future_release.sql"]
+      );
+    }
+    assert.equal((await request(url, "/readyz")).response.status, 200);
+    await verificationClient.end();
+
+    const logout = await request(url, "/api/auth/logout", { method: "POST", cookie });
     assert.equal(logout.response.status, 204);
-    assert.equal((await request(url, "/api/me", { token })).response.status, 401);
+    assert.match(logout.setCookie, /Max-Age=0/u);
+    const expiredSession = await request(url, "/api/me", { cookie });
+    assert.equal(expiredSession.response.status, 401);
+    assert.match(expiredSession.setCookie, /Max-Age=0/u);
 
     const login = await request(url, "/api/auth/login", {
       method: "POST",
       body: { email, password: "strong-test-password" },
     });
     assert.equal(login.response.status, 200);
-    assert.notEqual(login.payload.token, token);
+    assert.equal(Object.hasOwn(login.payload, "token"), false);
+    assert.match(login.payload.clientCapability, /^[A-Za-z0-9_-]{32,256}$/u);
+    assert.notEqual(login.cookie, cookie);
   }
 );
