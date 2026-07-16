@@ -1,0 +1,431 @@
+.rounding-lab {
+  margin-top: 28px;
+  padding: clamp(19px, 3vw, 28px);
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border));
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 22rem),
+    var(--surface-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.rounding-lab .eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 0.75rem;
+}
+
+.rounding-lab__heading h3,
+.rounding-lab__results h4,
+.rounding-lab__invariants h4,
+.rounding-lab__decision h4 {
+  margin-bottom: 7px;
+  font-size: 1.08rem;
+}
+
+.rounding-lab__intro {
+  max-width: 850px;
+  margin-bottom: 18px;
+  color: var(--muted-strong);
+  font-size: 0.8rem;
+}
+
+.rounding-lab__scenarios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.rounding-lab__scenario {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-strong);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.rounding-lab__scenario:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.rounding-lab__scenario:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.rounding-lab__scenario.is-selected {
+  border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.rounding-lab__scenario strong {
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+}
+
+.rounding-lab__scenario span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.rounding-lab__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 14px;
+}
+
+.rounding-lab__explorer,
+.rounding-lab__results {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+}
+
+.rounding-lab__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 13px;
+  align-items: end;
+}
+
+.rounding-lab__range,
+.rounding-lab__number {
+  display: grid;
+  gap: 7px;
+  color: var(--muted-strong);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.rounding-lab__range input {
+  width: 100%;
+  accent-color: var(--primary);
+  cursor: ew-resize;
+}
+
+.rounding-lab__number input {
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.rounding-lab__number input:focus-visible {
+  border-color: var(--primary);
+  outline: 3px solid color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+.rounding-lab__axis {
+  position: relative;
+  height: 124px;
+  margin: 15px 25px 0;
+}
+
+.rounding-lab__axis::before {
+  position: absolute;
+  top: 59px;
+  right: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  content: "";
+}
+
+.rounding-lab__ticks {
+  position: absolute;
+  inset: 0;
+}
+
+.rounding-lab__tick {
+  position: absolute;
+  top: 54px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  transform: translateX(-50%);
+}
+
+.rounding-lab__tick::before {
+  display: block;
+  width: 1px;
+  height: 12px;
+  margin: 0 auto 7px;
+  background: var(--border-strong);
+  content: "";
+}
+
+.rounding-lab__value-marker,
+.rounding-lab__bound {
+  position: absolute;
+  z-index: 1;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: left 170ms ease;
+}
+
+.rounding-lab__value-marker {
+  top: 5px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.rounding-lab__value-marker::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 2px;
+  height: 29px;
+  background: var(--primary);
+  content: "";
+  transform: translateX(-50%);
+}
+
+.rounding-lab__bound {
+  top: 83px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.rounding-lab__bound--floor {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.rounding-lab__bound--ceil {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.rounding-lab__observation {
+  min-height: 44px;
+  padding: 11px 12px;
+  margin: 0;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 9px 9px 0;
+  background: var(--primary-softer);
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+}
+
+.rounding-lab__results > .eyebrow,
+.rounding-lab__decision > .eyebrow {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.rounding-lab__result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.rounding-lab__result {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-top-width: 3px;
+  border-radius: 11px;
+  background: var(--surface-2);
+}
+
+.rounding-lab__result--floor {
+  border-top-color: var(--info);
+}
+
+.rounding-lab__result--round {
+  border-top-color: var(--primary);
+}
+
+.rounding-lab__result--ceil {
+  border-top-color: var(--warning);
+}
+
+.rounding-lab__result--trunc {
+  border-top-color: var(--muted);
+}
+
+.rounding-lab__result-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rounding-lab__result code {
+  overflow-wrap: anywhere;
+  color: var(--text-strong);
+  font-size: 0.72rem;
+}
+
+.rounding-lab__result-value {
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: 1.55rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.rounding-lab__result small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.rounding-lab__decision {
+  margin-top: 14px;
+  padding-top: 17px;
+  border-top: 1px solid var(--border);
+}
+
+.rounding-lab__invariants {
+  margin-top: 14px;
+  padding: 15px 17px;
+  border: 1px solid color-mix(in srgb, var(--success) 28%, var(--border));
+  border-radius: 14px;
+  background: var(--success-soft);
+}
+
+.rounding-lab__invariants ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  margin: 11px 0 0;
+  list-style: none;
+}
+
+.rounding-lab__invariants li {
+  position: relative;
+  padding: 10px 10px 10px 30px;
+  border: 1px solid color-mix(in srgb, var(--success) 24%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.rounding-lab__invariants li::before {
+  position: absolute;
+  top: 10px;
+  left: 11px;
+  color: var(--success);
+  content: "✓";
+  font-family: var(--font-sans);
+  font-weight: 900;
+}
+
+.rounding-lab__decision-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+}
+
+.rounding-lab__decision-grid li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+}
+
+.rounding-lab__decision-grid strong {
+  font-size: 0.76rem;
+}
+
+.rounding-lab__decision-grid code {
+  overflow-wrap: anywhere;
+  color: var(--primary-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.rounding-lab__decision-grid p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .rounding-lab__scenarios,
+  .rounding-lab__result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rounding-lab__workspace,
+  .rounding-lab__invariants ul,
+  .rounding-lab__decision-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 470px) {
+  .rounding-lab {
+    padding: 17px;
+  }
+
+  .rounding-lab__scenarios,
+  .rounding-lab__controls,
+  .rounding-lab__result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rounding-lab__axis {
+    margin-inline: 18px;
+  }
+
+  .rounding-lab__decision-grid li {
+    grid-template-columns: 1fr;
+  }
+
+  .rounding-lab__decision-grid code {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rounding-lab__scenario,
+  .rounding-lab__value-marker,
+  .rounding-lab__bound {
+    transition: none;
+  }
+}
