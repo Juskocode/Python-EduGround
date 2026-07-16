@@ -1,6 +1,6 @@
 # Python EduGround
 
-Python EduGround turns the 11 exercise chapters in this repository into a local-first, game-like Python learning path. Learners can study solution-free tutorials, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL.
+Python EduGround turns the 11 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL.
 
 ## Product tour
 
@@ -8,9 +8,9 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 
 ![Dark Python EduGround dashboard with chapter progress, stars, rank, and badges](docs/screenshots/dashboard.jpg)
 
-### Deep, solution-free learning guide
+### Full, solution-free chapter class
 
-![First Programs learning guide showing its mental model and guided-practice flow](docs/screenshots/learning-guide.jpg)
+![First Programs class material showing its mental model and guided-practice flow](docs/screenshots/learning-guide.jpg)
 
 ### Evidence-driven problem-solving runbook
 
@@ -35,9 +35,10 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 | Area | Included |
 | --- | --- |
 | Curriculum | 11 chapters, 92 exercises, 281 exercise tests, and 239 collectible difficulty stars |
-| Guided learning | 44 tutorials, 55 runbook phases, 55 mental-model steps, 22 guided practices, 37 learner/coach exchanges, and 40 choose-by-intent toolbox cards |
+| Classroom material | Eleven distinct 90-minute classes: 990 planned minutes, 44 summary outcomes, 55 lesson-plan blocks, 11 executable lecture demonstrations with labelled output, 22 collaborative activities, 44 independent-practice prompts, 55 recap questions, and 11 transfer-focused homework briefs |
+| Guided learning | 44 lesson-note sections, 55 runbook phases, 55 mental-model steps, 22 guided practices, 11 concept clinics with 66 worked trace rows, 33 misconception probes, and 33 transfer prompts, plus one interactive number-line lab, 38 coaching exchanges, and 43 toolbox cards |
 | Timed assessments | Four chapter blocks, each with 15 theory questions in 20 minutes and five practical tasks in 60 minutes; theory and practical pass independently at 60/100 |
-| Reference material | 66 glossary terms, 66 debugging checks, one checkpoint per chapter, and 60 curated official Python documentation links: 40 in chapter guides and 20 in assessments |
+| Reference material | 70 glossary terms, 66 debugging checks, one checkpoint per chapter, and 62 curated official Python documentation links: 42 in chapter guides and 20 in assessments |
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, and progressive hints |
 | Editor | Vendored Ace with a persistent Sublime or Vim keymap, fixed Monokai theme, Python highlighting, autocomplete, search, folding, line numbers, and copy/paste controls |
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
@@ -47,16 +48,20 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 | Persistence | Local browser storage by default; optional PostgreSQL account sync plus a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
-Every chapter guide combines six layers:
+Every chapter is presented as a complete class:
 
-1. Four concept tutorials with unrelated examples, checklists, takeaways, and common pitfalls.
-2. A visual mental model that explains how values or control move through the chapter's topic.
-3. Two guided prediction practices with copyable safe starters and revealable coaching notes.
-4. A glossary, debugging checklist, and knowledge checkpoint.
-5. A chapter-specific Python toolbox that explains syntax, return values, type conversions, imports, appropriate use, and common traps through copyable analogous examples.
-6. A five-phase runbook with a conversational Python coach, **why it matters**, **what to try when stuck**, inspectable evidence, and topic-specific links to the official Python documentation.
+1. A summary-first masthead states the audience, duration, format, prerequisites, preparation, and measurable chapter outcomes.
+2. A five-part, 90-minute lesson plan explains what the teacher and learners should accomplish in each segment.
+3. An original instructor demonstration includes copyable Python, separately labelled expected output, teaching points, and prediction questions.
+4. Four written lesson sections use unrelated examples, checklists, takeaways, and common pitfalls.
+5. Collaborative class activities end with concrete evidence another learner or teacher can inspect.
+6. A visual mental model, concept clinic, guided prediction practice, glossary, debugging checklist, and knowledge checkpoint deepen the core notes.
+7. Independent practice, retrieval questions, and transfer-focused homework turn reading into active learning.
+8. A chapter-specific toolbox, five-phase runbook, official Python references, exercise handoff, and previous/next navigation support practice after class.
 
-Guide sections can be marked understood. Their progress persists separately from graded exercise passes, so reading a tutorial never awards exercise stars.
+Concepts that benefit from direct manipulation can also include a focused lab. Chapter 2 provides an accessible number-line explorer for comparing `round`, `math.floor`, `math.ceil`, `int`, and `math.trunc` across positive values, negative values, exact integers, and ties-to-even.
+
+Lesson notes, concept clinics, and runbooks can be marked understood. Their progress persists separately from graded exercise passes, so reading material never awards exercise stars. The desktop class view includes a course rail and an on-page contents rail; both collapse into keyboard-accessible disclosures on smaller screens.
 
 The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10–11 capstone. Each room keeps its own active deadline, drafts, recent attempts, and best score; assessment results do not award exercise stars. See [docs/ASSESSMENTS.md](docs/ASSESSMENTS.md) for the room rules, source transparency, scoring, official references, and client-side security limitations.
 
@@ -124,7 +129,7 @@ The app uses bookmarkable hash routes:
 | `#home` | Chapter dashboard and current-learning cue |
 | `#chapter/py01` | Chapter hub |
 | `#chapter/py01/exercises` | Exercise catalogue |
-| `#chapter/py01/tutorials` | Tutorials, deep dive, checkpoint, and runbook |
+| `#chapter/py01/tutorials` | Full class: setup, schedule, lecture demo, notes, activities, recap, homework, references, and exercise handoff |
 | `#exercise/py01-first-programs` | Prompt, examples, hints, IDE, tests, and results |
 | `#assessments` | Four-block timed-assessment map and saved best scores |
 | `#assessment/py01-py03` | One block's theory/practical choices and official references |
@@ -172,7 +177,7 @@ The server owns this 92-file mapping. Learner input cannot select a path, and th
 | Draft code | Browser storage | Browser storage and account state |
 | Explicit Save or complete test submission | Browser draft; optional `.py` download | PostgreSQL `user_files`, browser draft, and `<chapter>/exNN.py` mirror |
 | Passed exercises and stars | Browser storage | Browser storage and PostgreSQL account state |
-| Guide markers | Browser storage | Browser storage and PostgreSQL account state |
+| Class lesson markers | Browser storage | Browser storage and PostgreSQL account state |
 | Timed assessment deadlines, answers, practical drafts, and recent results | Browser storage | Browser storage and PostgreSQL account state |
 | Editor keymap | Browser storage | Browser storage and PostgreSQL account state |
 | Complete run details | Current page memory only | PostgreSQL run-history record; current UI does not yet reload this history |
@@ -189,13 +194,13 @@ node --check python-runner-worker.mjs
 git diff --check
 ```
 
-`npm run validate` performs the deterministic offline checks for application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 exercise tests, every solution-free starter, every tutorial and runbook phase, all 40 toolbox cards, coaching conversations, and the complete deep-learning schema. It also checks all four assessment blocks, 60 theory questions, 20 practical tasks, 60 practical tests, absolute 20/60-minute limits, stable IDs, solution-free assessment starters, and official-link allowlisting. `npm run validate:links` is the optional network check that verifies all 60 curated Python documentation references and fragment anchors still exist.
+`npm run validate` performs the deterministic offline checks for application and backend syntax/tests, all 11 chapter definitions, all 92 exercise definitions, all 281 exercise tests, every solution-free starter, every lesson section and runbook phase, all 11 concept clinics, the directed-rounding interactive lab, all 43 toolbox cards, coaching conversations, and the complete deep-learning schema. Classroom validation checks the exact 11-class coverage, 990-minute schedule, stable IDs, deep immutability, complete teaching schema, executable Python demonstrations, labelled output, and repository solution/prompt leakage. Component tests cover the documentation hierarchy, scoped IDs, copy controls, router-safe contents navigation, supplied lesson slots, and responsive navigation structure. It also checks all four assessment blocks, 60 theory questions, 20 practical tasks, 60 practical tests, absolute 20/60-minute limits, stable IDs, solution-free assessment starters, and official-link allowlisting. `npm run validate:links` is the optional network check that verifies all 62 curated Python documentation references and fragment anchors still exist.
 
 The release smoke flow also covers:
 
-- Dashboard → chapter → guide and exercise routes.
-- Persistent tutorial-understanding markers.
-- Guided-practice reveal and chapter checkpoint feedback.
+- Dashboard → chapter → class and exercise routes.
+- Persistent class-section understanding markers.
+- Worked concept clinics, guided-practice reveal, the Chapter 2 rounding lab, and chapter checkpoint feedback.
 - Safe starter code with no repository answer loaded into the page.
 - Sublime/Vim switching, Monokai styling, and editor keyboard shortcuts.
 - Local saving plus signed-in PostgreSQL and canonical chapter-file persistence.
@@ -209,10 +214,18 @@ The release smoke flow also covers:
 | Path | Responsibility |
 | --- | --- |
 | `index.html` | Stable application shell and vendored asset loading order |
-| `course-ui.css` | Responsive light/dark UI, learning guide, account panel, runbook, and IDE layout |
-| `course-app.js` | Router, views, local/account persistence, profile, editor adapter, runner controls, and result rendering |
+| `course-ui.css` | Shared responsive light/dark UI, account panel, runbook, and IDE layout |
+| `course-app.js` | Router and application orchestration for persistence, profile, editor, runner controls, and shared result rendering |
+| `dashboard-model.js` | Pure resume-target, stage-status, and milestone derivation for the home learning path |
+| `dashboard-view.js` / `dashboard-ui.css` | Focused stage-based home renderer and responsive presentation |
+| `class-materials.js` | Eleven deeply frozen 90-minute class syllabi with preparation, schedules, demos, activities, retrieval practice, and homework |
+| `class-page.js` / `class-page.css` | Reusable documentation renderer with course navigation, contents rail, lecture code/output, supplied learning sections, and mobile disclosures |
 | `learning-content.js` | Ranks, badges, tutorials, deep dives, checkpoints, and runbooks |
 | `learning-toolbox.js` | Per-chapter Python functionality guide with conversions, imports, results, cautions, and copyable examples |
+| `learning-clinics.js` | Eleven immutable, solution-free worked traces, misconception probes, and transfer sets |
+| `concept-clinic.js` / `learning-clinic.css` | Accessible clinic component and its isolated responsive styling |
+| `rounding-model.js` | Tested Python-compatible floor, ceiling, truncation, and ties-to-even comparisons for the Chapter 2 lab |
+| `rounding-lab.js` / `rounding-lab.css` | Self-contained interactive number-line controller, derived view state, listeners, and styling |
 | `assessment-data.js` | Four assessment blocks, theory questions, practical contracts/tests, source notes, and official references |
 | `assessment-engine.js` | Assessment scoring, deadline, sanitization, history, and conflict-merge rules |
 | `assessment-room.js` | Assessment routes, timed-room controller, practical editor, submission flow, and results |
@@ -230,6 +243,9 @@ The release smoke flow also covers:
 | `db/migrations/` | Ordered, checksum-protected PostgreSQL schema migrations |
 | `scripts/migrate.mjs` | Migration command used locally and during deployment |
 | `scripts/validate-assessment-data.mjs` | Assessment structure, timing, stable-ID, syntax, test, solution-leak, and official-link validation |
+| `server/tests/class-materials.test.mjs` | Classroom coverage, timing, executable demos, immutability, and solution/prompt leakage validation |
+| `server/tests/class-page.test.mjs` | Deterministic class-page hierarchy, navigation, accessibility, and fallback rendering validation |
+| `docs/CLASSROOM.md` | Learner-facing class sequence, authoring contract, solution boundary, rendering integration, and validation guide |
 | `docs/ASSESSMENTS.md` | Timed-room rules, chapter/PDF mapping, scoring, references, persistence, and security boundaries |
 | `docs/PERSISTENCE.md` | Account sync, deployment durability, backup/restore, and security guide |
 

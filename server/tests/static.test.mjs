@@ -16,7 +16,19 @@ test("required playground assets remain public", async () => {
   for (const pathname of [
     "/",
     "/course-app.js",
+    "/dashboard-model.js",
+    "/dashboard-view.js",
+    "/dashboard-ui.css",
+    "/learning-clinics.js",
+    "/concept-clinic.js",
+    "/learning-clinic.css",
     "/learning-toolbox.js",
+    "/class-materials.js",
+    "/class-page.js",
+    "/class-page.css",
+    "/rounding-model.js",
+    "/rounding-lab.js",
+    "/rounding-lab.css",
     "/assessment-data.js",
     "/assessment-engine.js",
     "/assessment-room.js",
@@ -36,11 +48,44 @@ test("the toolbox data loads before the application reads it", async () => {
   const index = await readFile(resolve(REPOSITORY_ROOT, "index.html"), "utf8");
   const learningContentPosition = index.indexOf('src="learning-content.js"');
   const toolboxPosition = index.indexOf('src="learning-toolbox.js"');
+  const clinicsPosition = index.indexOf('src="learning-clinics.js"');
+  const clinicViewPosition = index.indexOf('src="concept-clinic.js"');
+  const classMaterialsPosition = index.indexOf('src="class-materials.js"');
+  const classPagePosition = index.indexOf('src="class-page.js"');
+  const roundingModelPosition = index.indexOf('src="rounding-model.js"');
+  const roundingLabPosition = index.indexOf('src="rounding-lab.js"');
+  const dashboardModelPosition = index.indexOf('src="dashboard-model.js"');
+  const dashboardViewPosition = index.indexOf('src="dashboard-view.js"');
   const applicationPosition = index.indexOf('src="course-app.js"');
 
   assert.ok(learningContentPosition >= 0, "index should load learning-content.js");
   assert.ok(toolboxPosition > learningContentPosition, "toolbox data should load after the core learning content");
-  assert.ok(applicationPosition > toolboxPosition, "toolbox data should load before course-app.js");
+  assert.ok(clinicsPosition > toolboxPosition, "concept-clinic data should load after the core learning data");
+  assert.ok(clinicViewPosition > clinicsPosition, "the concept-clinic view should load after its data");
+  assert.ok(classMaterialsPosition > clinicViewPosition, "class materials should load after the core learning components");
+  assert.ok(classPagePosition > classMaterialsPosition, "the class-page view should load after its materials");
+  assert.ok(roundingModelPosition > classPagePosition, "the rounding model should load after the class-page components");
+  assert.ok(roundingLabPosition > roundingModelPosition, "the rounding lab should load after its arithmetic model");
+  assert.ok(dashboardModelPosition > roundingLabPosition, "the dashboard model should load after course data");
+  assert.ok(dashboardViewPosition > dashboardModelPosition, "the dashboard view should load after its model");
+  assert.ok(applicationPosition > dashboardViewPosition, "learning dependencies should load before course-app.js");
+});
+
+test("the dashboard stylesheet can refine the shared course UI", async () => {
+  const index = await readFile(resolve(REPOSITORY_ROOT, "index.html"), "utf8");
+  const courseUiPosition = index.indexOf('href="course-ui.css"');
+  const dashboardUiPosition = index.indexOf('href="dashboard-ui.css"');
+  const clinicUiPosition = index.indexOf('href="learning-clinic.css"');
+  const roundingLabPosition = index.indexOf('href="rounding-lab.css"');
+  const classPagePosition = index.indexOf('href="class-page.css"');
+  const assessmentUiPosition = index.indexOf('href="assessment-ui.css"');
+
+  assert.ok(courseUiPosition >= 0, "index should load course-ui.css");
+  assert.ok(dashboardUiPosition > courseUiPosition, "dashboard UI should load after shared course styles");
+  assert.ok(clinicUiPosition > dashboardUiPosition, "concept-clinic styles should load after the shared dashboard layer");
+  assert.ok(roundingLabPosition > clinicUiPosition, "rounding lab styles should load after the learning clinic");
+  assert.ok(classPagePosition > roundingLabPosition, "class-page styles should be able to refine embedded learning components");
+  assert.ok(assessmentUiPosition > classPagePosition, "assessment UI should remain the final feature stylesheet");
 });
 
 test("assessment data, engine, and room controller load before the application", async () => {
@@ -68,6 +113,7 @@ test("solutions and backend or deployment files are not served", async () => {
     "/docker-compose.yml",
     "/submissions/learner/Py01%20First%20Programs/ex00.py",
     "/.env",
+    "/docs/CLASSROOM.md",
     "/docs/ROADMAP.md",
   ]) {
     const result = await resolvePath(pathname);

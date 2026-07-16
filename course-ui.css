@@ -7,7 +7,7 @@
   --surface-3: #eef3f9;
   --text: #182131;
   --text-strong: #0d1728;
-  --muted: #68768b;
+  --muted: #58667a;
   --muted-strong: #4d5c72;
   --border: #dce3ed;
   --border-strong: #c5d0df;
@@ -15,13 +15,13 @@
   --primary-strong: #0d583b;
   --primary-soft: #e2f5ed;
   --primary-softer: #f0faf6;
-  --success: #11885a;
+  --success: #0a6b44;
   --success-soft: #daf5e8;
   --danger: #c44452;
   --danger-soft: #fff0f1;
   --warning: #805000;
   --warning-soft: #fff5dd;
-  --info: #356fce;
+  --info: #245eb5;
   --info-soft: #eaf2ff;
   --code-bg: #171b22;
   --code-surface: #222832;
@@ -1064,159 +1064,6 @@ pre {
   animation: view-in 280ms ease-out both;
 }
 
-.dashboard-hero {
-  display: grid;
-  overflow: hidden;
-  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
-  gap: 42px;
-  align-items: center;
-  padding: clamp(30px, 5vw, 68px);
-  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
-  border-radius: var(--radius-xl);
-  background:
-    linear-gradient(130deg, color-mix(in srgb, var(--primary-softer) 82%, transparent), transparent 58%),
-    var(--surface);
-  box-shadow: var(--shadow-md);
-}
-
-.dashboard-hero__copy {
-  min-width: 0;
-}
-
-.dashboard-hero h1 {
-  max-width: 760px;
-  font-size: clamp(2.35rem, 5.2vw, 5rem);
-}
-
-.dashboard-hero__lede {
-  max-width: 670px;
-  margin-bottom: 27px;
-  color: var(--muted-strong);
-  font-size: clamp(1rem, 1.4vw, 1.16rem);
-}
-
-.dashboard-current-learning {
-  display: grid;
-  max-width: 680px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 14px;
-  margin: -7px 0 18px;
-  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border));
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--surface) 76%, var(--primary-softer));
-  text-decoration: none;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
-}
-
-.dashboard-current-learning:hover {
-  border-color: color-mix(in srgb, var(--primary) 58%, var(--border));
-  background: var(--primary-softer);
-  transform: translateY(-2px);
-}
-
-.dashboard-current-learning__marker {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--primary-soft);
-  color: var(--primary-strong);
-  font-family: var(--font-mono);
-  font-weight: 900;
-}
-
-.dashboard-current-learning__copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.dashboard-current-learning__label {
-  color: var(--primary);
-  font-size: 0.65rem;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.dashboard-current-learning__copy strong {
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: 0.84rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dashboard-current-learning__meta {
-  color: var(--muted);
-  font-size: 0.7rem;
-}
-
-.dashboard-current-learning__open {
-  color: var(--primary);
-  font-size: 0.72rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.dashboard-progress {
-  position: relative;
-  min-width: 0;
-  padding: 25px;
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  box-shadow: var(--shadow-sm);
-}
-
-.dashboard-progress::before {
-  position: absolute;
-  inset: -1px -1px auto;
-  height: 4px;
-  border-radius: 22px 22px 0 0;
-  background: linear-gradient(90deg, var(--primary), #59a9f5, transparent);
-  content: "";
-}
-
-.dashboard-progress__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 15px;
-}
-
-.dashboard-progress__top > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.dashboard-progress__label {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.dashboard-progress__top strong:not(.dashboard-progress__percent) {
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: 1rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dashboard-progress__percent {
-  color: var(--primary);
-  font-family: var(--font-mono);
-  font-size: 1.55rem;
-}
-
 .dashboard-stat-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1255,63 +1102,13 @@ pre {
   font-size: 0.65rem;
 }
 
-.dashboard-progress__next {
-  margin: 13px 0 0;
-  color: var(--muted);
-  font-size: 0.72rem;
-  text-align: center;
-}
-
-.chapter-map {
-  padding-top: 58px;
-}
-
-.chapter-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.chapter-card {
-  display: flex;
-  min-width: 0;
-  overflow: hidden;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 21px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow-sm);
-  text-decoration: none;
-  transform: translateY(0);
-  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-  animation: card-in 320ms ease-out both;
-  animation-delay: var(--card-delay, 0ms);
-}
-
-.chapter-card:hover {
-  border-color: color-mix(in srgb, var(--primary) 44%, var(--border));
-  box-shadow: var(--shadow-md);
-  transform: translateY(-5px);
-}
-
-.chapter-card.is-complete {
-  border-color: color-mix(in srgb, var(--success) 46%, var(--border));
-}
-
-.chapter-card__art,
 .chapter-hero__art {
   position: relative;
   overflow: hidden;
   background-color: var(--surface-3);
   background-image: linear-gradient(180deg, transparent 58%, rgba(9, 18, 31, 0.58)), url("assets/learning-visuals/python-chapter-sprite.png");
   background-repeat: no-repeat;
-  background-size: 400% 300%;
-}
-
-.chapter-card__art {
-  height: 174px;
-  border-bottom: 1px solid var(--border);
+  background-size: 100% 100%, 400% 300%;
 }
 
 .chapter-art__label {
@@ -1329,22 +1126,6 @@ pre {
   backdrop-filter: blur(8px);
 }
 
-.chapter-card__body {
-  display: flex;
-  min-height: 290px;
-  flex: 1;
-  flex-direction: column;
-  padding: 20px;
-}
-
-.chapter-card__top,
-.chapter-card__progress-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .chapter-number {
   color: var(--primary);
   font-family: var(--font-mono);
@@ -1352,84 +1133,6 @@ pre {
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-}
-
-.chapter-card__stars {
-  color: var(--warning);
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-
-.chapter-card.is-complete .chapter-card__stars {
-  color: var(--success);
-}
-
-.chapter-card h3 {
-  margin: 11px 0 8px;
-  font-size: 1.24rem;
-}
-
-.chapter-card__summary {
-  display: -webkit-box;
-  overflow: hidden;
-  margin-bottom: 14px;
-  color: var(--muted);
-  font-size: 0.85rem;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.chapter-card .tag-list {
-  margin-bottom: 18px;
-}
-
-.chapter-card__progress-row {
-  margin-top: auto;
-  margin-bottom: 8px;
-  color: var(--muted);
-  font-size: 0.71rem;
-}
-
-.chapter-card__progress-row strong {
-  color: var(--text-strong);
-}
-
-.chapter-card__open {
-  margin-top: 14px;
-  color: var(--primary);
-  font-size: 0.76rem;
-  font-weight: 800;
-}
-
-.source-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-top: 24px;
-  padding: 16px 18px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.source-note__icon {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--info-soft);
-  color: var(--info);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 900;
-}
-
-.source-note p {
-  margin: 1px 0 0;
 }
 
 .chapter-hero {
@@ -1601,11 +1304,6 @@ pre {
 
 @keyframes view-in {
   from { opacity: 0; transform: translateY(7px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes card-in {
-  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -4335,15 +4033,6 @@ pre {
 }
 
 @media (max-width: 1120px) {
-  .dashboard-hero {
-    grid-template-columns: minmax(0, 1fr) minmax(330px, 0.82fr);
-    gap: 28px;
-  }
-
-  .chapter-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .chapter-hero {
     grid-template-columns: minmax(270px, 0.72fr) minmax(0, 1.28fr);
   }
@@ -4370,14 +4059,9 @@ pre {
     padding-top: 25px;
   }
 
-  .dashboard-hero,
   .tutorial-hero,
   .badges-hero {
     grid-template-columns: 1fr;
-  }
-
-  .dashboard-hero h1 {
-    font-size: clamp(2.25rem, 9vw, 4.25rem);
   }
 
   .chapter-hero {
@@ -4478,11 +4162,6 @@ pre {
     height: 38px;
   }
 
-  .dashboard-hero {
-    padding: 28px 23px;
-    border-radius: 22px;
-  }
-
   .dashboard-stat-grid,
   .badges-hero__stats {
     grid-template-columns: 1fr;
@@ -4502,14 +4181,9 @@ pre {
     text-align: left;
   }
 
-  .chapter-grid,
   .choice-grid,
   .exercise-bottom-nav {
     grid-template-columns: 1fr;
-  }
-
-  .chapter-card__body {
-    min-height: 270px;
   }
 
   .continue-strip,
@@ -4730,34 +4404,12 @@ pre {
     max-height: calc(100vh - 86px);
   }
 
-  .dashboard-hero h1,
   .chapter-hero h1,
   .tutorial-hero h1,
   .badges-hero h1,
   .catalogue-header h1,
   .problem-panel h1 {
     font-size: clamp(2rem, 11vw, 2.8rem);
-  }
-
-  .dashboard-progress {
-    padding: 19px;
-  }
-
-  .dashboard-progress__top {
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .dashboard-current-learning {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .dashboard-current-learning__open {
-    display: none;
-  }
-
-  .chapter-card__art {
-    height: 150px;
   }
 
   .chapter-hero__art {
@@ -4815,6 +4467,15 @@ pre {
 
   .mental-model__flow li::after {
     display: none;
+  }
+
+  .runbook-tool__top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .runbook-tool__signature {
+    text-align: left;
   }
 
   .glossary-list {
@@ -4943,9 +4604,6 @@ pre {
     padding-inline: 15px;
   }
 
-  .dashboard-hero,
-  .dashboard-progress,
-  .chapter-card__body,
   .choice-card,
   .catalogue-progress {
     padding-inline: 17px;
