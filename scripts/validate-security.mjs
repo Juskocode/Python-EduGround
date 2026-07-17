@@ -139,6 +139,12 @@ check(
   "CI must exercise the complete hardened Compose topology."
 );
 check(
+  /browser-e2e:[\s\S]*playwright install --with-deps chromium[\s\S]*npm run validate:browser/u.test(
+    ciWorkflow
+  ),
+  "CI must run the deterministic browser and accessibility gate."
+);
+check(
   composeIntegrationGate.includes("scripts/init-secrets.sh") &&
     composeIntegrationGate.includes("--force-recreate") &&
     composeIntegrationGate.includes("eduground_app") &&
@@ -200,6 +206,11 @@ check(
     releaseWorkflow.includes("docker manifest inspect") &&
     releaseWorkflow.includes("refusing to overwrite existing image tag"),
   "Published images must come from a matching release tag and must never overwrite version or full-SHA tags."
+);
+check(
+  releaseWorkflow.includes("playwright install --with-deps chromium") &&
+    releaseWorkflow.includes("npm run validate:browser"),
+  "Release candidates must pass the browser and accessibility gate before publication."
 );
 
 const workflowDirectory = resolve(REPOSITORY_ROOT, ".github/workflows");

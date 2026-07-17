@@ -99,6 +99,12 @@ jobs:
           node --check python-runner-worker.mjs
           git diff --check
 
+      - name: Install the pinned Chromium test runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser journeys and accessibility checks
+        run: npm run validate:browser
+
       - name: Build the release image once
         env:
           IMAGE_REF: ${{ steps.release.outputs.image_ref }}
