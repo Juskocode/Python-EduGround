@@ -110,10 +110,11 @@ test(
     assert.equal(readiness.payload.database.schemaReady, true);
 
     const email = `integration-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
+    const cleanupEmails = [email];
     const cleanupClient = new Client({ connectionString: TEST_DATABASE_URL });
     context.after(async () => {
       await cleanupClient.connect();
-      await cleanupClient.query("DELETE FROM users WHERE email = $1", [email]);
+      await cleanupClient.query("DELETE FROM users WHERE email = ANY($1::text[])", [cleanupEmails]);
       await cleanupClient.end();
     });
 
@@ -364,6 +365,105 @@ test(
       )
     );
     concurrentRuns.forEach(({ response }) => assert.equal(response.status, 201));
+
+    const failedEvidence = await request(url, "/api/runs", {
+      method: "POST",
+      cookie,
+      body: {
+        exerciseId: "py01-first-programs",
+        scope: "all",
+        passedCount: 0,
+        totalCount: 1,
+        allPassed: false,
+        results: [
+          {
+            name: "historic failure",
+            passed: false,
+            expected: "expected line",
+            actual: "actual line",
+            stdout: "diagnostic output",
+            stderr: "warning output",
+            traceback: "Traceback: historic failure",
+          },
+        ],
+      },
+    });
+    assert.equal(failedEvidence.response.status, 201);
+
+    const history = await request(
+      url,
+      "/api/runs?exerciseId=py01-first-programs&limit=3",
+      { cookie }
+    );
+    assert.equal(history.response.status, 200);
+    assert.equal(history.response.headers.get("cache-control"), "no-store");
+    assert.equal(history.payload.runs.length, 3);
+    assert.equal(history.payload.runs[0].id, failedEvidence.payload.run.id);
+    assert.equal(history.payload.runs[0].verification, "learner-device");
+    assert.equal(Object.hasOwn(history.payload.runs[0], "code"), false);
+    assert.deepEqual(history.payload.runs[0].results[0], {
+      id: "case-1",
+      name: "historic failure",
+      hidden: false,
+      passed: false,
+      expected: "expected line",
+      actual: "actual line",
+      stdout: "diagnostic output",
+      stderr: "warning output",
+      traceback: "Traceback: historic failure",
+    });
+    assert.ok(
+      history.payload.runs.every(
+        (item, index, items) => index === 0 || Number(items[index - 1].id) > Number(item.id)
+      )
+    );
+
+    const workerStyleHistory = await request(
+      url,
+      "/api/runs?exerciseId=py01-first-programs",
+      { cookie, capability: false }
+    );
+    assert.equal(workerStyleHistory.response.status, 403);
+    assert.equal(workerStyleHistory.payload.error.code, "CLIENT_CAPABILITY_REQUIRED");
+
+    for (const invalidPath of [
+      "/api/runs?exerciseId=py01-first-programs&limit=0",
+      "/api/runs?exerciseId=py01-first-programs&limit=26",
+      "/api/runs?exerciseId=py01-first-programs&extra=true",
+      "/api/runs?exerciseId=py01-first-programs&exerciseId=py01-fixme",
+    ]) {
+      const invalidHistory = await request(url, invalidPath, { cookie });
+      assert.equal(invalidHistory.response.status, 400);
+      assert.equal(invalidHistory.payload.error.code, "INVALID_INPUT");
+    }
+
+    const unknownHistory = await request(
+      url,
+      "/api/runs?exerciseId=py99-not-real",
+      { cookie }
+    );
+    assert.equal(unknownHistory.response.status, 404);
+    assert.equal(unknownHistory.payload.error.code, "EXERCISE_NOT_FOUND");
+
+    const secondEmail = `integration-second-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
+    cleanupEmails.push(secondEmail);
+    const secondUser = await request(url, "/api/auth/register", {
+      method: "POST",
+      body: {
+        email: secondEmail,
+        displayName: "Second Learner",
+        password: "second-strong-test-password",
+      },
+    });
+    assert.equal(secondUser.response.status, 201);
+    const isolatedHistory = await request(
+      url,
+      "/api/runs?exerciseId=py01-first-programs",
+      { cookie: secondUser.cookie }
+    );
+    assert.equal(isolatedHistory.response.status, 200);
+    assert.deepEqual(isolatedHistory.payload.runs, []);
+
     const retainedRuns = await verificationClient.query(
       "SELECT COUNT(*)::integer AS count FROM test_runs WHERE user_id = $1",
       [userId]

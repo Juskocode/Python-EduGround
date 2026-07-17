@@ -74,6 +74,20 @@ function publicFile(row, mirror, exercise) {
   };
 }
 
+function publicRun(row) {
+  return {
+    id: String(row.id),
+    exerciseId: row.exercise_id,
+    scope: row.scope,
+    passedCount: Number(row.passed_count),
+    totalCount: Number(row.total_count),
+    allPassed: Boolean(row.all_passed),
+    results: Array.isArray(row.results) ? row.results : [],
+    verification: "learner-device",
+    createdAt: asIsoString(row.created_at),
+  };
+}
+
 function requireString(value, fieldName, { minimum = 1, maximum }) {
   if (typeof value !== "string") {
     throw new HttpError(400, "INVALID_INPUT", `${fieldName} must be a string.`);
@@ -664,8 +678,52 @@ export function createApiHandler({
       }
 
       if (pathname === "/api/runs") {
-        requireMethod(request, ["POST"]);
+        requireMethod(request, ["GET", "POST"]);
         const { user } = await authenticate(request, database);
+        if (request.method === "GET") {
+          const exerciseValues = requestUrl.searchParams.getAll("exerciseId");
+          const limitValues = requestUrl.searchParams.getAll("limit");
+          const unexpectedParameters = Array.from(requestUrl.searchParams.keys()).filter(
+            (name) => name !== "exerciseId" && name !== "limit"
+          );
+          if (
+            exerciseValues.length !== 1 ||
+            limitValues.length > 1 ||
+            unexpectedParameters.length > 0
+          ) {
+            throw new HttpError(
+              400,
+              "INVALID_INPUT",
+              "Run history requires one exerciseId and at most one limit parameter."
+            );
+          }
+          const exerciseId = requireKnownExercise(exerciseValues[0]).exerciseId;
+          const limitText = limitValues[0] || "10";
+          if (!/^\d{1,2}$/u.test(limitText)) {
+            throw new HttpError(400, "INVALID_INPUT", "limit must be a whole number from 1 to 25.");
+          }
+          const limit = Number(limitText);
+          if (limit < 1 || limit > 25) {
+            throw new HttpError(400, "INVALID_INPUT", "limit must be a whole number from 1 to 25.");
+          }
+          const history = await database.query(
+            `SELECT id, exercise_id, scope, passed_count, total_count,
+                    all_passed, results, created_at
+               FROM test_runs
+              WHERE user_id = $1 AND exercise_id = $2
+              ORDER BY created_at DESC, id DESC
+              LIMIT $3`,
+            [user.id, exerciseId, limit]
+          );
+          sendJson(
+            response,
+            200,
+            { runs: history.rows.map(publicRun) },
+            request.method
+          );
+          return true;
+        }
+
         limitAuthenticatedMutation(request, user, "run-submit", RUN_SUBMISSION_LIMIT);
         const body = await readJson(request);
         const exerciseId = requireKnownExercise(body.exerciseId).exerciseId;
