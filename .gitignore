@@ -9,3 +9,5 @@ backups/
 .credential-rotation.*
 .restore-drill-secrets.*
 secrets/
+playwright-report/
+test-results/

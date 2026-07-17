@@ -25,6 +25,7 @@
     const codeMeta = createElement("span", "tutorial-code__meta");
     const copyButton = createElement("button", "tutorial-copy-button", "Copy example");
     const pre = createElement("pre");
+    pre.tabIndex = 0;
     const code = createElement("code", null, clinic.exampleCode || "# Build a small traceable example.");
 
     copyButton.type = "button";

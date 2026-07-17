@@ -693,6 +693,7 @@
     const codeMeta = createElement("span", "tutorial-code__meta");
     const copyButton = createElement("button", "tutorial-copy-button", "Copy demo");
     const pre = createElement("pre");
+    pre.tabIndex = 0;
     const teachingGrid = createElement("div", "class-page__teaching-grid");
 
     demoHeader.append(createElement("h3", null, demo.title), createElement("p", null, demo.setup));
@@ -732,6 +733,7 @@
     const box = createElement("section", "class-page__output");
     const header = createElement("header");
     const pre = createElement("pre");
+    pre.tabIndex = 0;
     header.append(
       createElement("strong", null, "Expected output"),
       createElement("span", null, "stdout"),

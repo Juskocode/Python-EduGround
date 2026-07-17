@@ -335,6 +335,7 @@
       var latest = latestAttempt(history);
       var hero = element("header", "assessment-room-landing");
       var copy = element("div");
+      var title = element("h1", null, modeLabel(mode));
       var rules = element("ul", "assessment-room-rules");
       var minutes = Math.ceil(durationSeconds(block, mode) / 60);
       var start = element("button", "button button--primary assessment-start-button", mode === "theory"
@@ -351,9 +352,10 @@
       ].forEach(function (rule) {
         rules.append(element("li", null, rule));
       });
+      title.dataset.routeFocus = "assessment-result";
       copy.append(
         element("p", "eyebrow", block.title),
-        element("h1", null, modeLabel(mode)),
+        title,
         element("p", "assessment-room-landing__lede", mode === "theory"
           ? "Read each statement and select the complete correct set. Code-reading questions are executed mentally."
           : "Implement the supplied function contracts without using the PDF answer key. Run visible checks, then submit all five for grading."),
@@ -506,9 +508,13 @@
         element("span", "assessment-question-card__number", "Question " + (index + 1) + " / " + block.theory.questions.length),
         element("span", "assessment-question-card__type", question.correct.length > 1 ? "Select all that apply" : "Select the correct answer")
       );
-      article.append(heading, element("h2", null, question.prompt));
+      var questionHeading = element("h2", null, question.prompt);
+      questionHeading.dataset.routeFocus = "assessment-question";
+      questionHeading.tabIndex = -1;
+      article.append(heading, questionHeading);
       if (question.code) {
         var pre = element("pre", "assessment-question-code");
+        pre.tabIndex = 0;
         pre.append(element("code", null, question.code));
         article.append(pre);
       }
@@ -579,9 +585,12 @@
       var article = element("article", "assessment-practical-card");
       var heading = element("header", "assessment-practical-card__header");
       var meta = element("div");
+      var taskHeading = element("h2", null, question.title);
+      taskHeading.dataset.routeFocus = "assessment-question";
+      taskHeading.tabIndex = -1;
       meta.append(
         element("p", "eyebrow", "Task " + (index + 1) + " / " + block.practical.questions.length + " · " + question.points + " points"),
-        element("h2", null, question.title)
+        taskHeading
       );
       heading.append(meta, element("span", "assessment-practical-card__source", "Adapted prompt · solution excluded"));
       article.append(heading, element("p", "assessment-practical-card__prompt", question.prompt));
@@ -796,7 +805,7 @@
       }
       state.active = active;
       save(progress, true);
-      options.requestRender();
+      options.requestRender("assessment-question");
       options.announce(modeLabel(mode) + " started. The deadline is saved and the timer is running.");
     }
 
@@ -820,7 +829,7 @@
       state.active.currentQuestion = boundedIndex(index, total);
       state.active.updatedAt = Date.now();
       save(progress, true);
-      options.requestRender();
+      options.requestRender("assessment-question");
     }
 
     function updateTheoryAnswer(input) {
@@ -932,7 +941,7 @@
       } else {
         options.audio.playFailure();
       }
-      options.requestRender();
+      options.requestRender("assessment-result");
       options.announce("Theory exam submitted: " + score + " out of 100, " + (completed.passed ? "passed" : "not passed") + ".");
     }
 
@@ -1032,7 +1041,7 @@
         } else {
           options.audio.playFailure();
         }
-        options.requestRender();
+        options.requestRender("assessment-result");
         options.announce("Practical exam submitted: " + score + " out of 100, " + (completed.passed ? "passed" : "not passed") + ".");
       } finally {
         runInProgress = false;
@@ -1213,6 +1222,7 @@
     function renderResult(label, value) {
       var section = element("section", "result-field");
       var pre = element("pre");
+      pre.tabIndex = 0;
       var rendered = value === undefined || value === null || value === "" ? "<empty>" : String(value);
       pre.append(element("code", null, rendered));
       section.append(element("h4", null, label), pre);

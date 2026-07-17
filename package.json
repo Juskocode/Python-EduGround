@@ -18,6 +18,7 @@
     "validate:backend": "node --test server/tests/*.test.mjs",
     "validate:integration": "node scripts/validate-database-integration.mjs",
     "validate:compose": "bash scripts/validate-compose-integration.sh",
+    "validate:browser": "playwright test",
     "validate:security": "node scripts/validate-security.mjs",
     "validate:release": "npm run validate && npm run validate:integration && npm audit --audit-level=high --ignore-scripts",
     "vendor:ace": "node scripts/vendor-ace.mjs",
@@ -26,6 +27,8 @@
     "validate": "node --check course-app.js && node --check theme-bootstrap.js && node --check dashboard-model.js && node --check dashboard-view.js && node --check learning-content.js && node --check learning-toolbox.js && node --check learning-clinics.js && node --check concept-clinic.js && node --check class-materials.js && node --check class-page.js && node --check rounding-model.js && node --check rounding-lab.js && node --check assessment-data.js && node --check assessment-engine.js && node --check assessment-room.js && node --check audio-feedback.js && node scripts/validate-test-data.mjs && node scripts/validate-starter-data.mjs && node scripts/validate-learning-content.mjs && node scripts/validate-assessment-data.mjs && npm run validate:backend && npm run validate:security"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.61.1",
     "ace-builds": "1.44.0"
   },
   "dependencies": {

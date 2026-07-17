@@ -48,7 +48,7 @@
   border: 1px solid color-mix(in srgb, var(--rank-accent, var(--primary)) 42%, var(--border));
   border-radius: 14px;
   background: color-mix(in srgb, var(--rank-accent, var(--primary)) 14%, var(--surface));
-  color: var(--rank-accent, var(--primary));
+  color: color-mix(in srgb, var(--rank-accent, var(--primary)) 70%, var(--text-strong));
   font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 900;

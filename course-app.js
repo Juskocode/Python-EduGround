@@ -159,7 +159,7 @@
     restoreAuthenticatedSession();
   }
 
-  function renderRoute(announceChange) {
+  function renderRoute(announceChange, focusTarget) {
     var parsed = parseRoute();
 
     if (parsed.redirect) {
@@ -216,15 +216,37 @@
       });
     }
 
+    if (focusTarget) {
+      window.requestAnimationFrame(function () {
+        focusRouteTarget(focusTarget);
+      });
+    }
+
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
-    if (announceChange) {
+    if (announceChange && !focusTarget) {
       try {
         elements.main.focus({ preventScroll: true });
       } catch (error) {
         elements.main.focus();
       }
       announce(getRouteAnnouncement(parsed));
+    }
+  }
+
+  function focusRouteTarget(targetName) {
+    var target = elements.main.querySelector(
+      "[data-route-focus='" + cssEscape(targetName) + "']"
+    );
+    if (!target) {
+      target = elements.main;
+    } else if (!target.hasAttribute("tabindex")) {
+      target.tabIndex = -1;
+    }
+    try {
+      target.focus({ preventScroll: true });
+    } catch (error) {
+      target.focus();
     }
   }
 
@@ -796,6 +818,7 @@
     var codeBox = el("div", "tutorial-code");
     var codeHeader = el("div", "tutorial-code__header");
     var pre = el("pre");
+    pre.tabIndex = 0;
     var code = el("code", null, tutorial.exampleCode || "# Try a small example here.");
     var checklist = el("section", "tutorial-checklist");
     var checklistList = el("ul");
@@ -932,6 +955,7 @@
         var codeMeta = el("span", "tutorial-code__meta");
         var copyButton = el("button", "tutorial-copy-button", "Copy starter");
         var pre = el("pre");
+        pre.tabIndex = 0;
         copyButton.type = "button";
         copyButton.dataset.copySnippet = "true";
         copyButton.dataset.copyRestingLabel = "Copy starter";
@@ -1135,6 +1159,7 @@
     var codeMeta = el("span", "tutorial-code__meta");
     var copyButton = el("button", "tutorial-copy-button", "Copy example");
     var pre = el("pre");
+    pre.tabIndex = 0;
     copyButton.type = "button";
     copyButton.dataset.copySnippet = "true";
     codeMeta.append(el("span", null, "Python 3"), copyButton);
@@ -1492,6 +1517,7 @@
   function renderIoField(label, value) {
     var field = el("section", "io-field");
     var pre = el("pre");
+    pre.tabIndex = 0;
     pre.append(el("code", null, value === "" ? "<empty>" : value));
     field.append(el("span", "io-field__label", label), pre);
     return field;
@@ -1522,6 +1548,7 @@
     var fileTab = el("span", "ide-file-tab");
     var modified = el("span", "ide-file-tab__modified");
     modified.dataset.editorModified = exerciseId;
+    modified.setAttribute("role", "img");
     modified.setAttribute("aria-label", "Starter code");
     fileTab.append(el("span", "ide-file-tab__type", "PY"), el("span", null, getExerciseFileName(exercise)), modified);
     var actions = el("div", "ide-actions");
@@ -1731,6 +1758,7 @@
       var target = document.getElementById(scrollButton.dataset.scrollTarget);
       if (target) {
         target.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+        focusClassSection(target, scrollButton.dataset.scrollTarget);
       }
       return;
     }
@@ -1781,6 +1809,29 @@
     if (closeDialogButton) {
       closeBadgeDialog();
     }
+  }
+
+  function focusClassSection(section, targetId) {
+    elements.main.querySelectorAll("nav button[data-scroll-target]").forEach(function (button) {
+      if (button.dataset.scrollTarget === targetId) {
+        button.setAttribute("aria-current", "location");
+      } else {
+        button.removeAttribute("aria-current");
+      }
+    });
+    var heading = section.matches("h1, h2, h3, h4")
+      ? section
+      : section.querySelector("h1, h2, h3, h4");
+    if (!heading) {
+      return;
+    }
+    heading.tabIndex = -1;
+    try {
+      heading.focus({ preventScroll: true });
+    } catch (error) {
+      heading.focus();
+    }
+    announce("Opened " + heading.textContent.trim() + ".");
   }
 
   function handleMainChange(event) {
@@ -2683,6 +2734,7 @@
   function renderResultField(label, value, traceback) {
     var field = el("section", "result-field" + (traceback ? " result-field--traceback" : ""));
     var pre = el("pre");
+    pre.tabIndex = 0;
     pre.append(el("code", null, value === "" ? "<empty>" : value));
     field.append(el("h4", null, label), pre);
     return field;
@@ -4557,7 +4609,7 @@
       },
       preparePython: function () { return pythonRunner.prepare(); },
       runPython: function (code, mode, tests) { return pythonRunner.run(code, mode, tests); },
-      requestRender: function () { renderRoute(false); },
+      requestRender: function (focusTarget) { renderRoute(false, focusTarget); },
       announce: announce,
       audio: audio
     });
