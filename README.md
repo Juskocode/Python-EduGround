@@ -1,6 +1,6 @@
 # Python EduGround
 
-Python EduGround turns the 11 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL. The repository also ships a hardened container topology, secure-cookie account boundary, mandatory PostgreSQL integration gate, and reviewable CI/release pipeline.
+Python EduGround turns the 11 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL. The repository also ships a hardened container topology, secure-cookie account boundary, mandatory PostgreSQL and browser/accessibility gates, and a reviewable CI/release pipeline.
 
 ## Product tour
 
@@ -45,7 +45,7 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 | Runner | Pyodide in a dedicated browser worker; account APIs additionally require a tab-only capability never sent to that worker |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
 | Motivation | Chapter progress, difficulty stars, eight Pythonic ranks, ten badges, achievement toasts, and optional sound cues |
-| Persistence | Local browser storage by default; optional PostgreSQL sync with HttpOnly cookie sessions and a durable per-user submission-file volume |
+| Persistence | Local browser storage by default; optional PostgreSQL sync with HttpOnly cookie sessions, bounded per-exercise run history, and a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
 Every chapter is presented as a complete class:
@@ -216,7 +216,7 @@ The server owns this 92-file mapping. Learner input cannot select a path, and th
 | Class lesson markers | Browser storage | Browser storage and PostgreSQL account state |
 | Timed assessment deadlines, answers, practical drafts, and recent results | Browser storage | Browser storage and PostgreSQL account state |
 | Editor keymap | Browser storage | Browser storage and PostgreSQL account state |
-| Complete run details | Current page memory only | PostgreSQL run-history record; current UI does not yet reload this history |
+| Normalized run results | Current page memory only | PostgreSQL run-history record plus an exercise-page history view |
 | Theme and sound | Browser storage | Browser storage only |
 
 Local storage is scoped to the exact browser origin. For example, `127.0.0.1:8000` and `localhost:8000` have different local drafts. Within one origin, the app keeps an anonymous workspace and a separate local cache per account, but it selects an account cache only after the cookie and the tab-only capability are validated. Signing out or a failed session restore returns to the anonymous workspace instead of exposing the previous learner's drafts. Account data is attached to PostgreSQL and can follow a learner to another deployment after they sign in there with the same account credentials.
@@ -225,6 +225,7 @@ Local storage is scoped to the exact browser origin. For example, `127.0.0.1:800
 
 ```bash
 npm run validate
+npm run validate:browser
 npm run validate:links
 node --check python-runner-worker.mjs
 git diff --check
@@ -256,6 +257,11 @@ canonical mirrors, run normalization, and bounded history.
 `validate:release` combines the deterministic and database gates with a
 high-severity dependency audit.
 
+`validate:browser` starts the local application, runs the required Chromium
+learner journeys, and scans representative routes and the open profile with Axe.
+CI and the release workflow retain screenshots, traces, reports, and accessibility
+evidence only when the browser gate fails.
+
 Validation coverage includes:
 
 - Dashboard → chapter → class and exercise routes.
@@ -264,15 +270,18 @@ Validation coverage includes:
 - Safe starter code with no repository answer loaded into the page.
 - Sublime/Vim switching, Monokai styling, and editor keyboard shortcuts.
 - Local saving plus signed-in PostgreSQL and canonical chapter-file persistence.
+- Signed-in, newest-first exercise run history with reopen and per-field Copy
+  controls.
 - All-green execution across visible and hidden tests.
 - Failure output with expected/actual fields and Python tracebacks.
 - Four assessment blocks with resumable absolute deadlines, exact-set theory scoring, five-task practical grading, automatic expiry submission, and saved attempt history.
 - Dark mode, copy/paste controls, ranks, badges, and local persistence.
 
-The current CI does not yet run a full browser end-to-end or automated accessibility
-suite; those remain explicit roadmap items. CI boots the actual restricted Compose
-topology, verifies persistence across app recreation, smoke-tests the production
-image, and retains sanitized scan evidence.
+CI requires the Chromium learner-journey and automated accessibility baseline. It
+also boots the actual restricted Compose topology, verifies persistence across app
+recreation, smoke-tests the production image, and retains bounded failure and scan
+evidence. CDN-failure, complete timed-room, authenticated multi-device, and sync-
+conflict journeys remain explicit roadmap items.
 
 ## Repository map
 
@@ -330,7 +339,7 @@ The assessment practical prompts are independently paraphrased from four PDFs su
 
 `solution-code.js` supports local generation and validation only. It is not requested by `index.html`, `window.SOLUTION_CODE` is not created in the learner page, and editor resets restore a safe starter rather than an answer. The server uses a public-file allowlist, so the solution bundle, original `Py*/` sources, migrations, backend modules, and deployment secrets are not downloadable from the web application.
 
-Unsigned use sends no learner code or progress to the application API. Creating an account opts into syncing drafts, saved files, progress, editor mode, and detailed test results to PostgreSQL, plus the configured private submission-file mirror. Python code still executes in a browser worker, not on the Node server. The worker is not a safe sandbox for untrusted pasted code; it has a JavaScript bridge and network access to the CSP-allowed runtime origins. Account APIs require a separate tab capability that is never sent to the worker. Persisted run claims are explicitly labelled as learner-device evidence. See the [secure-SDLC trust boundaries](docs/SECURE_SDLC.md#security-objective) before exposing account sync publicly.
+Unsigned use sends no learner code or progress to the application API. Creating an account opts into syncing drafts, saved files, progress, editor mode, and detailed test results to PostgreSQL, plus the configured private submission-file mirror. Python code still executes in a browser worker, not on the Node server. The worker is not a safe sandbox for untrusted pasted code; it has a JavaScript bridge and network access to the CSP-allowed runtime origins. Account APIs require a separate tab capability that is never sent to the worker. Persisted run claims are explicitly labelled as learner-device evidence. The history view can reopen and copy recorded expected output, actual output, streams, and tracebacks, but the history API does not return source code or original test inputs. See the [secure-SDLC trust boundaries](docs/SECURE_SDLC.md#security-objective) before exposing account sync publicly.
 
 ## Refresh generated or vendored artifacts
 
@@ -352,7 +361,7 @@ npm run vendor:ace
 
 The prioritized, issue-ready backlog is in [docs/ROADMAP.md](docs/ROADMAP.md). It
 treats the cookie-plus-tab-capability boundary, PostgreSQL TLS, hardened Compose,
-CI, scanning, SBOM, and attested-release foundations as delivered, then focuses on
-account lifecycle, shared abuse controls, browser/accessibility gates, automated
-recovery evidence, conflict UX, performance, offline use, and secure hosted
-assessment.
+required browser/accessibility checks, scanning, SBOM, and attested-release
+foundations as delivered, then focuses on account lifecycle, shared abuse controls,
+deeper failure-path journeys, automated recovery evidence, conflict UX,
+performance, offline use, and secure hosted assessment.

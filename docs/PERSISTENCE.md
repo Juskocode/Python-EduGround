@@ -69,6 +69,8 @@ After sign-in:
   mirror;
 - a complete **Run tests** saves the submitted source, then a normalized bounded
   run record;
+- the exercise page can reload that learner's newest run records for the current
+  exercise and reopen their recorded output fields;
 - theme and sound remain device-local.
 
 The server does not execute learner Python. Pyodide runs it in a dedicated browser
@@ -139,9 +141,11 @@ Current API bounds are:
 | Text in one result field | 8 KiB, truncated when needed |
 | Retained runs per user | `RUN_HISTORY_LIMIT`, default 500 and constrained to 10–5000 |
 
-The current UI reloads assessment history from `user_state`, but it does not yet
-list persisted `test_runs`. Those rows are a bounded future-history record, not
-server-verified evidence.
+The exercise page lists the signed-in learner's newest persisted runs for the
+current exercise. Each record can be reopened and its expected output, actual
+output, captured standard output/error, and traceback can be copied independently.
+The record does not contain the submitted source or original test inputs. These
+rows remain learner-device evidence, not server-verified grading.
 
 ## PostgreSQL connection policy
 
@@ -258,9 +262,17 @@ automatically. Every authenticated request must also send
 | `GET /api/files/:exerciseId` | Read saved source and re-materialize its canonical file |
 | `PUT /api/files/:exerciseId` | Save source under the server-owned mapping |
 | `POST /api/runs` | Store one normalized, bounded learner-device run record |
+| `GET /api/runs?exerciseId=:exerciseId[&limit=:limit]` | List the signed-in learner's newest run records for one known exercise; `limit` defaults to 10 and accepts 1–25 |
 
-There is no API yet to list runs, verify email, change/reset a password, list/revoke
-other sessions, or delete an account.
+The run-history read requires the same cookie and tab capability as every other
+authenticated API. It rejects unknown exercise IDs and out-of-range limits,
+returns only the current learner's records for the requested exercise in
+newest-first order, and omits source code and original test inputs. Its
+`verification: learner-device` label is a trust-boundary warning, not a server-side
+grading claim.
+
+There is no API yet to verify email, change/reset a password, list/revoke other
+sessions, or delete an account.
 
 ## Upgrade and domain changes
 

@@ -23,8 +23,10 @@ The current repository includes:
   one-shot migrations, a read-only app filesystem, dropped capabilities, and
   schema-aware readiness;
 - deterministic/unit/security validation, mandatory PostgreSQL integration,
-  dependency review/audit, CodeQL, container smoke/scan, SBOM generation, and
-  optional attested GHCR publication;
+  required Chromium journeys and Axe scans, dependency review/audit, CodeQL,
+  container smoke/scan, SBOM generation, and optional attested GHCR publication;
+- newest-first, learner-scoped per-exercise run history with reopen and output-field
+  copy controls, without returning source code or original test inputs;
 - secure-SDLC, deployment, persistence, vulnerability-reporting, and repository
   enforcement runbooks.
 
@@ -65,27 +67,31 @@ Acceptance criteria:
   passwords, learner code, or result payloads.
 - Account deletion is tracked through mirrors, replicas, and backup retention.
 
-## 3. Add browser end-to-end and accessibility release gates
+## 3. Extend browser end-to-end and accessibility release coverage
 
 **Priority:** P0
 **Suggested labels:** `testing`, `ci`, `accessibility`
 
-The current CI deeply validates data, backend behavior, PostgreSQL, container
-startup, supply chain, and static security policy. It does not yet exercise the full
-browser UI.
+CI and release workflows now require a Chromium baseline covering dashboard-to-
+class navigation, editor preferences and local drafts, theory-deadline resume,
+keyboard focus, profile/theme behavior, a mocked authenticated run-history reload
+and Copy journey, console errors, and serious/critical Axe findings across
+representative routes. Failure screenshots, traces, reports, and Axe evidence are
+retained for seven days. The remaining work is deeper failure-path and live-
+PostgreSQL browser coverage.
 
 Acceptance criteria:
 
-- Browser flows cover home → class/exercise, Sublime/Vim switching, keyboard
-  shortcuts, local save, signed-in sync, session restoration, sign-out isolation,
-  and pass/fail output.
-- Assessment flows cover absolute deadlines, reload/resume, automatic expiry,
+- Browser flows add live-PostgreSQL signed-in sync, session restoration, sign-out
+  isolation, and runner pass/fail output.
+- Assessment flows add automatic expiry,
   exact-set theory scoring, practical checks, and cross-account workspace isolation.
 - Worker startup, syntax/runtime failures, timeout recovery, CDN fallback, offline
   status, and database unavailability are tested.
-- Automated accessibility checks have no serious/critical findings.
-- Failure screenshots, traces, console output, and sanitized server logs are
-  retained as bounded CI artifacts.
+- Accessibility coverage expands to active practical rooms, result details, account
+  errors, and remaining interactive states without serious/critical findings.
+- Failure evidence adds bounded sanitized server logs where backend interaction is
+  under test.
 
 ## 4. Automate observability, backups, and recovery evidence
 
@@ -114,13 +120,17 @@ Acceptance criteria:
 **Priority:** P1
 **Suggested labels:** `sync`, `ux`, `data`
 
+The bounded run-history slice is delivered: the exercise page reloads the current
+learner's newest records for one known exercise, labels them as learner-device
+evidence, and can reopen and copy stored result fields. The API requires the
+cookie-plus-tab capability and returns neither submitted source nor original test
+inputs. Conflict comparison and richer sync-state UX remain open.
+
 Acceptance criteria:
 
 - Drafts and account state carry explicit revisions or timestamps.
 - A conflict view compares local and remote drafts before replacement.
 - Learners can keep local, keep remote, download both, or save a new copy.
-- The exercise page lists and reopens the bounded persisted run history and clearly
-  labels it as learner-device evidence.
 - Sync status distinguishes pending, synced, offline, conflict, expired session,
   rate limited, and server error.
 - Multi-tab and two-device behavior has deterministic tests.

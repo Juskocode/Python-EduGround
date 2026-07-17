@@ -89,6 +89,7 @@ Run the deterministic local gate before every commit:
 
 ```bash
 npm run validate
+npm run validate:browser
 node --check python-runner-worker.mjs
 git diff --check
 ```
@@ -96,6 +97,9 @@ git diff --check
 `npm run validate` includes application syntax checks, curriculum and assessment
 schema checks, backend unit tests, solution-leak checks, migration-manifest checks,
 database configuration checks, and the static security-policy validator.
+`npm run validate:browser` runs the Chromium learner journeys and Axe scans used by
+CI. Install the pinned Playwright Chromium runtime once with
+`npx playwright install chromium` when it is not already present.
 
 Database changes and all release candidates must also pass the mandatory PostgreSQL
 integration gate against an isolated database:
@@ -148,12 +152,12 @@ security assertion or required CI check merely to make a failing release pass.
 
 | Workflow | Gate or evidence |
 | --- | --- |
-| `CI` | Lockfile install, deterministic validation, worker syntax, patch hygiene on Node 22 and 24, real PostgreSQL integration, and a full restricted Compose bootstrap/migration/persistence gate |
+| `CI` | Lockfile install, deterministic validation, required Chromium learner journeys and Axe scans, worker syntax, patch hygiene on Node 22 and 24, real PostgreSQL integration, and a full restricted Compose bootstrap/migration/persistence gate |
 | `Supply-chain security` | Pull-request dependency review and scheduled/push `npm audit` |
 | `CodeQL` | JavaScript/TypeScript and GitHub Actions analysis with extended security queries |
 | `Container security` | Production-image build, read-only container smoke test, and Trivy high/critical vulnerability and secret scan |
 | `Documentation links` | Scheduled external Python-documentation link monitor; informative rather than a merge gate |
-| `Release container` | Manual full release validation, build-once image, smoke test, Trivy scan, SPDX JSON SBOM, bounded evidence artifacts, optional GHCR publication, and provenance attestation |
+| `Release container` | Manual full release and browser/accessibility validation, build-once image, smoke test, Trivy scan, SPDX JSON SBOM, bounded evidence artifacts, optional GHCR publication, and provenance attestation |
 
 External actions and Docker base images are pinned to immutable commit SHAs or image
 digests. Dependabot proposes lockfile, action, and container updates; reviewers must
@@ -234,8 +238,8 @@ The current release still requires explicit acceptance of these limitations:
 - Rate limits are local to one Node process and reset on restart.
 - There is no email verification, password reset/change, MFA, account lockout,
   session-management UI, or user-facing account deletion.
-- Browser end-to-end, automated accessibility, CDN-failure, and multi-device
-  conflict suites are not yet complete.
+- The required Chromium and accessibility baseline does not yet cover CDN failure,
+  every timed-room transition, or authenticated multi-device conflict behavior.
 - Learner source and progress are readable by database/storage operators and by
   anyone who can restore a backup.
 - Backup encryption, off-site retention, restore scheduling, monitoring, and
