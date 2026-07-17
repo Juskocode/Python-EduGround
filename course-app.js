@@ -119,6 +119,7 @@
   };
   var revealedHints = new Map();
   var runResults = new Map();
+  var runHistoryByExercise = new Map();
   var draftPersistTimer = null;
   var stateSyncTimer = null;
   var suppressStateSync = false;
@@ -1655,7 +1656,7 @@
       results.append(renderResultsEmpty());
     }
 
-    section.append(heading, layout, runtime, submissionSave, results);
+    section.append(heading, layout, runtime, submissionSave, results, renderRunHistory(exercise));
     return section;
   }
 
@@ -1703,6 +1704,190 @@
     return empty;
   }
 
+  function renderRunHistory(exercise) {
+    var exerciseId = String(exercise.id);
+    var section = el("section", "run-history");
+    var headingId = "run-history-title-" + domId(exerciseId);
+    var heading = el("header", "run-history__header");
+    var headingCopy = el("div");
+    var title = el("h3", null, "Run history");
+    var evidence = el("span", "run-history__evidence", "Learner-device evidence");
+    title.id = headingId;
+    headingCopy.append(
+      title,
+      el("p", null, "Reopen the latest synced results for this exercise without exposing your submitted code.")
+    );
+    heading.append(headingCopy, evidence);
+    section.dataset.runHistory = exerciseId;
+    section.setAttribute("aria-labelledby", headingId);
+    section.append(heading);
+
+    if (!currentUser || !authToken) {
+      section.append(renderRunHistoryNotice(
+        "Sign in to keep run evidence",
+        "Local results remain available during this visit. Signed-in runs can be reopened after a reload or deployment."
+      ));
+      return section;
+    }
+
+    var state = runHistoryByExercise.get(exerciseId);
+    if (!state || state.status === "loading") {
+      var loading = renderRunHistoryNotice(
+        "Loading saved runs…",
+        "Fetching this account's newest results."
+      );
+      loading.setAttribute("role", "status");
+      section.append(loading);
+      return section;
+    }
+
+    if (state.status === "error") {
+      var error = renderRunHistoryNotice(
+        "Run history is temporarily unavailable",
+        state.message || "Your current local result is safe. Try the account request again."
+      );
+      var retry = el("button", "button button--quiet", "Retry history");
+      retry.type = "button";
+      retry.dataset.refreshRunHistory = exerciseId;
+      error.append(retry);
+      section.append(error);
+      return section;
+    }
+
+    if (!state.runs.length) {
+      section.append(renderRunHistoryNotice(
+        "No synced runs yet",
+        "Use Run or Run tests while signed in. The result evidence will appear here."
+      ));
+      return section;
+    }
+
+    var list = el("div", "run-history__list");
+    state.runs.forEach(function (run, index) {
+      list.append(renderRunHistoryItem(run, index));
+    });
+    section.append(list);
+    return section;
+  }
+
+  function renderRunHistoryNotice(title, message) {
+    var notice = el("div", "run-history__notice");
+    notice.append(el("strong", null, title), el("p", null, message));
+    return notice;
+  }
+
+  function renderRunHistoryItem(run, runIndex) {
+    var details = el(
+      "details",
+      "run-history__item " + (run.allPassed ? "run-history__item--pass" : "run-history__item--fail")
+    );
+    var summary = el("summary", "run-history__summary");
+    var outcome = el("span", "run-history__outcome", run.allPassed ? "✓" : "×");
+    var copy = el("span", "run-history__summary-copy");
+    var status = run.allPassed
+      ? "All " + run.totalCount + " tests passed"
+      : run.passedCount + " of " + run.totalCount + " tests passed";
+    var timestamp = el("time", null, formatRunHistoryDate(run.createdAt));
+    timestamp.dateTime = run.createdAt;
+    outcome.setAttribute("aria-hidden", "true");
+    copy.append(el("strong", null, status), timestamp);
+    summary.append(
+      outcome,
+      copy,
+      el("span", "run-history__scope", run.scope === "all" ? "Full suite" : "Visible examples")
+    );
+    details.dataset.runHistoryItem = run.id;
+    details.append(summary);
+
+    var body = el("div", "run-history__body");
+    body.append(el(
+      "p",
+      "run-history__warning",
+      "Saved as learner-device evidence. It is not server-verified grading and does not contain submitted code or original test inputs."
+    ));
+    if (!run.results.length) {
+      body.append(el("p", "run-history__empty", "This older run has summary counts but no saved result fields."));
+    } else {
+      var results = el("div", "run-history__results");
+      run.results.forEach(function (result, resultIndex) {
+        results.append(renderRunHistoryResult(result, run, runIndex, resultIndex));
+      });
+      body.append(results);
+    }
+    details.append(body);
+    return details;
+  }
+
+  function renderRunHistoryResult(result, run, runIndex, resultIndex) {
+    var card = el(
+      "section",
+      "run-history-result " + (result.passed ? "run-history-result--pass" : "run-history-result--fail")
+    );
+    var heading = el("header", "run-history-result__header");
+    heading.append(
+      el("span", "run-history-result__icon", result.passed ? "✓" : "×"),
+      el("strong", null, result.name || "Test " + (resultIndex + 1)),
+      el("span", "test-kind", result.hidden ? "Hidden" : "Visible")
+    );
+    card.append(heading);
+
+    var fields = el("div", "run-history-result__fields");
+    [
+      ["Expected", "expected", false],
+      ["Actual", "actual", false],
+      ["Captured stdout", "stdout", false],
+      ["Captured stderr", "stderr", false],
+      ["Traceback", "traceback", true]
+    ].forEach(function (definition) {
+      var value = result[definition[1]];
+      if (typeof value === "string") {
+        fields.append(renderRunHistoryField(
+          definition[0],
+          value,
+          definition[2],
+          run.id + "-" + runIndex + "-" + resultIndex + "-" + definition[1]
+        ));
+      }
+    });
+    if (!fields.childElementCount) {
+      fields.append(el("p", "run-history__empty", "No detailed fields were stored for this test."));
+    }
+    card.append(fields);
+    return card;
+  }
+
+  function renderRunHistoryField(label, value, traceback, identifier) {
+    var field = el("section", "result-field run-history-field" + (traceback ? " result-field--traceback" : ""));
+    var heading = el("header", "run-history-field__header");
+    var targetId = "run-history-field-" + domId(identifier);
+    var copy = el("button", "button button--quiet run-history-field__copy", "Copy");
+    var pre = el("pre");
+    copy.type = "button";
+    copy.dataset.copyResult = targetId;
+    copy.setAttribute("aria-label", "Copy " + label.toLowerCase() + " from saved run");
+    pre.id = targetId;
+    pre.tabIndex = 0;
+    pre.append(el("code", null, value === "" ? "<empty>" : value));
+    heading.append(el("h4", null, label), copy);
+    field.append(heading, pre);
+    return field;
+  }
+
+  function formatRunHistoryDate(value) {
+    var date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "Saved run";
+    }
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }).format(date);
+    } catch (error) {
+      return date.toISOString();
+    }
+  }
+
   function renderExerciseBottomNavigation(exercises, index, chapter) {
     var nav = el("nav", "exercise-bottom-nav");
     nav.setAttribute("aria-label", "Exercise navigation");
@@ -1744,6 +1929,8 @@
     var saveFileButton = event.target.closest("button[data-save-file]");
     var downloadFileButton = event.target.closest("button[data-download-file]");
     var copySnippetButton = event.target.closest("button[data-copy-snippet]");
+    var copyResultButton = event.target.closest("button[data-copy-result]");
+    var refreshRunHistoryButton = event.target.closest("button[data-refresh-run-history]");
     var learningButton = event.target.closest("button[data-learning-toggle]");
     var practiceRevealButton = event.target.closest("button[data-reveal-practice]");
     var checkpointButton = event.target.closest("button[data-checkpoint-option]");
@@ -1784,6 +1971,14 @@
     }
     if (copySnippetButton) {
       copyTutorialSnippet(copySnippetButton);
+      return;
+    }
+    if (copyResultButton) {
+      copyRunHistoryField(copyResultButton);
+      return;
+    }
+    if (refreshRunHistoryButton) {
+      loadRunHistory(refreshRunHistoryButton.dataset.refreshRunHistory, true);
       return;
     }
     if (learningButton) {
@@ -2103,6 +2298,20 @@
     }
   }
 
+  async function copyRunHistoryField(button) {
+    var target = document.getElementById(button.dataset.copyResult || "");
+    if (!target) {
+      return;
+    }
+    try {
+      await writeClipboardText(target.textContent);
+      showControlFeedback(button, "Copied", "Copy", 1400);
+      announce("Saved result field copied to the clipboard.");
+    } catch (error) {
+      announce("Copy was blocked by the browser. Select the saved result and copy it manually.");
+    }
+  }
+
   function toggleLearningItem(button) {
     var chapter = chapterById.get(String(button.dataset.chapterId));
     var itemId = button.dataset.learningToggle;
@@ -2303,6 +2512,7 @@
       activeEditor = createTextareaAdapter(exerciseId, textarea, state, modified, position);
       state.textContent = "Basic editor fallback";
       loadRemoteExerciseFile(exerciseId);
+      loadRunHistory(exerciseId);
       return;
     }
 
@@ -2413,6 +2623,7 @@
       };
       aceEditor.resize(true);
       loadRemoteExerciseFile(exerciseId);
+      loadRunHistory(exerciseId);
     } catch (error) {
       if (aceEditor && typeof aceEditor.destroy === "function") {
         aceEditor.destroy();
@@ -2423,6 +2634,7 @@
       activeEditor = createTextareaAdapter(exerciseId, textarea, state, modified, position);
       state.textContent = "Basic editor fallback";
       loadRemoteExerciseFile(exerciseId);
+      loadRunHistory(exerciseId);
     }
   }
 
@@ -2588,6 +2800,13 @@
       if (runSessionToken) {
         try {
           await persistRunDetails(exerciseId, scope, results, allPassed, stored.completedAt, runSessionToken);
+          if (
+            workspaceEpoch === runWorkspaceEpoch &&
+            authToken === runSessionToken &&
+            currentUser
+          ) {
+            await loadRunHistory(exerciseId, true);
+          }
         } catch (syncError) {
           if (workspaceEpoch === runWorkspaceEpoch && authToken === runSessionToken && currentUser) {
             setSyncStatus("error", "Run finished locally, but its history could not sync.");
@@ -3542,6 +3761,123 @@
     }
   }
 
+  async function loadRunHistory(exerciseId, force) {
+    if (!authToken || !currentUser || !exerciseById.has(exerciseId)) {
+      runHistoryByExercise.delete(exerciseId);
+      replaceRunHistory(exerciseId);
+      return;
+    }
+    var existing = runHistoryByExercise.get(exerciseId);
+    if (!force && existing && (existing.status === "loading" || existing.status === "ready")) {
+      return;
+    }
+
+    var loadSessionToken = authToken;
+    var loadClientCapability = clientCapability;
+    var loadWorkspaceEpoch = workspaceEpoch;
+    var loadUserId = String(currentUser.id);
+    runHistoryByExercise.set(exerciseId, { status: "loading", runs: [] });
+    replaceRunHistory(exerciseId);
+
+    try {
+      var response = await apiRequest(
+        "/api/runs?exerciseId=" + encodeURIComponent(exerciseId) + "&limit=10",
+        { token: loadSessionToken, clientCapability: loadClientCapability }
+      );
+      if (!isCurrentRunHistoryRequest(loadSessionToken, loadClientCapability, loadWorkspaceEpoch, loadUserId)) {
+        return;
+      }
+      runHistoryByExercise.set(exerciseId, {
+        status: "ready",
+        runs: normalizeRunHistory(response && response.runs, exerciseId)
+      });
+      replaceRunHistory(exerciseId);
+    } catch (error) {
+      if (!isCurrentRunHistoryRequest(loadSessionToken, loadClientCapability, loadWorkspaceEpoch, loadUserId)) {
+        return;
+      }
+      if (isSessionAuthorizationError(error)) {
+        expireAuthenticatedSession("Your session expired. Account work remains hidden; sign in again to resume it.");
+        renderRoute(false);
+        return;
+      }
+      runHistoryByExercise.set(exerciseId, {
+        status: "error",
+        runs: [],
+        message: getErrorMessage(error)
+      });
+      replaceRunHistory(exerciseId);
+    }
+  }
+
+  function isCurrentRunHistoryRequest(sessionToken, capability, epoch, userId) {
+    return Boolean(
+      authToken === sessionToken &&
+      clientCapability === capability &&
+      workspaceEpoch === epoch &&
+      currentUser &&
+      String(currentUser.id) === userId
+    );
+  }
+
+  function normalizeRunHistory(value, exerciseId) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.slice(0, 10).filter(function (run) {
+      return run && typeof run === "object" && String(run.exerciseId) === exerciseId;
+    }).map(function (run, index) {
+      var totalCount = Number.isInteger(run.totalCount) && run.totalCount >= 0 ? run.totalCount : 0;
+      var passedCount = Number.isInteger(run.passedCount) && run.passedCount >= 0
+        ? Math.min(run.passedCount, totalCount)
+        : 0;
+      return {
+        id: typeof run.id === "string" && run.id ? run.id : "saved-" + index,
+        exerciseId: exerciseId,
+        scope: run.scope === "all" ? "all" : "visible",
+        passedCount: passedCount,
+        totalCount: totalCount,
+        allPassed: Boolean(run.allPassed && totalCount > 0 && passedCount === totalCount),
+        results: normalizeRunHistoryResults(run.results),
+        verification: run.verification === "learner-device" ? run.verification : "learner-device",
+        createdAt: typeof run.createdAt === "string" ? run.createdAt : ""
+      };
+    });
+  }
+
+  function normalizeRunHistoryResults(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.slice(0, 100).filter(function (result) {
+      return result && typeof result === "object";
+    }).map(function (result, index) {
+      var normalized = {
+        id: typeof result.id === "string" ? result.id : "case-" + (index + 1),
+        name: typeof result.name === "string" ? result.name : "Test " + (index + 1),
+        hidden: Boolean(result.hidden),
+        passed: Boolean(result.passed)
+      };
+      ["expected", "actual", "stdout", "stderr", "traceback"].forEach(function (field) {
+        if (typeof result[field] === "string") {
+          normalized[field] = result[field];
+        }
+      });
+      return normalized;
+    });
+  }
+
+  function replaceRunHistory(exerciseId) {
+    if (!isCurrentExercise(exerciseId)) {
+      return;
+    }
+    var exercise = exerciseById.get(exerciseId);
+    var current = elements.main.querySelector("[data-run-history='" + cssEscape(exerciseId) + "']");
+    if (exercise && current) {
+      current.replaceWith(renderRunHistory(exercise));
+    }
+  }
+
   function persistRunDetails(exerciseId, scope, results, allPassed, completedAt, sessionToken) {
     var passedCount = results.filter(function (result) { return result.passed; }).length;
     return apiRequest("/api/runs", {
@@ -4462,6 +4798,7 @@
       }
       revealedHints.clear();
       runResults.clear();
+      runHistoryByExercise.clear();
       selectedBadgeId = null;
       activeRun = null;
       remoteFilesLoaded.clear();
