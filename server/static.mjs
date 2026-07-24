@@ -23,6 +23,7 @@ export const PUBLIC_ROOT_FILES = new Set([
   "rounding-lab.css",
   "rounding-lab.js",
   "rounding-model.js",
+  "solution-shape.js",
   "assessment-data.js",
   "assessment-engine.js",
   "assessment-room.js",

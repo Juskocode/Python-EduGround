@@ -57,6 +57,7 @@ COPY --chown=node:node \
   rounding-lab.css \
   rounding-lab.js \
   rounding-model.js \
+  solution-shape.js \
   starter-code.js \
   theme-bootstrap.js \
   ./

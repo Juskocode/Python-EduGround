@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const dataFiles = [
+  "solution-shape.js",
   "exercise-data.js",
   "solution-code.js",
   "test-data/tests-py01-03.js",
@@ -19,9 +20,12 @@ for (const file of dataFiles) {
 const course = globalThis.window.COURSE_DATA;
 const specs = globalThis.window.EXERCISE_TESTS;
 const solutions = globalThis.window.SOLUTION_CODE;
+const solutionShape = globalThis.SOLUTION_SHAPE;
 const errors = [];
 const exerciseIds = [];
 const testIds = new Set();
+const sourceRuleIds = new Set();
+let sourceRuleCount = 0;
 let visibleTests = 0;
 let hiddenTests = 0;
 
@@ -54,6 +58,38 @@ if (!course || !Array.isArray(course.chapters)) {
       }
       if (!['script', 'function'].includes(spec.mode)) {
         errors.push(`${id}: mode must be script or function.`);
+      }
+      if (spec.sourceRules !== undefined) {
+        if (!solutionShape || typeof solutionShape.validateRules !== "function") {
+          errors.push(`${id}: source-rule validator is unavailable.`);
+        } else {
+          const validation = solutionShape.validateRules(spec.sourceRules);
+          if (Array.isArray(spec.sourceRules) && spec.sourceRules.length === 0) {
+            errors.push(`${id}: sourceRules must not be empty when provided.`);
+          }
+          validation.errors.forEach((error) => errors.push(`${id}: invalid sourceRules: ${error}.`));
+          if (Array.isArray(spec.sourceRules)) {
+            for (const rule of spec.sourceRules) {
+              sourceRuleCount += 1;
+              if (rule && typeof rule.id === "string") {
+                if (sourceRuleIds.has(rule.id)) {
+                  errors.push(`${id}: source rule IDs must be globally unique (${rule.id}).`);
+                }
+                sourceRuleIds.add(rule.id);
+              }
+            }
+          }
+          if (validation.valid && typeof solutions?.[id] === "string") {
+            const repositoryCheck = solutionShape.evaluate(solutions[id], spec.sourceRules);
+            if (!repositoryCheck.passed) {
+              const failedLabels = repositoryCheck.results
+                .filter((result) => !result.passed)
+                .map((result) => result.label)
+                .join(", ");
+              errors.push(`${id}: repository code does not satisfy source rules (${failedLabels}).`);
+            }
+          }
+        }
       }
       if (!Array.isArray(spec.tests)) {
         errors.push(`${id}: tests must be an array.`);
@@ -108,6 +144,7 @@ if (errors.length > 0) {
 } else {
   console.log(
     `Validated ${course.chapters.length} chapters, ${exerciseIds.length} exercises, ` +
-      `${visibleTests + hiddenTests} tests (${visibleTests} visible, ${hiddenTests} hidden).`,
+      `${visibleTests + hiddenTests} tests (${visibleTests} visible, ${hiddenTests} hidden), ` +
+      `and ${sourceRuleCount} source-shape rules.`,
   );
 }

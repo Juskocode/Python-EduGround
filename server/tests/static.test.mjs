@@ -34,6 +34,7 @@ test("required playground assets remain public", async () => {
     "/assessment-room.js",
     "/assessment-ui.css",
     "/starter-code.js",
+    "/solution-shape.js",
     "/test-data/tests-py01-03.js",
     "/test-data/tests-py12.js",
     "/assets/vendor/ace/ace.js",
@@ -61,6 +62,7 @@ test("the toolbox data loads before the application reads it", async () => {
   const roundingLabPosition = index.indexOf('src="rounding-lab.js"');
   const dashboardModelPosition = index.indexOf('src="dashboard-model.js"');
   const dashboardViewPosition = index.indexOf('src="dashboard-view.js"');
+  const solutionShapePosition = index.indexOf('src="solution-shape.js"');
   const applicationPosition = index.indexOf('src="course-app.js"');
 
   assert.ok(learningContentPosition >= 0, "index should load learning-content.js");
@@ -73,6 +75,8 @@ test("the toolbox data loads before the application reads it", async () => {
   assert.ok(roundingLabPosition > roundingModelPosition, "the rounding lab should load after its arithmetic model");
   assert.ok(dashboardModelPosition > roundingLabPosition, "the dashboard model should load after course data");
   assert.ok(dashboardViewPosition > dashboardModelPosition, "the dashboard view should load after its model");
+  assert.ok(solutionShapePosition > dashboardViewPosition, "solution-shape rules should load after exercise data");
+  assert.ok(applicationPosition > solutionShapePosition, "solution-shape rules should load before course-app.js");
   assert.ok(applicationPosition > dashboardViewPosition, "learning dependencies should load before course-app.js");
 });
 

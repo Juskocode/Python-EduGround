@@ -11,6 +11,18 @@
       ],
       visual: "recursion",
       mode: "function",
+      sourceRules: [
+        {
+          id: "sum-digits-self-call",
+          label: "Use recursive decomposition",
+          target: "code",
+          pattern: "^(?!\\s*def\\b)[^\\n]*\\bsum_digits_rec\\s*\\(",
+          flags: "m",
+          minMatches: 1,
+          passFeedback: "The function calls itself to continue with a smaller problem.",
+          failFeedback: "After the base case, call the same function again with a smaller input.",
+        },
+      ],
       tests: [
         { id: "py08-sum-digits-single", name: "Single digit base case", hidden: false, call: "sum_digits_rec(7)", expected: "7" },
         { id: "py08-sum-digits-many", name: "Several digits", hidden: false, call: "sum_digits_rec(12345)", expected: "15" },
