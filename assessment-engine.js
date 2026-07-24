@@ -67,6 +67,10 @@
     return Math.min(100, Math.max(0, finiteNumber(value, DEFAULT_PASS_PERCENT)));
   }
 
+  function normalizedRevision(value) {
+    return Math.max(1, Math.floor(finiteNumber(value, 1)));
+  }
+
   function roundedPercent(numerator, denominator) {
     if (!denominator) {
       return 0;
@@ -391,6 +395,7 @@
     attempt.blockId = blockId;
     attempt.mode = mode;
     attempt.status = "active";
+    attempt.revision = normalizedRevision(block.revision);
     attempt.startedAt = startedAt;
     attempt.deadlineAt = deadlineFrom(startedAt, durationSeconds);
     attempt.updatedAt = timestamp(input.updatedAt) || startedAt;
@@ -407,6 +412,7 @@
     attempt.blockId = blockId;
     attempt.mode = mode;
     attempt.status = status;
+    attempt.revision = normalizedRevision(attempt.revision);
 
     ["startedAt", "deadlineAt", "updatedAt", "submittedAt"].forEach(function (field) {
       if (attempt[field] !== undefined) {
@@ -522,9 +528,15 @@
     );
   }
 
-  function sanitizeModeProgress(rawMode, blockId, mode, shouldLimitHistory) {
+  function sanitizeModeProgress(rawMode, blockId, mode, shouldLimitHistory, configuredRevision) {
     var source = rawMode && typeof rawMode === "object" ? rawMode : {};
     var active = sanitizeAttempt(source.active, blockId, mode, "active");
+    if (active && active.revision !== normalizedRevision(configuredRevision)) {
+      // A draft is meaningful only with the exact questions and starter code
+      // it began against. Keep submitted evidence below, but never resume or
+      // score an older active attempt using a newer assessment definition.
+      active = null;
+    }
     var historyById = new Map();
     (Array.isArray(source.history) ? source.history : []).forEach(function (entry) {
       var compact = compactHistoryAttempt(entry, blockId, mode);
@@ -556,6 +568,7 @@
       ? source.blocks
       : {};
     var configured = createProgress(config);
+    var definitions = blockMap(config);
     var clean = safeClone(source) || {};
     clean.version = Math.max(
       configured.version,
@@ -567,12 +580,14 @@
         ? sourceBlocks[blockId]
         : {};
       var cleanBlock = safeClone(sourceBlock) || {};
+      var definition = definitions.get(blockId) || {};
       MODES.forEach(function (mode) {
         cleanBlock[mode] = sanitizeModeProgress(
           sourceBlock[mode],
           blockId,
           mode,
-          shouldLimitHistory
+          shouldLimitHistory,
+          definition.revision
         );
       });
       clean.blocks[blockId] = cleanBlock;

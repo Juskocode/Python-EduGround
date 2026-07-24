@@ -15,7 +15,7 @@ Open `#assessments` from the top navigation to see every block and the learner's
 
 The supplied source-file order was `2019.pdf` (PE01), `2019 (1).pdf` (PE02), `2019 (2).pdf` (PE03), and `2019 (3).pdf` (PE04). Those PDFs are source material only and are not published by the web app.
 
-Every practical room contains five independent Python tasks and lasts 60 minutes. The fourth block is a two-chapter capstone because the course contains 11 chapters.
+Every practical room contains five independent Python tasks and lasts 60 minutes. The fourth block covers chapters 10–12 and now closes the course with functional tools, lazy algorithms, search, and dynamic-programming problem solving.
 
 ## Rules and scoring
 

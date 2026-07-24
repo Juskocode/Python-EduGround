@@ -169,7 +169,7 @@
         element(
           "p",
           "assessment-hub-hero__lede",
-          "Four checkpoints group the course into three-chapter stages, with a final chapters 10–11 capstone. Results are saved separately from exercise stars."
+          "Four checkpoints group the course into three-chapter stages, ending with functional tools, search, and problem-solving algorithms. Results are saved separately from exercise stars."
         )
       );
       rules.append(
@@ -710,6 +710,16 @@
       );
       header.append(element("span", "assessment-result-summary__icon", attempt.passed ? "✓" : "×"), copy);
       section.append(header);
+      var attemptRevision = Math.max(1, Math.floor(Number(attempt.revision) || 1));
+      var currentRevision = Math.max(1, Math.floor(Number(block.revision) || 1));
+      if (attemptRevision !== currentRevision) {
+        section.append(element(
+          "p",
+          "assessment-result-details-unavailable",
+          "This score is retained from an earlier assessment revision. Its per-question review is hidden because the questions have since changed."
+        ));
+        return section;
+      }
       var results = element("div", "assessment-result-list");
       var definitions = mode === "theory" ? block.theory.questions : block.practical.questions;
       if (!Array.isArray(attempt.results)) {

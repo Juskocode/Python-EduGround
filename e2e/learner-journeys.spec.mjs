@@ -167,3 +167,60 @@ test("a theory assessment deadline survives reload", async ({ page }) => {
     )
     .toBe(savedDeadline);
 });
+
+test("an assessment revision retires stale drafts but preserves the saved score", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("fp-playground.assessments.v1", JSON.stringify({
+      version: 1,
+      blocks: {
+        "py10-py11": {
+          theory: {
+            active: {
+              id: "legacy-v1-active",
+              blockId: "py10-py11",
+              mode: "theory",
+              status: "active",
+              revision: 1,
+              startedAt: Date.now() - 60_000,
+              deadlineAt: Date.now() + 600_000,
+              updatedAt: Date.now(),
+              currentQuestion: 10,
+              answers: { "a4-theory-11": [0] },
+            },
+            history: [{
+              id: "legacy-v1-pass",
+              blockId: "py10-py11",
+              mode: "theory",
+              status: "submitted",
+              revision: 1,
+              startedAt: Date.now() - 180_000,
+              deadlineAt: Date.now() - 60_000,
+              updatedAt: Date.now() - 60_000,
+              submittedAt: Date.now() - 60_000,
+              score: 80,
+              passed: true,
+              results: [{
+                questionId: "a4-theory-11",
+                correct: true,
+                selected: [0],
+              }],
+            }],
+            bestScore: 80,
+            completed: true,
+          },
+          practical: { active: null, history: [] },
+        },
+      },
+    }));
+  });
+
+  await page.goto("/#assessment/py10-py11/theory");
+
+  await expect(page.locator("[data-assessment-timer]")).toHaveCount(0);
+  await expect(page.locator('button[data-assessment-start="theory"]')).toBeVisible();
+  await expect(page.getByText("Best score · 80/100")).toBeVisible();
+  await expect(page.getByText(
+    "This score is retained from an earlier assessment revision. Its per-question review is hidden because the questions have since changed."
+  )).toBeVisible();
+  await expect(page.locator(".assessment-result-list")).toHaveCount(0);
+});
