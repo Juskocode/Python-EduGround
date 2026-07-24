@@ -3474,7 +3474,9 @@
     syncLearningProgressUI(chapter);
     var stats = getChapterLearningProgress(chapter);
     if (stats.done === stats.total) {
-      audio.playAchievement();
+      window.setTimeout(function () {
+        audio.playAchievement();
+      }, 380);
     }
     return true;
   }
@@ -3612,7 +3614,11 @@
     status.textContent = (
       runMode === "check" ? "Checking the task." : "Running your current experiment."
     ) + " The editor will unlock when Python finishes.";
-    audio.playSubmit();
+    if (runMode === "check") {
+      audio.playCheck();
+    } else {
+      audio.playRun();
+    }
     scheduleClassLabDraft(chapterId, labId, code.value, stdin.value, true);
 
     try {
@@ -3654,7 +3660,7 @@
         status.textContent = definition.task
           ? "Run complete. This was an experiment, so it did not change task progress. Inspect the terminal, then use Check task when ready."
           : "Run complete. Inspect the terminal, change the code or sample input, and run another prediction whenever you are ready.";
-        audio.playSuccess();
+        audio.playRunComplete();
         announce(
           definition.task
             ? "Classroom experiment finished. Use Check task when you are ready for completion feedback."
@@ -3668,11 +3674,19 @@
         status.textContent = definition.task
           ? definition.task.success
           : "Check complete. The terminal matches the expected output.";
+        var newlyCompleted = false;
         if (definition.task) {
           var chapter = chapterById.get(chapterId);
-          completeLearningItem(chapter, getClassRoomProgressId(definition.task.id));
+          newlyCompleted = completeLearningItem(
+            chapter,
+            getClassRoomProgressId(definition.task.id)
+          );
         }
-        audio.playSuccess();
+        if (newlyCompleted) {
+          audio.playTaskComplete();
+        } else {
+          audio.playRunComplete();
+        }
         announce(definition.task ? "Code task completed." : "Classroom check passed.");
       } else {
         status.textContent = "The program ran, but its output does not match the target yet. Compare each character and try again.";
@@ -4090,7 +4104,11 @@
         );
       }
     }
-    audio.playSubmit();
+    if (scope === "visible") {
+      audio.playRun();
+    } else {
+      audio.playRunAll();
+    }
     setIdeControlsLocked(true);
     button.textContent = scope === "visible" ? "Running…" : "Running tests…";
     updateIdeResultBadge(exerciseId, null, "running");
@@ -4134,7 +4152,11 @@
         return result.passed;
       });
       if (allPassed) {
-        audio.playSuccess();
+        if (scope === "visible") {
+          audio.playRunComplete();
+        } else {
+          audio.playTestComplete();
+        }
       } else {
         audio.playFailure();
       }
@@ -5518,8 +5540,17 @@
   }
 
   function handleDocumentClick(event) {
+    var semanticAudioAction = event.target.closest([
+      "button[data-run-exercise]",
+      "button[data-class-lab-run]",
+      "button[data-assessment-run]",
+      "button[data-assessment-submit]",
+      "form[data-class-room-form] button[type='submit']"
+    ].join(","));
     if (event.target.closest("a, button, summary")) {
-      audio.playClick();
+      if (!semanticAudioAction) {
+        audio.playClick();
+      }
       if (event.detail === 0) {
         showGeometricPressFeedback(event);
       }
@@ -6573,7 +6604,13 @@
       unlock: function () { return Promise.resolve(false); },
       playClick: function () { return false; },
       playSubmit: function () { return false; },
+      playRun: function () { return false; },
+      playRunAll: function () { return false; },
+      playCheck: function () { return false; },
       playFailure: function () { return false; },
+      playRunComplete: function () { return false; },
+      playTestComplete: function () { return false; },
+      playTaskComplete: function () { return false; },
       playSuccess: function () { return false; },
       playAchievement: function () { return false; }
     };

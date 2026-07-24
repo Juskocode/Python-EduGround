@@ -44,7 +44,7 @@ Python EduGround turns the 12 exercise chapters in this repository into a local-
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
 | Runner | Pyodide in a dedicated browser worker; account APIs additionally require a tab-only capability never sent to that worker |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
-| Motivation | A dedicated welcome page, chapter progress, four stage recaps, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, optional sound cues, and a geometric space-navigation motion system |
+| Motivation | A dedicated welcome page, chapter progress, four stage recaps, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, crisp action-specific coding cues, and a geometric space-navigation motion system |
 | Persistence | Local browser storage by default; optional PostgreSQL sync with HttpOnly cookie sessions, bounded per-exercise run history, and a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
@@ -397,7 +397,7 @@ conflict journeys remain explicit roadmap items.
 | `test-data/` | 206 visible and 110 hidden learning checks |
 | `starter-code.js` | Generated solution-free starters and public function signatures |
 | `solution-code.js` | Build-time repository artifact that is deliberately not loaded by the learner page |
-| `audio-feedback.js` | Synthesized click, result, and achievement cues |
+| `audio-feedback.js` | Synthesized click, run, full-suite, task-completion, failure, and achievement cues |
 | `python-runner-worker.mjs` | Dedicated-worker Python execution, output capture, timeout handling, and traceback capture |
 | `assets/vendor/ace/` | Pinned Ace 1.44.0 runtime, Monokai theme, Sublime/Vim keymaps, and license |
 | `assets/illustrations/problem-solving/` | Original accessible SVG field guide for decomposition, state tables, knapsack choices, and strategy recognition |

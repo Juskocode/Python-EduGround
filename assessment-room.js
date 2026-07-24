@@ -983,7 +983,7 @@
       active.status = "submitting";
       active.updatedAt = Date.now();
       save(progress, true);
-      options.audio.playSubmit();
+      options.audio.playRunAll();
       options.announce("Submitting all five practical tasks. Keep this page open while Python evaluates them.");
       updateSubmittingUi(true);
       var results = [];
@@ -1047,7 +1047,7 @@
         state.active = null;
         save(progress, true);
         if (completed.passed) {
-          options.audio.playSuccess();
+          options.audio.playTestComplete();
         } else {
           options.audio.playFailure();
         }
@@ -1148,7 +1148,7 @@
       var code = state.active.drafts[question.id];
       var container = document.querySelector("[data-assessment-check-results='" + cssEscape(question.id) + "']");
       runInProgress = true;
-      options.audio.playSubmit();
+      options.audio.playRun();
       if (container) {
         container.replaceChildren(element("p", "assessment-run-status", "Running " + tests.length + " visible checks…"));
         container.setAttribute("aria-busy", "true");
@@ -1177,7 +1177,7 @@
           renderCheckResults(container, results, tests);
         }
         if (passedCount === results.length && results.length) {
-          options.audio.playSuccess();
+          options.audio.playRunComplete();
         } else {
           options.audio.playFailure();
         }
