@@ -271,6 +271,9 @@ test("every analogous lecture demo compiles and produces its labelled output", (
       ["-c", demo.code],
       {
         encoding: "utf8",
+        input: Array.isArray(demo.stdin) && demo.stdin.length
+          ? `${demo.stdin.join("\n")}\n`
+          : "",
         timeout: 5_000,
       },
     );

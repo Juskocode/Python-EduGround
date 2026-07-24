@@ -15,6 +15,7 @@
     checklist,
     takeaway,
     commonPitfall,
+    options = {},
   ) => ({
     id: tutorialId(title),
     title,
@@ -23,6 +24,9 @@
     checklist,
     takeaway,
     commonPitfall,
+    sampleInput: Array.isArray(options.sampleInput)
+      ? options.sampleInput.map(String)
+      : [],
   });
 
   const runStep = (phase, action, evidence, why, whenStuck) => ({
@@ -222,6 +226,7 @@
             ],
             "Boundary rule: read raw text, validate or convert it, then let the core of the program use stable types.",
             "int(input()) fails with ValueError for text such as \"four\" or \"4.5\". Converting every digit-looking value is also wrong: postal codes and identifiers may need their leading zeroes preserved.",
+            { sampleInput: ["3", "1.5"] },
           ),
           section(
             "Use names to explain the transformation",
