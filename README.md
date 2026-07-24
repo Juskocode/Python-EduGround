@@ -44,7 +44,7 @@ Python EduGround turns the 12 exercise chapters in this repository into a local-
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
 | Runner | Pyodide in a dedicated browser worker; account APIs additionally require a tab-only capability never sent to that worker |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
-| Motivation | Chapter progress, difficulty stars, eight Pythonic ranks, ten badges, achievement toasts, and optional sound cues |
+| Motivation | A dedicated welcome page, chapter progress, four stage recaps, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, and optional sound cues |
 | Persistence | Local browser storage by default; optional PostgreSQL sync with HttpOnly cookie sessions, bounded per-exercise run history, and a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
@@ -76,11 +76,18 @@ canonical input, compares exact output, and applies small source-shape rules tha
 confirm the taught construct—such as `input()`, `int()`, or `float()`—without
 rendering a solution or the matching rule in the page.
 
-The dashboard presents the curriculum as four animated module paths. Each path
-connects three chapter stops to its timed checkpoint and derives completed,
-current, and upcoming states from saved learning progress. On narrow screens the
-same path becomes a vertical timeline; reduced-motion preferences disable the
-entrance, route-fill, and current-stop animations.
+The bare site URL now opens a focused welcome page before the chapter dashboard.
+It explains the understand → experiment → prove learning loop, previews all four
+stages, and uses saved progress to offer a useful continue action. The dashboard
+presents the curriculum as four animated module paths. Each path connects three
+chapter stops to a bookmarkable stage recap and its timed checkpoint, deriving
+preview, learning, ready, and complete states from existing saved progress.
+Recaps combine chapter progress, retrieval prompts, cross-chapter synthesis,
+checkpoint evidence, and official Python references without introducing another
+graded score. The final route shows the Python Pathforger award; it unlocks only
+after every chapter and all four checkpoints are complete. On narrow screens the
+same path becomes a vertical timeline, while reduced-motion preferences disable
+route and badge motion without hiding completion state.
 
 Concepts that benefit from direct manipulation can also include a focused lab. Chapter 2 provides an accessible number-line explorer for comparing `round`, `math.floor`, `math.ceil`, `int`, and `math.trunc` across positive values, negative values, exact integers, and ties-to-even.
 
@@ -192,7 +199,9 @@ The app uses bookmarkable hash routes:
 
 | Route | View |
 | --- | --- |
+| `/` or `#welcome` | Course welcome, learning loop, stage previews, and saved-progress continue action |
 | `#home` | Chapter dashboard and current-learning cue |
+| `#stage/py01-py03/recap` | Three-chapter synthesis, retrieval prompts, checkpoint evidence, and official references |
 | `#chapter/py01` | Chapter hub |
 | `#chapter/py01/exercises` | Exercise catalogue |
 | `#chapter/py01/tutorials` | Full class: setup, schedule, runnable lecture demo, guided room tasks, editable lesson examples, activities, recap, homework, references, and exercise handoff |
@@ -360,6 +369,9 @@ conflict journeys remain explicit roadmap items.
 | `course-app.js` | Router and application orchestration for persistence, profile, editor, runner controls, and shared result rendering |
 | `dashboard-model.js` | Pure resume-target, stage-status, and milestone derivation for the home learning path |
 | `dashboard-view.js` / `dashboard-ui.css` | Focused stage-based home renderer and responsive presentation |
+| `landing-view.js` / `landing-ui.css` | Course welcome page, learning-loop preview, and progress-aware entry action |
+| `stage-recaps.js` | Solution-free synthesis content for the four stable three-chapter stages |
+| `stage-recap-view.js` / `stage-recap-ui.css` | Stage recap pages and the accessible animated final-course award |
 | `class-materials.js` | Twelve deeply frozen 90-minute class syllabi plus the Chapters 1–3 beginner-room explanations, answer tasks, code tasks, canonical inputs, and technique rules |
 | `class-page.js` / `class-page.css` | Reusable documentation renderer with course navigation, contents rail, editable lecture/lesson labs, guided room tasks, terminal feedback, and mobile disclosures |
 | `learning-content.js` | Ranks, badges, tutorials, deep dives, checkpoints, and runbooks |

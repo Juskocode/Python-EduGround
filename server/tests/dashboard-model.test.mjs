@@ -15,6 +15,7 @@ const context = vm.createContext({
   Number,
   Object,
   String,
+  encodeURIComponent,
   window: {},
 });
 vm.runInContext(source, context, { filename: "dashboard-model.js" });
@@ -29,6 +30,9 @@ function makeChapter(id, number, overrides = {}) {
     title: overrides.title || `Chapter ${number}`,
     summary: overrides.summary || "A focused Python chapter.",
     topics: overrides.topics || ["values", "tracing"],
+    recapQuestions: overrides.recapQuestions || [
+      `Explain the central idea from chapter ${number}.`,
+    ],
     exercises,
     guide,
     exerciseItems: overrides.exerciseItems || [
@@ -49,6 +53,27 @@ function makeInput(chapters, overrides = {}) {
         chapters: chapters.map((chapter) => chapter.id),
         passedModes: 0,
         totalModes: 2,
+        modes: [
+          { id: "theory", completed: false, bestScore: 0 },
+          { id: "practical", completed: false, bestScore: 0 },
+        ],
+        references: [
+          {
+            label: "Python tutorial",
+            description: "Official reference.",
+            url: "https://docs.python.org/3/tutorial/",
+          },
+        ],
+        recap: {
+          id: "stage-one-recap",
+          title: "Reconnect stage one",
+          summary: "A compact synthesis.",
+          outcomes: ["Trace a fresh example."],
+          recall: [
+            { prompt: "What changed?", answer: "The program state changed." },
+          ],
+          bridge: "Use the model under time.",
+        },
       },
     ],
     stats: {
@@ -91,6 +116,10 @@ test("a fresh learner starts with the first chapter learning guide", () => {
   assert.equal(model.overview.progress.percent, 0);
   assert.equal(model.overview.focus.id, "py01");
   assert.equal(model.overview.nextChapter.id, "py02");
+  assert.equal(model.stages[0].recap.state.id, "preview");
+  assert.equal(model.stages[0].recap.chapterPrompts.length, 2);
+  assert.equal(model.stages[0].recap.chapterPrompts[0].chapterId, "py01");
+  assert.equal(model.stages[0].recap.references.length, 1);
 });
 
 test("an unfinished last exercise resumes directly in the editor", () => {
@@ -136,6 +165,8 @@ test("mastering every chapter exposes the stage checkpoint", () => {
 
   assert.equal(model.stages[0].status.id, "checkpoint");
   assert.equal(model.stages[0].status.label, "Checkpoint ready");
+  assert.equal(model.stages[0].recap.state.id, "ready");
+  assert.equal(model.stages[0].recap.nextAction.href, "#assessment/stage-one/theory");
   assert.equal(model.resume.kind, "assessment");
   assert.equal(model.resume.href, "#assessment/stage-one");
   assert.equal(model.resume.action, "Open checkpoint");
@@ -155,6 +186,7 @@ test("passing both assessment rooms completes a mastered stage", () => {
 
   assert.equal(model.stages[0].status.id, "complete");
   assert.equal(model.stages[0].progress.percent, 100);
+  assert.equal(model.stages[0].recap.state.id, "complete");
   assert.equal(model.resume.href, "#profile/badges");
 });
 
@@ -203,4 +235,69 @@ test("chapters outside assessment blocks remain discoverable as independent prac
   );
   assert.equal(model.stages[1].assessment, null);
   assert.equal(model.overview.chapters, 2);
+});
+
+test("the final Python Pathforger badge follows whole-course completion", () => {
+  const masteredOne = makeChapter("py01", 1, {
+    exercises: { done: 2, total: 2, stars: 3, maxStars: 3 },
+    guide: { done: 5, total: 5 },
+  });
+  const masteredFinal = makeChapter("py12", 12, {
+    exercises: { done: 2, total: 2, stars: 3, maxStars: 3 },
+    guide: { done: 5, total: 5 },
+  });
+  const award = {
+    id: "python-pathforger",
+    name: "Python Pathforger",
+    monogram: "PY∞",
+    description: "Complete the whole path.",
+  };
+  const blocks = (firstPassed, finalPassed) => [
+    {
+      id: "py01-py03",
+      number: 1,
+      title: "Foundations",
+      chapters: ["py01"],
+      passedModes: firstPassed,
+      totalModes: 2,
+      recap: { title: "Foundations recap" },
+    },
+    {
+      id: "py10-py11",
+      number: 4,
+      title: "Algorithms",
+      chapters: ["py12"],
+      passedModes: finalPassed,
+      totalModes: 2,
+      recap: { title: "Algorithms recap", award },
+    },
+  ];
+
+  const ready = dashboard.build(makeInput([masteredOne, masteredFinal], {
+    assessmentBlocks: blocks(2, 0),
+    stats: { passedExercises: 4, totalExercises: 4, earnedStars: 6, maxStars: 6 },
+  }));
+  assert.equal(ready.completionAward.state.id, "ready");
+  assert.equal(ready.completionAward.href, "#assessment/py10-py11");
+  assert.equal(ready.pathComplete, false);
+
+  const unlocked = dashboard.build(makeInput([masteredOne, masteredFinal], {
+    assessmentBlocks: blocks(2, 2),
+    stats: { passedExercises: 4, totalExercises: 4, earnedStars: 6, maxStars: 6 },
+  }));
+  assert.equal(unlocked.completionAward.state.id, "unlocked");
+  assert.equal(unlocked.completionAward.href, "#profile/badges");
+  assert.equal(unlocked.pathComplete, true);
+  assert.equal(unlocked.stages[1].id, "py10-py11");
+
+  const finalOutOfOrder = dashboard.build(makeInput([
+    makeChapter("py01", 1),
+    masteredFinal,
+  ], {
+    assessmentBlocks: blocks(0, 2),
+    stats: { passedExercises: 2, totalExercises: 4, earnedStars: 3, maxStars: 6 },
+  }));
+  assert.equal(finalOutOfOrder.stages[1].status.id, "complete");
+  assert.equal(finalOutOfOrder.completionAward.state.id, "locked");
+  assert.equal(finalOutOfOrder.pathComplete, false);
 });

@@ -2,7 +2,9 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 const routes = [
+  ["welcome", "/#welcome"],
   ["dashboard", "/#home"],
+  ["stage recap", "/#stage/py01-py03/recap"],
   ["chapter", "/#chapter/py01"],
   ["class materials", "/#chapter/py01/tutorials"],
   ["exercise editor", "/#exercise/py01-first-programs"],

@@ -33,7 +33,9 @@ test("the curriculum is presented as four connected three-chapter routes", async
   const stages = page.locator("[data-roadmap-stage]");
   await expect(stages).toHaveCount(4);
   await expect(page.locator("[data-chapter-node]")).toHaveCount(12);
+  await expect(page.locator("[data-stage-recap]")).toHaveCount(4);
   await expect(page.locator("[data-stage-checkpoint]")).toHaveCount(4);
+  await expect(page.locator("[data-final-stage-badge]")).toHaveCount(1);
 
   for (let index = 0; index < 4; index += 1) {
     const stage = stages.nth(index);
@@ -41,6 +43,7 @@ test("the curriculum is presented as four connected three-chapter routes", async
     await expect(stage.locator(".learning-stage__route-track")).toHaveCount(1);
     await expect(stage.locator(".learning-stage__route-progress")).toHaveCount(1);
     await expect(stage.locator(".learning-stage__progress progress")).toHaveCount(1);
+    await expect(stage.locator("[data-stage-recap]")).toHaveCount(1);
     await expect(stage.locator("[data-stage-checkpoint]")).toHaveCount(1);
   }
 
@@ -57,16 +60,22 @@ test("the curriculum is presented as four connected three-chapter routes", async
     const firstStage = document.querySelector("[data-roadmap-stage]");
     const firstNode = firstStage.querySelector("[data-chapter-node]");
     const secondNode = firstStage.querySelectorAll("[data-chapter-node]")[1];
+    const thirdNode = firstStage.querySelectorAll("[data-chapter-node]")[2];
+    const recap = firstStage.querySelector("[data-stage-recap]");
     const checkpoint = firstStage.querySelector("[data-stage-checkpoint]");
     const route = firstStage.querySelector(".learning-stage__route-track");
     const firstBox = firstNode.getBoundingClientRect();
     const secondBox = secondNode.getBoundingClientRect();
+    const thirdBox = thirdNode.getBoundingClientRect();
+    const recapBox = recap.getBoundingClientRect();
     const checkpointBox = checkpoint.getBoundingClientRect();
     const routeBox = route.getBoundingClientRect();
     const routeProgress = firstStage.querySelector(".learning-stage__route-progress");
     return {
       firstX: firstBox.x,
       secondX: secondBox.x,
+      thirdX: thirdBox.x,
+      recapX: recapBox.x,
       checkpointX: checkpointBox.x,
       routeWidth: routeBox.width,
       routeHeight: routeBox.height,
@@ -77,7 +86,9 @@ test("the curriculum is presented as four connected three-chapter routes", async
   });
 
   expect(geometry.firstX).toBeLessThan(geometry.secondX);
-  expect(geometry.secondX).toBeLessThan(geometry.checkpointX);
+  expect(geometry.secondX).toBeLessThan(geometry.thirdX);
+  expect(geometry.thirdX).toBeLessThan(geometry.recapX);
+  expect(geometry.recapX).toBeLessThan(geometry.checkpointX);
   expect(geometry.routeWidth).toBeGreaterThan(geometry.routeHeight);
   expect(Number.parseFloat(geometry.routeAnimationDuration)).toBeGreaterThan(0);
   expect(geometry.pageScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
@@ -137,9 +148,11 @@ test("the roadmap becomes a usable vertical path on mobile and reduces motion", 
   const firstStage = page.locator("[data-roadmap-stage]").first();
   const firstNode = firstStage.locator("[data-chapter-node]").nth(0);
   const secondNode = firstStage.locator("[data-chapter-node]").nth(1);
+  const recap = firstStage.locator("[data-stage-recap]");
   const checkpoint = firstStage.locator("[data-stage-checkpoint]");
   await expect(firstNode).toBeVisible();
   await expect(secondNode).toBeVisible();
+  await expect(recap).toBeVisible();
   await expect(checkpoint).toBeVisible();
 
   const geometry = await page.evaluate(() => {
@@ -154,6 +167,7 @@ test("the roadmap becomes a usable vertical path on mobile and reduces motion", 
       stage,
       stage.querySelector(".learning-stage__route-progress"),
       stage.querySelector('[data-node-state="current"] .path-chapter__marker'),
+      stage.querySelector("[data-stage-recap]"),
     ].filter(Boolean);
     return {
       firstTop: firstBox.top,
@@ -184,4 +198,6 @@ test("the roadmap becomes a usable vertical path on mobile and reduces motion", 
 
   await checkpoint.focus();
   await expect(checkpoint).toBeFocused();
+  await recap.focus();
+  await expect(recap).toBeFocused();
 });

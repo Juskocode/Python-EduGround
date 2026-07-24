@@ -16,9 +16,14 @@ test("required playground assets remain public", async () => {
   for (const pathname of [
     "/",
     "/course-app.js",
+    "/landing-view.js",
+    "/landing-ui.css",
     "/dashboard-model.js",
     "/dashboard-view.js",
     "/dashboard-ui.css",
+    "/stage-recaps.js",
+    "/stage-recap-view.js",
+    "/stage-recap-ui.css",
     "/learning-clinics.js",
     "/concept-clinic.js",
     "/learning-clinic.css",
@@ -61,6 +66,9 @@ test("the toolbox data loads before the application reads it", async () => {
   const roundingModelPosition = index.indexOf('src="rounding-model.js"');
   const roundingLabPosition = index.indexOf('src="rounding-lab.js"');
   const dashboardModelPosition = index.indexOf('src="dashboard-model.js"');
+  const stageRecapsPosition = index.indexOf('src="stage-recaps.js"');
+  const landingViewPosition = index.indexOf('src="landing-view.js"');
+  const stageRecapViewPosition = index.indexOf('src="stage-recap-view.js"');
   const dashboardViewPosition = index.indexOf('src="dashboard-view.js"');
   const solutionShapePosition = index.indexOf('src="solution-shape.js"');
   const applicationPosition = index.indexOf('src="course-app.js"');
@@ -73,7 +81,10 @@ test("the toolbox data loads before the application reads it", async () => {
   assert.ok(classPagePosition > classMaterialsPosition, "the class-page view should load after its materials");
   assert.ok(roundingModelPosition > classPagePosition, "the rounding model should load after the class-page components");
   assert.ok(roundingLabPosition > roundingModelPosition, "the rounding lab should load after its arithmetic model");
+  assert.ok(stageRecapsPosition > roundingLabPosition, "stage recap content should load after course data");
   assert.ok(dashboardModelPosition > roundingLabPosition, "the dashboard model should load after course data");
+  assert.ok(landingViewPosition > dashboardModelPosition, "the landing view should load after the dashboard model");
+  assert.ok(stageRecapViewPosition > landingViewPosition, "the recap view should load after landing dependencies");
   assert.ok(dashboardViewPosition > dashboardModelPosition, "the dashboard view should load after its model");
   assert.ok(solutionShapePosition > dashboardViewPosition, "solution-shape rules should load after exercise data");
   assert.ok(applicationPosition > solutionShapePosition, "solution-shape rules should load before course-app.js");
