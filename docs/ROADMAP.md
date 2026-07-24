@@ -27,6 +27,11 @@ The current repository includes:
   container smoke/scan, SBOM generation, and optional attested GHCR publication;
 - newest-first, learner-scoped per-exercise run history with reopen and output-field
   copy controls, without returning source code or original test inputs;
+- a compact four-stage learning path with saved completed/current/upcoming states,
+  accessible chapter/checkpoint stops, mobile vertical layout, and reduced motion;
+- a resizable exercise workspace with pointer and keyboard splitters, persistent
+  layout, responsive fallback, and selected source-shape coaching rules that stay
+  subordinate to executable tests;
 - secure-SDLC, deployment, persistence, vulnerability-reporting, and repository
   enforcement runbooks.
 
@@ -79,6 +84,11 @@ and Copy journey, console errors, and serious/critical Axe findings across
 representative routes. Failure screenshots, traces, reports, and Axe evidence are
 retained for seven days. The remaining work is deeper failure-path and live-
 PostgreSQL browser coverage.
+
+The local suite additionally traverses every chapter hub, exercise catalogue, and
+class; checks the four connected learning paths in desktop, mobile, saved-progress,
+and reduced-motion states; and covers pointer/keyboard editor resizing plus
+technique-contract pass/fail behavior.
 
 Acceptance criteria:
 

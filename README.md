@@ -39,8 +39,8 @@ Python EduGround turns the 12 exercise chapters in this repository into a local-
 | Guided learning | 48 lesson-note sections, 60 runbook phases, 60 mental-model steps, 24 guided practices, 12 concept clinics with 72 worked trace rows, 36 misconception probes, and 36 transfer prompts, plus one interactive number-line lab, 42 coaching exchanges, and 47 toolbox cards |
 | Timed assessments | Four chapter blocks, each with 15 theory questions in 20 minutes and five practical tasks in 60 minutes; theory and practical pass independently at 60/100 |
 | Reference material | 77 glossary terms, 73 debugging checks, one checkpoint per chapter, and 67 curated official Python documentation links: 46 in chapter guides and 21 in assessments |
-| Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, and progressive hints |
-| Editor | Vendored Ace with a persistent Sublime or Vim keymap, fixed Monokai theme, Python highlighting, autocomplete, search, folding, line numbers, and copy/paste controls |
+| Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, progressive hints, and selected technique contracts that coach the intended Python construct |
+| Editor | Vendored Ace with persistent Sublime or Vim keys, Monokai styling, Python highlighting, autocomplete, search, folding, line numbers, copy/paste controls, and resizable lesson, editor, and feedback panes |
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
 | Runner | Pyodide in a dedicated browser worker; account APIs additionally require a tab-only capability never sent to that worker |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
@@ -58,6 +58,12 @@ Every chapter is presented as a complete class:
 6. A visual mental model, concept clinic, guided prediction practice, glossary, debugging checklist, and knowledge checkpoint deepen the core notes.
 7. Independent practice, retrieval questions, and transfer-focused homework turn reading into active learning.
 8. A chapter-specific toolbox, five-phase runbook, official Python references, exercise handoff, and previous/next navigation support practice after class.
+
+The dashboard presents the curriculum as four animated module paths. Each path
+connects three chapter stops to its timed checkpoint and derives completed,
+current, and upcoming states from saved learning progress. On narrow screens the
+same path becomes a vertical timeline; reduced-motion preferences disable the
+entrance, route-fill, and current-stop animations.
 
 Concepts that benefit from direct manipulation can also include a focused lab. Chapter 2 provides an accessible number-line explorer for comparing `round`, `math.floor`, `math.ceil`, `int`, and `math.trunc` across positive values, negative values, exact integers, and ties-to-even.
 
@@ -180,6 +186,8 @@ Legacy routes such as `#py01` redirect to the corresponding chapter hub.
 ## Editor controls
 
 - Choose **Sublime** or **Vim** from the **Keys** selector. The selection persists; the visual theme remains Monokai.
+- Drag the vertical divider to resize the lesson and coding workspace. Drag the horizontal divider to resize the editor and feedback dock.
+- Focus either divider and use the arrow keys for precise resizing, **Home** or **End** for its limits, or **Reset layout** to restore the balanced default. Layout sizes persist in this browser.
 - `Shift + Enter` runs the visible examples.
 - `Ctrl/Command + Enter` runs the complete visible and hidden suite and, when signed in, saves that exact submitted snapshot.
 - `Ctrl/Command + S` performs the same explicit save as the **Save** button.
@@ -189,6 +197,13 @@ Legacy routes such as `#py01` redirect to the corresponding chapter hub.
 - **Restart** restores the clean, solution-free starter for the current exercise.
 
 The practical assessment editor uses the same Sublime/Vim selection, Monokai theme, copy/paste controls, and `Shift + Enter` visible-check shortcut. Its five drafts belong to the timed attempt and do not create canonical chapter `exNN.py` files; use **Download .py** for a separate copy.
+
+Selected exercises also show a **Technique contract**. These checks use small
+source-shape rules after the normal output tests—for example, requiring two
+assignments and string concatenation in the first chapter's FIXME exercise. They
+provide educational coaching and never expose their matching patterns or a
+solution. They are intentionally heuristic rather than a substitute for Python
+execution or instructor review.
 
 Typing is auto-saved to browser storage after a short delay. Signed-in progress and drafts are also synchronized in the background. Explicit **Save** and every complete **Run tests** attempt upsert the exact editor snapshot and materialize it under a stable zero-based name:
 
@@ -233,6 +248,14 @@ node --check python-runner-worker.mjs
 git diff --check
 ```
 
+After local browser runs, remove generated reports and disposable operating-system
+or Python cache files without touching dependencies, submissions, backups, or
+database data:
+
+```bash
+npm run clean
+```
+
 `npm run validate` performs the deterministic offline checks for application and
 backend syntax/tests, the security policy, all 12 chapter definitions, all 102
 exercise definitions, all 316 exercise tests, every solution-free starter, every
@@ -266,11 +289,17 @@ evidence only when the browser gate fails.
 
 Validation coverage includes:
 
-- Dashboard → chapter → class and exercise routes.
+- All 12 dashboard → chapter → class and exercise routes, plus representative
+  mobile overflow checks.
+- Four animated module paths, saved completed/current/upcoming states, keyboard
+  access, vertical mobile layout, and reduced-motion behavior.
 - Persistent class-section understanding markers.
 - Worked concept clinics, guided-practice reveal, the Chapter 2 rounding lab, and chapter checkpoint feedback.
 - Safe starter code with no repository answer loaded into the page.
-- Sublime/Vim switching, Monokai styling, and editor keyboard shortcuts.
+- Sublime/Vim switching, Monokai styling, editor keyboard shortcuts, pointer and
+  keyboard pane resizing, layout persistence/reset, and responsive fallback.
+- Output grading plus source-shape technique contracts, including non-disclosure
+  of matching patterns and canonical private-solution compatibility.
 - Local saving plus signed-in PostgreSQL and canonical chapter-file persistence.
 - Signed-in, newest-first exercise run history with reopen and per-field Copy
   controls.

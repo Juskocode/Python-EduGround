@@ -10,6 +10,7 @@
   },
   "scripts": {
     "test": "npm run validate",
+    "clean": "node scripts/clean-workspace.mjs",
     "serve": "node scripts/serve.mjs",
     "migrate": "node scripts/migrate.mjs",
     "secrets:init": "sh scripts/init-secrets.sh",
