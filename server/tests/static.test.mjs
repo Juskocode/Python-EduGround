@@ -16,6 +16,7 @@ test("required playground assets remain public", async () => {
   for (const pathname of [
     "/",
     "/course-app.js",
+    "/geospace-ui.css",
     "/landing-view.js",
     "/landing-ui.css",
     "/dashboard-model.js",
@@ -99,6 +100,7 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
   const roundingLabPosition = index.indexOf('href="rounding-lab.css"');
   const classPagePosition = index.indexOf('href="class-page.css"');
   const assessmentUiPosition = index.indexOf('href="assessment-ui.css"');
+  const geospaceUiPosition = index.indexOf('href="geospace-ui.css"');
 
   assert.ok(courseUiPosition >= 0, "index should load course-ui.css");
   assert.ok(dashboardUiPosition > courseUiPosition, "dashboard UI should load after shared course styles");
@@ -106,6 +108,7 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
   assert.ok(roundingLabPosition > clinicUiPosition, "rounding lab styles should load after the learning clinic");
   assert.ok(classPagePosition > roundingLabPosition, "class-page styles should be able to refine embedded learning components");
   assert.ok(assessmentUiPosition > classPagePosition, "assessment UI should remain the final feature stylesheet");
+  assert.ok(geospaceUiPosition > assessmentUiPosition, "the shared geospace layer should refine every feature stylesheet");
 });
 
 test("assessment data, engine, and room controller load before the application", async () => {

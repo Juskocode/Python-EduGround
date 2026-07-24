@@ -44,7 +44,7 @@ Python EduGround turns the 12 exercise chapters in this repository into a local-
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
 | Runner | Pyodide in a dedicated browser worker; account APIs additionally require a tab-only capability never sent to that worker |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
-| Motivation | A dedicated welcome page, chapter progress, four stage recaps, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, and optional sound cues |
+| Motivation | A dedicated welcome page, chapter progress, four stage recaps, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, optional sound cues, and a geometric space-navigation motion system |
 | Persistence | Local browser storage by default; optional PostgreSQL sync with HttpOnly cookie sessions, bounded per-exercise run history, and a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
@@ -88,6 +88,15 @@ graded score. The final route shows the Python Pathforger award; it unlocks only
 after every chapter and all four checkpoints are complete. On narrow screens the
 same path becomes a vertical timeline, while reduced-motion preferences disable
 route and badge motion without hiding completion state.
+
+The code-native geospace layer makes those surfaces feel like one navigation
+console: orbit geometry and a scanning Python terminal introduce the welcome page,
+waypoint traces guide the learning loop, the current roadmap stage carries a
+luminous route beacon, recap rooms use restrained radar geometry, and the final
+badge earns a one-shot arrival burst. The effects pause while off-screen or while
+the tab is hidden, use only transform and opacity for animation, and disappear or
+become static under reduced-motion, forced-colours, small-screen, and
+high-contrast preferences.
 
 Concepts that benefit from direct manipulation can also include a focused lab. Chapter 2 provides an accessible number-line explorer for comparing `round`, `math.floor`, `math.ceil`, `int`, and `math.trunc` across positive values, negative values, exact integers, and ties-to-even.
 
