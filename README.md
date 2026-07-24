@@ -201,9 +201,11 @@ The practical assessment editor uses the same Sublime/Vim selection, Monokai the
 Selected exercises also show a **Technique contract**. These checks use small
 source-shape rules after the normal output tests—for example, requiring two
 assignments and string concatenation in the first chapter's FIXME exercise. They
-provide educational coaching and never expose their matching patterns or a
-solution. They are intentionally heuristic rather than a substitute for Python
-execution or instructor review.
+provide educational coaching without rendering matching patterns or a repository
+solution in the learning interface. As client-side teaching aids, the rules remain
+inspectable in downloaded application assets; they are intentionally heuristic
+rather than a secure grading boundary or a substitute for Python execution and
+instructor review.
 
 Typing is auto-saved to browser storage after a short delay. Signed-in progress and drafts are also synchronized in the background. Explicit **Save** and every complete **Run tests** attempt upsert the exact editor snapshot and materialize it under a stable zero-based name:
 

@@ -443,13 +443,6 @@
       var assessmentCopy = el("span");
       assessment.dataset.stageCheckpoint = String(stage.id);
       assessment.dataset.checkpointState = checkpointState;
-      assessment.setAttribute(
-        "aria-label",
-        stage.assessment.title + ", " +
-          (checkpointState === "completed"
-            ? "completed"
-            : checkpointState === "current" ? "current checkpoint" : "upcoming checkpoint")
-      );
       if (checkpointState === "current") {
         assessment.setAttribute("aria-current", "step");
       }
