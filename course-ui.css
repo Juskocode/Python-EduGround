@@ -5912,3 +5912,209 @@ pre {
     min-height: 380px;
   }
 }
+
+/* Accessible exercise pane resizing. The stacked tablet/mobile layout remains static. */
+.ide-layout-reset {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.ide-layout-reset:hover {
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text-strong);
+}
+
+.ide-layout-reset:focus-visible,
+.ide-pane-resizer:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 38%, transparent);
+  outline-offset: -3px;
+}
+
+.ide-stack {
+  min-width: 0;
+}
+
+.ide-pane-resizer {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: var(--surface-2);
+  touch-action: none;
+}
+
+.ide-pane-resizer::before {
+  position: absolute;
+  background: transparent;
+  content: "";
+  transition: background 120ms ease;
+}
+
+.ide-pane-resizer__grip {
+  display: block;
+  border-radius: 999px;
+  background: var(--border-strong);
+  opacity: 0.72;
+  transition: background 120ms ease, opacity 120ms ease, transform 120ms ease;
+}
+
+.ide-pane-resizer--lesson {
+  cursor: col-resize;
+}
+
+.ide-pane-resizer--lesson::before {
+  inset: 0 4px;
+}
+
+.ide-pane-resizer--lesson .ide-pane-resizer__grip {
+  width: 3px;
+  height: 44px;
+}
+
+.ide-pane-resizer--editor {
+  cursor: row-resize;
+}
+
+.ide-pane-resizer--editor::before {
+  inset: 3px 0;
+}
+
+.ide-pane-resizer--editor .ide-pane-resizer__grip {
+  width: 44px;
+  height: 3px;
+}
+
+.ide-pane-resizer:hover::before,
+.ide-pane-resizer:focus-visible::before,
+.ide-pane-resizer.is-dragging::before {
+  background: color-mix(in srgb, var(--primary) 17%, transparent);
+}
+
+.ide-pane-resizer:hover .ide-pane-resizer__grip,
+.ide-pane-resizer:focus-visible .ide-pane-resizer__grip,
+.ide-pane-resizer.is-dragging .ide-pane-resizer__grip {
+  background: var(--primary);
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+body.is-resizing-ide {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.is-resizing-ide:has(.ide-pane-resizer--editor.is-dragging) {
+  cursor: row-resize;
+}
+
+@media (min-width: 981px) {
+  .exercise-workbench {
+    grid-template-columns:
+      minmax(300px, var(--ide-lesson-percent, 36%))
+      12px
+      minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .exercise-workbench__code {
+    overflow: hidden;
+  }
+
+  .exercise-workbench.is-editor-focused {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .exercise-workbench.is-editor-focused .exercise-workbench__code {
+    grid-column: 1 / -1;
+  }
+
+  .exercise-workbench.is-editor-focused .ide-pane-resizer--lesson {
+    display: none;
+  }
+
+  .exercise-workbench .ide-section {
+    display: grid;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .exercise-workbench .ide-stack {
+    display: grid;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows:
+      minmax(240px, var(--ide-editor-percent, 55%))
+      10px
+      minmax(170px, 1fr);
+  }
+
+  .exercise-workbench .ide-layout,
+  .exercise-workbench .ide-editor-shell {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .exercise-workbench .ide-editor-shell {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .exercise-workbench .ide-editor-frame,
+  .exercise-workbench .ace-editor-host,
+  .exercise-workbench .code-editor-fallback,
+  .exercise-workbench.is-editor-focused .ide-editor-frame,
+  .exercise-workbench.is-editor-focused .ace-editor-host,
+  .exercise-workbench.is-editor-focused .code-editor-fallback {
+    height: auto;
+    min-height: 0;
+  }
+
+  .exercise-workbench .ide-dock {
+    display: grid;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .exercise-workbench .ide-dock__panel {
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+  }
+}
+
+@media (max-width: 980px) {
+  .ide-pane-resizer,
+  .ide-layout-reset {
+    display: none;
+  }
+
+  .exercise-workbench .ide-stack {
+    display: block;
+    overflow: visible;
+  }
+}
+
+@media (forced-colors: active) {
+  .ide-pane-resizer {
+    border: 1px solid ButtonText;
+  }
+
+  .ide-pane-resizer__grip {
+    background: ButtonText;
+  }
+}

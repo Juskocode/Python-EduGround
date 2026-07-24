@@ -9,6 +9,7 @@
     learning: "fp-playground.learning.v1",
     assessments: "fp-playground.assessments.v1",
     editorMode: "fp-playground.editor-mode.v1",
+    ideLayout: "fp-playground.ide-layout.v1",
     authSession: "fp-playground.auth-session.v2",
     legacyAuthToken: "fp-playground.auth-token.v1",
     authUser: "fp-playground.auth-user.v1",
@@ -16,6 +17,11 @@
     authSignedOut: "fp-playground.auth-signed-out.v1"
   };
   var COOKIE_SESSION_MARKER = "cookie-session";
+  var IDE_LAYOUT_DEFAULTS = { lesson: 36, editor: 55 };
+  var IDE_LAYOUT_LIMITS = {
+    lesson: { min: 25, max: 60 },
+    editor: { min: 40, max: 70 }
+  };
 
   var elements = {
     main: document.getElementById("app-main"),
@@ -127,12 +133,14 @@
   var remoteFilesLoaded = new Set();
   var accountFileSaves = new Map();
   var activeEditor = null;
+  var activeEditorResizeFrame = null;
   var activeRun = null;
   var currentRoute = null;
   var selectedBadgeId = null;
   var signOutInProgress = false;
   var pythonRunner = createPythonRunner();
   var assessmentRooms = createAssessmentRoomsController();
+  var ideLayoutPreferences = readIdeLayoutPreferences();
 
   syncThemeButton();
   syncSoundButton();
@@ -1517,17 +1525,29 @@
     examples.append(exampleGrid);
 
     var lessonPane = el("section", "exercise-workbench__lesson");
+    lessonPane.id = "exercise-lesson-" + domId(exerciseId);
     lessonPane.setAttribute("aria-label", "Exercise lesson and visible examples");
     lessonPane.tabIndex = 0;
     lessonPane.append(problem, examples);
 
     var codePane = el("section", "exercise-workbench__code");
+    codePane.id = "exercise-code-" + domId(exerciseId);
     codePane.setAttribute("aria-label", "Python code workspace and results");
     codePane.tabIndex = 0;
     codePane.append(renderIdeWorkspace(exercise, testSpec, visibleTests.length, hiddenCount));
 
     var workbench = el("div", "exercise-workbench");
-    workbench.append(lessonPane, codePane);
+    workbench.dataset.ideWorkbench = exerciseId;
+    workbench.style.setProperty("--ide-lesson-percent", ideLayoutPreferences.lesson + "%");
+    workbench.append(
+      lessonPane,
+      createIdePaneResizer(
+        exerciseId,
+        "lesson",
+        lessonPane.id + " " + codePane.id
+      ),
+      codePane
+    );
     shell.append(workbench, renderExerciseBottomNavigation(chapterExercises, exerciseIndex, chapter));
     wrapper.append(shell);
     workspaceWrite(STORAGE_KEYS.lastExercise, exerciseId);
@@ -1698,10 +1718,14 @@
     var headingCopy = el("div");
     var headingActions = el("div", "ide-section__actions");
     var focusButton = el("button", "ide-focus-button", "Focus editor");
+    var layoutResetButton = el("button", "ide-layout-reset", "Reset layout");
     focusButton.type = "button";
     focusButton.dataset.ideFocus = exerciseId;
     focusButton.setAttribute("aria-pressed", "false");
     focusButton.setAttribute("aria-label", "Focus the editor and hide the lesson panel");
+    layoutResetButton.type = "button";
+    layoutResetButton.dataset.ideLayoutReset = exerciseId;
+    layoutResetButton.setAttribute("aria-label", "Reset lesson, editor, and feedback pane sizes");
     headingCopy.append(
       el("p", "eyebrow", "Python workspace"),
       el("h2", null, "Code and feedback"),
@@ -1709,11 +1733,13 @@
     );
     headingActions.append(
       el("span", "section-heading__count", visibleCount + " visible · " + hiddenCount + " hidden"),
+      layoutResetButton,
       focusButton
     );
     heading.append(headingCopy, headingActions);
 
     var layout = el("div", "ide-layout");
+    layout.id = "ide-editor-pane-" + domId(exerciseId);
     var editorShell = el("section", "ide-editor-shell");
     var topbar = el("header", "ide-topbar");
     var windowControls = el("span", "ide-window-controls");
@@ -1856,6 +1882,7 @@
     var storedResult = runResults.get(exerciseId);
     var activeTab = storedResult ? "results" : "tests";
     var dock = el("section", "ide-dock");
+    dock.id = "ide-feedback-pane-" + domId(exerciseId);
     var dockTablist = el("div", "ide-dock__tabs");
     var testCasesPanel = createIdeDockPanel(exerciseId, "tests");
     var resultPanel = createIdeDockPanel(exerciseId, "results");
@@ -1881,7 +1908,18 @@
     historyPanel.append(renderRunHistory(exercise));
     dock.append(dockTablist, testCasesPanel, resultPanel, historyPanel);
 
-    section.append(heading, layout, dock);
+    var stack = el("div", "ide-stack");
+    stack.style.setProperty("--ide-editor-percent", ideLayoutPreferences.editor + "%");
+    stack.append(
+      layout,
+      createIdePaneResizer(
+        exerciseId,
+        "editor",
+        layout.id + " " + dock.id
+      ),
+      dock
+    );
+    section.append(heading, stack);
     return section;
   }
 
@@ -1918,6 +1956,216 @@
       panel.setAttribute("aria-live", "polite");
     }
     return panel;
+  }
+
+  function createIdePaneResizer(exerciseId, dimension, controlledIds) {
+    var isLesson = dimension === "lesson";
+    var limits = IDE_LAYOUT_LIMITS[dimension];
+    var value = ideLayoutPreferences[dimension];
+    var separator = el(
+      "div",
+      "ide-pane-resizer ide-pane-resizer--" + dimension
+    );
+    var grip = el("span", "ide-pane-resizer__grip");
+    separator.dataset.idePaneResizer = dimension;
+    separator.dataset.ideExercise = exerciseId;
+    separator.setAttribute("role", "separator");
+    separator.setAttribute("aria-label", isLesson
+      ? "Resize lesson and code panes"
+      : "Resize editor and feedback panes");
+    separator.setAttribute("aria-orientation", isLesson ? "vertical" : "horizontal");
+    separator.setAttribute("aria-controls", controlledIds);
+    separator.setAttribute("aria-valuemin", String(limits.min));
+    separator.setAttribute("aria-valuemax", String(limits.max));
+    separator.setAttribute("aria-valuenow", String(value));
+    separator.setAttribute("aria-valuetext", getIdeLayoutValueText(dimension, value));
+    separator.setAttribute(
+      "title",
+      (isLesson ? "Drag left or right" : "Drag up or down") +
+        "; use arrow, Home, or End keys; double-click to reset"
+    );
+    separator.tabIndex = 0;
+    grip.setAttribute("aria-hidden", "true");
+    separator.append(grip);
+    installIdePaneResizer(separator, dimension);
+    return separator;
+  }
+
+  function installIdePaneResizer(separator, dimension) {
+    var pointerId = null;
+
+    function finishPointerResize(event) {
+      if (pointerId === null || (event && event.pointerId !== pointerId)) {
+        return;
+      }
+      if (separator.hasPointerCapture && separator.hasPointerCapture(pointerId)) {
+        separator.releasePointerCapture(pointerId);
+      }
+      pointerId = null;
+      separator.classList.remove("is-dragging");
+      document.body.classList.remove("is-resizing-ide");
+      persistIdeLayoutPreferences();
+      requestActiveEditorResize(separator.dataset.ideExercise);
+    }
+
+    separator.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) {
+        return;
+      }
+      pointerId = event.pointerId;
+      separator.setPointerCapture(pointerId);
+      separator.classList.add("is-dragging");
+      document.body.classList.add("is-resizing-ide");
+      event.preventDefault();
+    });
+
+    separator.addEventListener("pointermove", function (event) {
+      if (pointerId === null || event.pointerId !== pointerId) {
+        return;
+      }
+      var container = dimension === "lesson"
+        ? separator.closest(".exercise-workbench")
+        : separator.closest(".ide-stack");
+      if (!container) {
+        return;
+      }
+      var bounds = container.getBoundingClientRect();
+      var value = dimension === "lesson"
+        ? ((event.clientX - bounds.left) / bounds.width) * 100
+        : ((event.clientY - bounds.top) / bounds.height) * 100;
+      setIdeLayoutValue(separator.dataset.ideExercise, dimension, value, false);
+      event.preventDefault();
+    });
+    separator.addEventListener("pointerup", finishPointerResize);
+    separator.addEventListener("pointercancel", finishPointerResize);
+
+    separator.addEventListener("dblclick", function (event) {
+      event.preventDefault();
+      resetIdeLayout(separator.dataset.ideExercise, dimension);
+    });
+
+    separator.addEventListener("keydown", function (event) {
+      var limits = IDE_LAYOUT_LIMITS[dimension];
+      var value = ideLayoutPreferences[dimension];
+      var delta = event.shiftKey ? 10 : 2;
+      var nextValue = null;
+      if (event.key === "Home") {
+        nextValue = limits.min;
+      } else if (event.key === "End") {
+        nextValue = limits.max;
+      } else if (
+        (dimension === "lesson" && event.key === "ArrowLeft") ||
+        (dimension === "editor" && event.key === "ArrowUp")
+      ) {
+        nextValue = value - delta;
+      } else if (
+        (dimension === "lesson" && event.key === "ArrowRight") ||
+        (dimension === "editor" && event.key === "ArrowDown")
+      ) {
+        nextValue = value + delta;
+      }
+      if (nextValue === null) {
+        return;
+      }
+      event.preventDefault();
+      setIdeLayoutValue(separator.dataset.ideExercise, dimension, nextValue, true);
+    });
+  }
+
+  function setIdeLayoutValue(exerciseId, dimension, nextValue, persist) {
+    var limits = IDE_LAYOUT_LIMITS[dimension];
+    var value = Math.round(clampNumber(nextValue, limits.min, limits.max));
+    ideLayoutPreferences[dimension] = value;
+    var workspace = elements.main.querySelector(
+      "[data-ide-workspace='" + cssEscape(exerciseId) + "']"
+    );
+    var container = dimension === "lesson"
+      ? workspace && workspace.closest(".exercise-workbench")
+      : workspace && workspace.querySelector(".ide-stack");
+    var separator = workspace && workspace.closest(".exercise-workbench").querySelector(
+      "[data-ide-pane-resizer='" + dimension + "']"
+    );
+    if (container) {
+      container.style.setProperty(
+        dimension === "lesson" ? "--ide-lesson-percent" : "--ide-editor-percent",
+        value + "%"
+      );
+    }
+    if (separator) {
+      separator.setAttribute("aria-valuenow", String(value));
+      separator.setAttribute("aria-valuetext", getIdeLayoutValueText(dimension, value));
+    }
+    if (persist) {
+      persistIdeLayoutPreferences();
+    }
+    requestActiveEditorResize(exerciseId);
+    return value;
+  }
+
+  function resetIdeLayout(exerciseId, dimension) {
+    var dimensions = dimension ? [dimension] : ["lesson", "editor"];
+    dimensions.forEach(function (name) {
+      setIdeLayoutValue(exerciseId, name, IDE_LAYOUT_DEFAULTS[name], false);
+    });
+    persistIdeLayoutPreferences();
+    announce(
+      dimension
+        ? (dimension === "lesson" ? "Lesson and code pane sizes reset." : "Editor and feedback pane sizes reset.")
+        : "Exercise workspace pane sizes reset."
+    );
+  }
+
+  function requestActiveEditorResize(exerciseId) {
+    if (activeEditorResizeFrame !== null) {
+      window.cancelAnimationFrame(activeEditorResizeFrame);
+    }
+    activeEditorResizeFrame = window.requestAnimationFrame(function () {
+      activeEditorResizeFrame = null;
+      if (
+        activeEditor &&
+        activeEditor.exerciseId === exerciseId &&
+        typeof activeEditor.resize === "function"
+      ) {
+        activeEditor.resize();
+      }
+      window.dispatchEvent(new Event("resize"));
+    });
+  }
+
+  function getIdeLayoutValueText(dimension, value) {
+    return (dimension === "lesson" ? "Lesson pane " : "Editor pane ") + value + " percent";
+  }
+
+  function readIdeLayoutPreferences() {
+    var stored = null;
+    try {
+      stored = JSON.parse(safeRead(STORAGE_KEYS.ideLayout) || "null");
+    } catch (error) {
+      stored = null;
+    }
+    return {
+      lesson: normalizeIdeLayoutValue(stored && stored.lesson, "lesson"),
+      editor: normalizeIdeLayoutValue(stored && stored.editor, "editor")
+    };
+  }
+
+  function normalizeIdeLayoutValue(value, dimension) {
+    if (value === null || value === undefined || value === "") {
+      return IDE_LAYOUT_DEFAULTS[dimension];
+    }
+    var numeric = Number(value);
+    var limits = IDE_LAYOUT_LIMITS[dimension];
+    return Number.isFinite(numeric)
+      ? Math.round(clampNumber(numeric, limits.min, limits.max))
+      : IDE_LAYOUT_DEFAULTS[dimension];
+  }
+
+  function persistIdeLayoutPreferences() {
+    safeWrite(STORAGE_KEYS.ideLayout, JSON.stringify(ideLayoutPreferences));
+  }
+
+  function clampNumber(value, minimum, maximum) {
+    return Math.min(maximum, Math.max(minimum, Number(value)));
   }
 
   function getIdeResultBadge(stored) {
@@ -2362,7 +2610,12 @@
     var ideTabButton = event.target.closest("button[data-ide-tab]");
     var testCaseButton = event.target.closest("button[data-test-case]");
     var ideFocusButton = event.target.closest("button[data-ide-focus]");
+    var ideLayoutResetButton = event.target.closest("button[data-ide-layout-reset]");
 
+    if (ideLayoutResetButton) {
+      resetIdeLayout(ideLayoutResetButton.dataset.ideLayoutReset);
+      return;
+    }
     if (ideTabButton) {
       activateIdeTab(ideTabButton.dataset.ideExercise, ideTabButton.dataset.ideTab, false);
       return;
@@ -3048,6 +3301,7 @@
           syncPosition();
         },
         focus: function () { aceEditor.focus(); },
+        resize: function () { aceEditor.resize(true); },
         setKeyboardMode: function (mode) {
           aceEditor.setKeyboardHandler(getAceKeyboardHandler(mode));
         },
