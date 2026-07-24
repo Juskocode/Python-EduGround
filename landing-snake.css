@@ -1,0 +1,553 @@
+.landing-hero {
+  grid-template-columns: minmax(260px, 0.7fr) minmax(520px, 1.3fr);
+  gap: clamp(24px, 3.4vw, 48px);
+  padding: clamp(26px, 3.5vw, 48px);
+}
+
+.landing-hero h1 {
+  max-width: 12ch;
+  margin-bottom: 14px;
+  font-size: clamp(2.1rem, 4vw, 3.65rem);
+  line-height: 1.01;
+  letter-spacing: -0.052em;
+}
+
+.landing-hero__lede {
+  max-width: 590px;
+}
+
+.landing-hero__geometry {
+  right: 22%;
+  width: min(35vw, 460px);
+  opacity: 0.16;
+}
+
+.landing-snake {
+  --snake-board: #030817;
+  --snake-grid: rgba(88, 220, 255, 0.13);
+  --snake-text: #eef8ff;
+  --snake-muted: #94a8c0;
+  position: relative;
+  z-index: 3;
+  min-width: 0;
+  overflow: hidden;
+  padding: clamp(16px, 2vw, 22px);
+  border: 1px solid color-mix(in srgb, var(--geo-cyan) 43%, #334158);
+  border-radius: 14px 26px 14px 26px;
+  background:
+    radial-gradient(circle at 85% 8%, rgba(165, 152, 255, 0.15), transparent 15rem),
+    linear-gradient(155deg, rgba(13, 31, 51, 0.98), rgba(4, 10, 24, 0.99));
+  color: var(--snake-text);
+  box-shadow:
+    0 28px 72px rgba(1, 5, 15, 0.36),
+    inset 0 0 0 1px rgba(88, 220, 255, 0.05);
+  animation: landing-snake-arrive 580ms 90ms var(--geo-spring) both;
+}
+
+.landing-snake::before {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--geo-cyan), transparent);
+  content: "";
+  opacity: 0.56;
+  transform: translateY(0);
+  animation: landing-snake-scan 5.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.landing-snake__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.landing-snake__heading > div:first-child {
+  min-width: 0;
+}
+
+.landing-snake__heading .eyebrow {
+  margin-bottom: 4px;
+  color: #6be7aa;
+  font-size: 0.62rem;
+}
+
+.landing-snake__heading h2 {
+  margin: 0;
+  color: var(--snake-text);
+  font: 900 clamp(1rem, 1.7vw, 1.32rem) var(--font-mono);
+  letter-spacing: -0.035em;
+}
+
+.landing-snake__heading p:last-child {
+  max-width: 520px;
+  margin: 5px 0 0;
+  color: var(--snake-muted);
+  font-size: 0.69rem;
+  line-height: 1.48;
+}
+
+.landing-snake__hud {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+}
+
+.landing-snake__hud div {
+  display: grid;
+  min-width: 60px;
+  gap: 1px;
+  padding: 6px 8px;
+  border: 1px solid rgba(88, 220, 255, 0.18);
+  border-radius: 7px;
+  background: rgba(9, 23, 40, 0.72);
+}
+
+.landing-snake__hud dt {
+  color: var(--snake-muted);
+  font: 750 0.48rem var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.landing-snake__hud dd {
+  margin: 0;
+  color: #6be7aa;
+  font: 900 0.68rem var(--font-mono);
+}
+
+.landing-snake__playfield {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(88, 220, 255, 0.28);
+  border-radius: 9px 17px 9px 17px;
+  background: var(--snake-board);
+  box-shadow:
+    inset 0 0 42px rgba(40, 112, 177, 0.16),
+    0 0 0 3px rgba(88, 220, 255, 0.035);
+  cursor: crosshair;
+  outline: 0;
+}
+
+.landing-snake__playfield:focus-visible {
+  border-color: #6be7aa;
+  box-shadow:
+    inset 0 0 42px rgba(40, 112, 177, 0.16),
+    0 0 0 4px rgba(107, 231, 170, 0.24);
+}
+
+.landing-snake__board {
+  display: block;
+  width: 100%;
+  aspect-ratio: 12 / 7;
+}
+
+.landing-snake__space {
+  fill: var(--snake-board);
+}
+
+.landing-snake__grid {
+  fill: url("#landing-snake-grid");
+}
+
+#landing-snake-grid path {
+  stroke: var(--snake-grid);
+}
+
+.landing-snake__stars {
+  fill: #bcecff;
+  opacity: 0.72;
+  animation: landing-snake-stars 2.8s ease-in-out infinite alternate;
+}
+
+.landing-snake__asteroid {
+  color: #7b879a;
+}
+
+.landing-snake__asteroid polygon {
+  fill: currentColor;
+  stroke: #b4c2d4;
+  stroke-width: 0.055;
+  transform-box: fill-box;
+  transform-origin: center;
+  vector-effect: non-scaling-stroke;
+  animation: landing-snake-rock 8s linear infinite;
+}
+
+.landing-snake__asteroid:nth-child(2n) polygon {
+  animation-direction: reverse;
+  animation-duration: 10.5s;
+}
+
+.landing-snake__crater {
+  fill: #4a5568;
+  stroke: #9aa9bc;
+  stroke-width: 0.035;
+}
+
+.landing-snake__energy {
+  color: #ffd06f;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: landing-snake-energy 920ms ease-in-out infinite alternate;
+}
+
+.landing-snake__energy polygon {
+  fill: currentColor;
+  stroke: #fff4c8;
+  stroke-width: 0.045;
+  filter: drop-shadow(0 0 0.16px #ffd06f);
+}
+
+.landing-snake__energy-core {
+  fill: #fffbe7;
+}
+
+.landing-snake__segment rect {
+  fill: #2eaf7b;
+  stroke: #8ff3c5;
+  stroke-width: 0.045;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__segment:nth-last-child(2n) rect {
+  fill: #24966d;
+}
+
+.landing-snake__head rect {
+  fill: #6be7aa;
+  stroke: #e8fff6;
+  stroke-width: 0.06;
+  filter: drop-shadow(0 0 0.13px #6be7aa);
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__head-label {
+  fill: #042015;
+  font: 900 0.28px var(--font-mono);
+  letter-spacing: -0.04em;
+  pointer-events: none;
+}
+
+.landing-snake__overlay {
+  position: absolute;
+  right: 50%;
+  bottom: 12px;
+  max-width: calc(100% - 30px);
+  padding: 6px 9px;
+  margin: 0;
+  border: 1px solid rgba(88, 220, 255, 0.24);
+  border-radius: 6px;
+  background: rgba(3, 8, 23, 0.82);
+  color: #dceafa;
+  font: 750 0.57rem var(--font-mono);
+  text-align: center;
+  transform: translateX(50%);
+  backdrop-filter: blur(8px);
+}
+
+.landing-snake__overlay[hidden] {
+  display: none;
+}
+
+.landing-snake__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.landing-snake__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.landing-snake__actions .button {
+  min-height: 38px;
+  padding: 0 12px;
+  border-color: rgba(148, 168, 192, 0.34);
+  font-size: 0.68rem;
+}
+
+.landing-snake__actions .button--primary {
+  border-color: #6be7aa;
+  background: #6be7aa;
+  color: #041d14;
+}
+
+.landing-snake__actions .button--quiet {
+  background: rgba(14, 29, 49, 0.78);
+  color: #d8e7f7;
+}
+
+.landing-snake__dpad {
+  display: none;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(3, 44px);
+  grid-template-rows: repeat(2, 44px);
+  gap: 4px;
+}
+
+.landing-snake__direction {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(88, 220, 255, 0.32);
+  border-radius: 9px;
+  background: rgba(14, 29, 49, 0.9);
+  color: #dff7ff;
+  cursor: pointer;
+  font: 900 1rem var(--font-mono);
+}
+
+.landing-snake__direction:hover,
+.landing-snake__direction:focus-visible {
+  border-color: #6be7aa;
+  background: rgba(107, 231, 170, 0.14);
+  color: #8ff3c5;
+  outline: 0;
+}
+
+.landing-snake__direction:nth-child(1) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.landing-snake__direction:nth-child(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.landing-snake__direction:nth-child(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.landing-snake__direction:nth-child(4) {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.landing-snake__instructions {
+  margin: 9px 0 0;
+  color: var(--snake-muted);
+  font: 0.55rem/1.5 var(--font-mono);
+  text-align: right;
+}
+
+.landing-snake__instructions strong {
+  color: #dceafa;
+}
+
+@keyframes landing-snake-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+}
+
+@keyframes landing-snake-scan {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+
+  42% {
+    opacity: 0.48;
+  }
+
+  74%,
+  100% {
+    opacity: 0;
+    transform: translateY(430px);
+  }
+}
+
+@keyframes landing-snake-stars {
+  to {
+    opacity: 0.38;
+  }
+}
+
+@keyframes landing-snake-rock {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes landing-snake-energy {
+  to {
+    scale: 1.16;
+  }
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .landing-snake__dpad {
+    display: grid;
+  }
+
+  .landing-snake__instructions {
+    text-align: left;
+  }
+}
+
+@media (max-width: 1080px) {
+  .landing-hero {
+    grid-template-columns: minmax(230px, 0.62fr) minmax(480px, 1.38fr);
+    padding: 30px;
+  }
+
+  .landing-hero h1 {
+    font-size: clamp(2rem, 4.4vw, 3.2rem);
+  }
+
+  .landing-snake__heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+  }
+}
+
+@media (max-width: 900px) {
+  .landing-hero {
+    grid-template-columns: 1fr;
+    padding: 28px;
+  }
+
+  .landing-hero h1 {
+    max-width: 16ch;
+  }
+
+  .landing-hero__geometry {
+    right: -10%;
+    width: 440px;
+    opacity: 0.1;
+  }
+
+  .landing-snake__heading {
+    align-items: end;
+    flex-direction: row;
+  }
+}
+
+@media (max-width: 620px) {
+  .landing-hero {
+    padding: 20px 15px;
+  }
+
+  .landing-hero h1 {
+    font-size: clamp(2rem, 10.5vw, 2.85rem);
+  }
+
+  .landing-snake {
+    padding: 14px 10px;
+    border-radius: 12px 20px 12px 20px;
+  }
+
+  .landing-snake__heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .landing-snake__hud {
+    width: 100%;
+  }
+
+  .landing-snake__hud div {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .landing-snake__controls {
+    align-items: flex-end;
+  }
+
+  .landing-snake__actions {
+    align-items: stretch;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .landing-snake__actions .button {
+    justify-content: center;
+  }
+
+  .landing-snake__instructions {
+    font-size: 0.51rem;
+  }
+}
+
+@media (max-width: 410px) {
+  .landing-snake__controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .landing-snake__dpad {
+    align-self: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-snake,
+  .landing-snake::before,
+  .landing-snake__stars,
+  .landing-snake__asteroid polygon,
+  .landing-snake__energy {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .landing-snake {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
+  }
+
+  .landing-snake::before,
+  .landing-snake__stars,
+  .landing-snake__grid {
+    display: none;
+  }
+
+  .landing-snake__space {
+    fill: Canvas;
+  }
+
+  .landing-snake__asteroid polygon,
+  .landing-snake__crater {
+    fill: CanvasText;
+    stroke: Canvas;
+  }
+
+  .landing-snake__segment rect,
+  .landing-snake__head rect {
+    fill: Highlight;
+    stroke: HighlightText;
+    filter: none;
+  }
+
+  .landing-snake__head-label {
+    fill: HighlightText;
+  }
+
+  .landing-snake__energy polygon,
+  .landing-snake__energy-core {
+    fill: LinkText;
+    stroke: Canvas;
+    filter: none;
+  }
+}

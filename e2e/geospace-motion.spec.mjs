@@ -81,7 +81,7 @@ test("pointer feedback is brief with motion and absent with reduced motion", asy
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/#welcome");
 
-  const target = page.locator(".landing-hero .button--quiet");
+  const target = page.getByRole("link", { name: "Explore the roadmap" });
   await target.dispatchEvent("pointerdown", {
     button: 0,
     clientX: 220,
@@ -114,9 +114,10 @@ test("reduced motion disables the new ambient and reward animations", async ({
     [".site-topbar", "::after"],
     [".landing-hero__orbit--outer", null],
     [".landing-hero__node--one", null],
-    [".landing-terminal", null],
-    [".landing-terminal", "::before"],
-    [".landing-terminal__result", "::after"],
+    [".landing-snake", null],
+    [".landing-snake", "::before"],
+    [".landing-snake__asteroid polygon", null],
+    [".landing-snake__energy", null],
     [".landing-stage-card", null],
   ]) {
     expectAnimationDisabled(await animationState(page.locator(selector).first(), pseudo));

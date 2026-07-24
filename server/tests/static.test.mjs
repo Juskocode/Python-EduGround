@@ -3,7 +3,7 @@ import { readFile, realpath } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { resolveRequestedFile } from "../static.mjs";
+import { PUBLIC_ROOT_FILES, resolveRequestedFile } from "../static.mjs";
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const REAL_REPOSITORY_ROOT = await realpath(REPOSITORY_ROOT);
@@ -17,6 +17,9 @@ test("required playground assets remain public", async () => {
     "/",
     "/course-app.js",
     "/geospace-ui.css",
+    "/landing-snake.css",
+    "/landing-snake.js",
+    "/workbench-mode.css",
     "/landing-view.js",
     "/landing-ui.css",
     "/dashboard-model.js",
@@ -68,6 +71,7 @@ test("the toolbox data loads before the application reads it", async () => {
   const roundingLabPosition = index.indexOf('src="rounding-lab.js"');
   const dashboardModelPosition = index.indexOf('src="dashboard-model.js"');
   const stageRecapsPosition = index.indexOf('src="stage-recaps.js"');
+  const landingSnakePosition = index.indexOf('src="landing-snake.js"');
   const landingViewPosition = index.indexOf('src="landing-view.js"');
   const stageRecapViewPosition = index.indexOf('src="stage-recap-view.js"');
   const dashboardViewPosition = index.indexOf('src="dashboard-view.js"');
@@ -84,6 +88,8 @@ test("the toolbox data loads before the application reads it", async () => {
   assert.ok(roundingLabPosition > roundingModelPosition, "the rounding lab should load after its arithmetic model");
   assert.ok(stageRecapsPosition > roundingLabPosition, "stage recap content should load after course data");
   assert.ok(dashboardModelPosition > roundingLabPosition, "the dashboard model should load after course data");
+  assert.ok(landingSnakePosition > dashboardModelPosition, "the landing game should load after course data");
+  assert.ok(landingViewPosition > landingSnakePosition, "the landing view should load after its game model");
   assert.ok(landingViewPosition > dashboardModelPosition, "the landing view should load after the dashboard model");
   assert.ok(stageRecapViewPosition > landingViewPosition, "the recap view should load after landing dependencies");
   assert.ok(dashboardViewPosition > dashboardModelPosition, "the dashboard view should load after its model");
@@ -101,6 +107,8 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
   const classPagePosition = index.indexOf('href="class-page.css"');
   const assessmentUiPosition = index.indexOf('href="assessment-ui.css"');
   const geospaceUiPosition = index.indexOf('href="geospace-ui.css"');
+  const landingSnakePosition = index.indexOf('href="landing-snake.css"');
+  const workbenchModePosition = index.indexOf('href="workbench-mode.css"');
 
   assert.ok(courseUiPosition >= 0, "index should load course-ui.css");
   assert.ok(dashboardUiPosition > courseUiPosition, "dashboard UI should load after shared course styles");
@@ -109,6 +117,19 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
   assert.ok(classPagePosition > roundingLabPosition, "class-page styles should be able to refine embedded learning components");
   assert.ok(assessmentUiPosition > classPagePosition, "assessment UI should remain the final feature stylesheet");
   assert.ok(geospaceUiPosition > assessmentUiPosition, "the shared geospace layer should refine every feature stylesheet");
+  assert.ok(landingSnakePosition > geospaceUiPosition, "the playable landing game should refine the shared geospace layer");
+  assert.ok(workbenchModePosition > landingSnakePosition, "the route-specific workbench shell should remain the final layout refinement");
+});
+
+test("the production image copies every root asset exposed by the static server", async () => {
+  const dockerfile = await readFile(resolve(REPOSITORY_ROOT, "Dockerfile"), "utf8");
+  for (const asset of PUBLIC_ROOT_FILES) {
+    assert.equal(
+      dockerfile.includes(asset),
+      true,
+      `Dockerfile should copy ${asset}`
+    );
+  }
 });
 
 test("assessment data, engine, and room controller load before the application", async () => {

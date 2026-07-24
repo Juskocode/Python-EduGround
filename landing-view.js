@@ -37,7 +37,7 @@
   function renderHero(model) {
     var section = el("section", "landing-hero");
     var copy = el("div", "landing-hero__copy");
-    var title = el("h1", null, "Learn Python by understanding what every line does.");
+    var title = el("h1", null, "Play the logic. Then build it in Python.");
     var actions = el("div", "landing-hero__actions");
     var resume = model.resume || {};
     var primaryLabel = resume.kind === "achievement"
@@ -48,12 +48,12 @@
     section.setAttribute("aria-labelledby", title.id);
     section.append(renderHeroGeometry());
     copy.append(
-      el("p", "eyebrow", "A complete browser-based Python class"),
+      el("p", "eyebrow", "Learn by reading · running · building"),
       title,
       el(
         "p",
         "landing-hero__lede",
-        "Begin with input(), variables, and exact output. Build through functions and collections, then finish with recursion, divide and conquer, knapsack, and dynamic programming."
+        "Fly Python Snake through an orbital grid, then learn the variables, conditions, loops, lists, and functions that make games like it work."
       )
     );
     actions.append(
@@ -61,7 +61,7 @@
       link("#home", "button button--quiet", "Explore the roadmap")
     );
     copy.append(actions, renderHeroMetrics(model));
-    section.append(copy, renderTerminalPreview());
+    section.append(copy, renderSnakeArcade());
     return section;
   }
 
@@ -107,35 +107,168 @@
     return list;
   }
 
-  function renderTerminalPreview() {
-    var visual = el("div", "landing-terminal");
-    var chrome = el("div", "landing-terminal__chrome");
-    var dots = el("span", "landing-terminal__dots");
-    var code = el("div", "landing-terminal__code");
-    var output = el("div", "landing-terminal__output");
-    visual.setAttribute("aria-hidden", "true");
-    visual.dataset.geoMotion = "code-console";
-    dots.append(el("i"), el("i"), el("i"));
-    chrome.append(dots, el("span", null, "first_steps.py"), el("span", null, "Python 3"));
-    [
-      ["1", "raw_count = input()"],
-      ["2", "count = int(raw_count)"],
-      ["3", "next_count = count + 1"],
-      ["4", "print(next_count)"],
-    ].forEach(function (line, index) {
-      var row = el("span", "landing-terminal__line");
-      row.style.setProperty("--line-delay", index * 110 + "ms");
-      row.append(el("b", null, line[0]), el("code", null, line[1]));
-      code.append(row);
+  function svgEl(tagName, className) {
+    var element = document.createElementNS("http://www.w3.org/2000/svg", tagName);
+    if (className) {
+      element.setAttribute("class", className);
+    }
+    return element;
+  }
+
+  function svgAttributes(element, attributes) {
+    Object.keys(attributes).forEach(function (name) {
+      element.setAttribute(name, String(attributes[name]));
     });
-    output.append(
-      el("span", null, "Program input"),
-      el("code", null, "4"),
-      el("span", null, "Terminal"),
-      el("code", "landing-terminal__result", "5")
+    return element;
+  }
+
+  function renderSnakeBoard() {
+    var svg = svgAttributes(svgEl("svg", "landing-snake__board"), {
+      viewBox: "0 0 24 14",
+      preserveAspectRatio: "xMidYMid meet",
+      "aria-hidden": "true",
+      focusable: "false",
+      "data-snake-board": "",
+    });
+    var defs = svgEl("defs");
+    var pattern = svgAttributes(svgEl("pattern"), {
+      id: "landing-snake-grid",
+      width: 1,
+      height: 1,
+      patternUnits: "userSpaceOnUse",
+    });
+    pattern.append(
+      svgAttributes(svgEl("path"), {
+        d: "M 1 0 L 0 0 0 1",
+        fill: "none",
+        "stroke-width": 0.035,
+      })
     );
-    visual.append(chrome, code, output);
-    return visual;
+    defs.append(pattern);
+    var background = svgAttributes(svgEl("rect", "landing-snake__space"), {
+      width: 24,
+      height: 14,
+      rx: 0.55,
+    });
+    var grid = svgAttributes(svgEl("rect", "landing-snake__grid"), {
+      width: 24,
+      height: 14,
+      rx: 0.55,
+      fill: "url(#landing-snake-grid)",
+    });
+    var stars = svgEl("g", "landing-snake__stars");
+    [
+      [1.3, 1.4, 0.05], [2.7, 5.2, 0.035], [4.9, 12.4, 0.055],
+      [6.2, 3.4, 0.04], [7.8, 10.7, 0.04], [9.5, 1.1, 0.055],
+      [11.2, 6.1, 0.035], [12.6, 12.5, 0.045], [14.4, 1.7, 0.035],
+      [16.1, 6.7, 0.05], [18.2, 11.1, 0.04], [19.6, 1.2, 0.05],
+      [22.3, 3.4, 0.04], [23.1, 8.5, 0.055], [1.8, 9.8, 0.035],
+      [5.5, 7.2, 0.03], [8.6, 5.1, 0.04], [11.8, 9.2, 0.035],
+    ].forEach(function (star) {
+      stars.append(svgAttributes(svgEl("circle"), {
+        cx: star[0],
+        cy: star[1],
+        r: star[2],
+      }));
+    });
+    svg.append(
+      defs,
+      background,
+      grid,
+      stars,
+      svgAttributes(svgEl("g"), { "data-snake-asteroid-layer": "" }),
+      svgAttributes(svgEl("g"), { "data-snake-energy-layer": "" }),
+      svgAttributes(svgEl("g"), { "data-snake-segment-layer": "" })
+    );
+    return svg;
+  }
+
+  function snakeControl(label, className, dataName, dataValue) {
+    var button = el("button", className, label);
+    button.type = "button";
+    if (dataName) {
+      button.dataset[dataName] = dataValue;
+    }
+    return button;
+  }
+
+  function renderSnakeArcade() {
+    var arcade = el("section", "landing-snake");
+    var heading = el("header", "landing-snake__heading");
+    var headingCopy = el("div");
+    var title = el("h2", null, "snake.py // orbital loop");
+    var hud = el("dl", "landing-snake__hud");
+    var playfield = el("div", "landing-snake__playfield");
+    var overlay = el("p", "landing-snake__overlay", "Press Start, Enter, or a direction");
+    var controls = el("div", "landing-snake__controls");
+    var actions = el("div", "landing-snake__actions");
+    var dpad = el("div", "landing-snake__dpad");
+    var instructions = el("p", "landing-snake__instructions");
+    var liveStatus = el("p", "visually-hidden");
+
+    arcade.dataset.landingSnake = "";
+    arcade.dataset.geoMotion = "snake-arcade";
+    title.id = "landing-snake-title";
+    arcade.setAttribute("aria-labelledby", title.id);
+    headingCopy.append(
+      el("p", "eyebrow", "Playable Python preview"),
+      title,
+      el("p", null, "Collect data cores. Avoid asteroids and your own trail. Crossing an edge warps you to the opposite side.")
+    );
+    [
+      ["Score", "000", "snakeScore"],
+      ["Best", "000", "snakeBest"],
+      ["Signal", "Ready", "snakePhaseLabel"],
+    ].forEach(function (metric) {
+      var group = el("div");
+      var value = el("dd", null, metric[1]);
+      value.dataset[metric[2]] = "";
+      group.append(el("dt", null, metric[0]), value);
+      hud.append(group);
+    });
+    heading.append(headingCopy, hud);
+
+    playfield.tabIndex = 0;
+    playfield.dataset.snakePlayfield = "";
+    playfield.setAttribute("role", "group");
+    playfield.setAttribute("aria-describedby", "landing-snake-instructions");
+    playfield.append(renderSnakeBoard(), overlay);
+    overlay.dataset.snakeOverlay = "";
+
+    var toggle = snakeControl("Start mission", "button button--primary", "snakeAction", "toggle");
+    toggle.setAttribute("aria-pressed", "false");
+    var restart = snakeControl("Restart", "button button--quiet", "snakeAction", "restart");
+    var describe = snakeControl("Describe field", "button button--quiet", "snakeAction", "describe");
+    actions.append(toggle, restart, describe);
+
+    [
+      ["↑", "up", "Steer up"],
+      ["←", "left", "Steer left"],
+      ["↓", "down", "Steer down"],
+      ["→", "right", "Steer right"],
+    ].forEach(function (control) {
+      var button = snakeControl(control[0], "landing-snake__direction", "snakeDirection", control[1]);
+      button.setAttribute("aria-label", control[2]);
+      dpad.append(button);
+    });
+    dpad.setAttribute("aria-label", "Touch steering controls");
+
+    instructions.id = "landing-snake-instructions";
+    instructions.append(
+      el("strong", null, "Arrow keys / WASD"),
+      document.createTextNode(" steer · "),
+      el("strong", null, "Space"),
+      document.createTextNode(" pauses · "),
+      el("strong", null, "R"),
+      document.createTextNode(" restarts")
+    );
+    liveStatus.dataset.snakeAnnouncement = "";
+    liveStatus.setAttribute("role", "status");
+    liveStatus.setAttribute("aria-live", "polite");
+    liveStatus.setAttribute("aria-atomic", "true");
+    controls.append(actions, dpad);
+    arcade.append(heading, playfield, controls, instructions, liveStatus);
+    return arcade;
   }
 
   function renderLearningLoop() {

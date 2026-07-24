@@ -48,7 +48,12 @@ COPY --chown=node:node \
   dashboard-view.js \
   exercise-data.js \
   favicon.svg \
+  geospace-ui.css \
   index.html \
+  landing-snake.css \
+  landing-snake.js \
+  landing-ui.css \
+  landing-view.js \
   learning-clinic.css \
   learning-clinics.js \
   learning-content.js \
@@ -58,8 +63,12 @@ COPY --chown=node:node \
   rounding-lab.js \
   rounding-model.js \
   solution-shape.js \
+  stage-recaps.js \
+  stage-recap-ui.css \
+  stage-recap-view.js \
   starter-code.js \
   theme-bootstrap.js \
+  workbench-mode.css \
   ./
 COPY --chown=node:node assets ./assets
 COPY --chown=node:node test-data ./test-data

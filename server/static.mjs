@@ -9,6 +9,8 @@ export const PUBLIC_ROOT_FILES = new Set([
   "class-page.js",
   "course-app.js",
   "course-ui.css",
+  "landing-snake.css",
+  "landing-snake.js",
   "landing-ui.css",
   "landing-view.js",
   "dashboard-model.js",
@@ -37,6 +39,7 @@ export const PUBLIC_ROOT_FILES = new Set([
   "python-runner-worker.mjs",
   "starter-code.js",
   "theme-bootstrap.js",
+  "workbench-mode.css",
 ]);
 
 const PUBLIC_DIRECTORIES = new Set(["assets", "test-data"]);

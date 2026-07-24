@@ -55,6 +55,7 @@
     : null;
   var dashboardModel = window.DASHBOARD_MODEL || null;
   var dashboardView = window.DASHBOARD_VIEW || null;
+  var landingSnake = window.LANDING_SNAKE || null;
   var landingView = window.LANDING_VIEW || null;
   var stageRecapView = window.STAGE_RECAP_VIEW || null;
   var stageRecaps = window.STAGE_RECAPS || {};
@@ -145,6 +146,7 @@
   var activeEditor = null;
   var activeEditorResizeFrame = null;
   var activeRun = null;
+  var activeLandingSnake = null;
   var currentRoute = null;
   var selectedBadgeId = null;
   var signOutInProgress = false;
@@ -165,6 +167,10 @@
     flushDrafts();
     flushClassLabDrafts();
     if (assessmentRooms) assessmentRooms.flush();
+    if (activeLandingSnake) {
+      activeLandingSnake.destroy();
+      activeLandingSnake = null;
+    }
   });
   elements.themeToggle.addEventListener("click", toggleTheme);
   elements.soundToggle.addEventListener("click", toggleSound);
@@ -193,8 +199,13 @@
     }
 
     if (assessmentRooms) assessmentRooms.dispose();
+    if (activeLandingSnake) {
+      activeLandingSnake.destroy();
+      activeLandingSnake = null;
+    }
     disposeActiveEditor();
     currentRoute = parsed;
+    document.body.dataset.route = parsed.name;
     syncPrimaryNavigation(parsed);
     closeProfile();
 
@@ -238,6 +249,16 @@
     refreshGeospaceMotion();
     renderProfile();
 
+    if (
+      parsed.name === "landing" &&
+      landingSnake &&
+      typeof landingSnake.mount === "function"
+    ) {
+      activeLandingSnake = landingSnake.mount(
+        elements.main.querySelector("[data-landing-snake]"),
+        { audio: audio }
+      );
+    }
     if (parsed.name === "exercise") {
       window.requestAnimationFrame(function () {
         initializeExerciseEditor(parsed.exercise);
@@ -5545,6 +5566,8 @@
       "button[data-class-lab-run]",
       "button[data-assessment-run]",
       "button[data-assessment-submit]",
+      "button[data-snake-action]",
+      "button[data-snake-direction]",
       "form[data-class-room-form] button[type='submit']"
     ].join(","));
     if (event.target.closest("a, button, summary")) {
