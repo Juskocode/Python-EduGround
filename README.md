@@ -376,9 +376,11 @@ conflict journeys remain explicit roadmap items.
 | `index.html` | Stable application shell and vendored asset loading order |
 | `course-ui.css` | Shared responsive light/dark UI, account panel, runbook, and IDE layout |
 | `course-app.js` | Router and application orchestration for persistence, profile, editor, runner controls, and shared result rendering |
+| `workbench-mode.css` | Exercise-route-only compact application chrome that gives the lesson and IDE more viewport space |
 | `dashboard-model.js` | Pure resume-target, stage-status, and milestone derivation for the home learning path |
 | `dashboard-view.js` / `dashboard-ui.css` | Focused stage-based home renderer and responsive presentation |
 | `landing-view.js` / `landing-ui.css` | Course welcome page, learning-loop preview, and progress-aware entry action |
+| `landing-snake.js` / `landing-snake.css` | Deterministic, keyboard/touch-accessible Python Snake arcade with fair asteroid layouts and local best-score persistence |
 | `stage-recaps.js` | Solution-free synthesis content for the four stable three-chapter stages |
 | `stage-recap-view.js` / `stage-recap-ui.css` | Stage recap pages and the accessible animated final-course award |
 | `class-materials.js` | Twelve deeply frozen 90-minute class syllabi plus the Chapters 1–3 beginner-room explanations, answer tasks, code tasks, canonical inputs, and technique rules |
