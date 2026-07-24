@@ -22,7 +22,7 @@ test("a learner can navigate from the roadmap into class materials", async ({ pa
   await page.goto("/#home");
   await expect(
     page.getByRole("heading", {
-      name: "Learn in stages, prove it at each checkpoint.",
+      name: "Choose a chapter by skill, then prove what you learned.",
     })
   ).toBeVisible();
 

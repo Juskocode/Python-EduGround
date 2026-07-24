@@ -6,6 +6,8 @@ const routes = [
   ["chapter", "/#chapter/py01"],
   ["class materials", "/#chapter/py01/tutorials"],
   ["exercise editor", "/#exercise/py01-first-programs"],
+  ["problem-solving class", "/#chapter/py12/tutorials"],
+  ["dynamic-programming editor", "/#exercise/py12-knapsack"],
   ["assessment hub", "/#assessments"],
   ["theory room", "/#assessment/py01-py03/theory"],
 ];

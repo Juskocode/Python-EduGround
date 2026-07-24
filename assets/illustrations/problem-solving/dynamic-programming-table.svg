@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Dynamic programming state and table flow</title>
+  <desc id="desc">Repeated recursive states feed a memo cache, while neighboring solved cells combine across a table until the final optimal state is reached.</desc>
+  <defs>
+    <linearGradient id="background" x1="77" y1="30" x2="881" y2="537" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EEF4FF"/>
+      <stop offset=".48" stop-color="#F5F0FF"/>
+      <stop offset="1" stop-color="#EDF9F3"/>
+    </linearGradient>
+    <linearGradient id="answer" x1="690" y1="337" x2="783" y2="431" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7CE2AF"/>
+      <stop offset="1" stop-color="#35B97C"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#18245D" flood-opacity=".12"/>
+    </filter>
+    <pattern id="gridPattern" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0H0V28" stroke="#18245D" stroke-opacity=".04"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" markerWidth="12" markerHeight="12" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0L10 5L0 10Z" fill="#18245D"/>
+    </marker>
+  </defs>
+
+  <rect x="14" y="14" width="932" height="532" rx="36" fill="url(#background)"/>
+  <rect x="14" y="14" width="932" height="532" rx="36" fill="url(#gridPattern)"/>
+  <rect x="14" y="14" width="932" height="532" rx="36" stroke="#18245D" stroke-opacity=".12" stroke-width="2"/>
+
+  <g filter="url(#shadow)">
+    <circle cx="145" cy="124" r="35" fill="#9D7DE8" stroke="#18245D" stroke-width="4"/>
+    <circle cx="91" cy="215" r="28" fill="#C2ADF3" stroke="#18245D" stroke-width="4"/>
+    <circle cx="199" cy="215" r="28" fill="#C2ADF3" stroke="#18245D" stroke-width="4"/>
+    <circle cx="54" cy="298" r="22" fill="#E0D5FA" stroke="#18245D" stroke-width="4"/>
+    <circle cx="128" cy="298" r="22" fill="#E0D5FA" stroke="#18245D" stroke-width="4"/>
+    <circle cx="162" cy="298" r="22" fill="#E0D5FA" stroke="#18245D" stroke-width="4"/>
+    <circle cx="236" cy="298" r="22" fill="#E0D5FA" stroke="#18245D" stroke-width="4"/>
+  </g>
+  <g stroke="#18245D" stroke-width="4" stroke-linecap="round">
+    <path d="M126 153L103 187M164 153L187 187"/>
+    <path d="M76 239L63 276M106 239L119 276M184 239L171 276M214 239L227 276"/>
+    <path d="M128 276C130 245 159 244 162 276" stroke="#F06449" stroke-dasharray="7 8"/>
+  </g>
+  <path d="M260 219H309" stroke="#18245D" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="322" y="101" width="166" height="236" rx="25" fill="#FFFFFF" stroke="#18245D" stroke-width="4"/>
+    <path d="M322 157H488M322 213H488M322 269H488" stroke="#18245D" stroke-width="3"/>
+    <circle cx="357" cy="129" r="15" fill="#9D7DE8" stroke="#18245D" stroke-width="3"/>
+    <rect x="388" y="119" width="68" height="20" rx="10" fill="#E0D5FA"/>
+    <circle cx="357" cy="185" r="15" fill="#FF826A" stroke="#18245D" stroke-width="3"/>
+    <rect x="388" y="175" width="45" height="20" rx="10" fill="#FFD4C9"/>
+    <circle cx="357" cy="241" r="15" fill="#FFD164" stroke="#18245D" stroke-width="3"/>
+    <rect x="388" y="231" width="57" height="20" rx="10" fill="#FFF0B8"/>
+    <circle cx="357" cy="297" r="15" fill="#53C990" stroke="#18245D" stroke-width="3"/>
+    <rect x="388" y="287" width="79" height="20" rx="10" fill="#C9F1DD"/>
+  </g>
+  <path d="M405 351V390H493" stroke="#18245D" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="520" y="114" width="349" height="349" rx="27" fill="#FFFFFF" stroke="#18245D" stroke-width="4"/>
+    <g stroke="#18245D" stroke-opacity=".52" stroke-width="2">
+      <path d="M578 114V463M636 114V463M694 114V463M752 114V463M810 114V463"/>
+      <path d="M520 172H869M520 230H869M520 288H869M520 346H869M520 404H869"/>
+    </g>
+    <g fill="#D8CBF8">
+      <rect x="529" y="123" width="40" height="40" rx="10"/>
+      <rect x="587" y="123" width="40" height="40" rx="10"/>
+      <rect x="529" y="181" width="40" height="40" rx="10"/>
+    </g>
+    <g fill="#C8F0DC">
+      <rect x="645" y="239" width="40" height="40" rx="10"/>
+      <rect x="703" y="239" width="40" height="40" rx="10"/>
+      <rect x="645" y="297" width="40" height="40" rx="10"/>
+      <rect x="703" y="297" width="40" height="40" rx="10"/>
+      <rect x="761" y="297" width="40" height="40" rx="10"/>
+    </g>
+    <g fill="#FFF0B8">
+      <rect x="587" y="181" width="40" height="40" rx="10"/>
+      <rect x="645" y="181" width="40" height="40" rx="10"/>
+      <rect x="587" y="239" width="40" height="40" rx="10"/>
+    </g>
+    <rect x="695" y="347" width="56" height="56" rx="12" fill="url(#answer)" stroke="#18245D" stroke-width="3"/>
+    <path d="M666 317L702 353M724 310V338" stroke="#18245D" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)"/>
+    <path d="M713 375L721 383L737 365" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <path d="M827 90C827 67 792 57 754 70" stroke="#8B64DD" stroke-width="5" stroke-linecap="round" stroke-dasharray="8 9" marker-end="url(#arrow)"/>
+</svg>

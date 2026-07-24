@@ -171,6 +171,7 @@
     if (assessmentRooms) assessmentRooms.dispose();
     disposeActiveEditor();
     currentRoute = parsed;
+    syncPrimaryNavigation(parsed);
     closeProfile();
 
     var view;
@@ -249,6 +250,33 @@
     } catch (error) {
       target.focus();
     }
+  }
+
+  function syncPrimaryNavigation(route) {
+    var chapterRoute = route && [
+      "home",
+      "chapter",
+      "exercises",
+      "tutorial",
+      "exercise"
+    ].includes(route.name);
+    var assessmentRoute = route && [
+      "assessments",
+      "assessment-block",
+      "assessment-mode"
+    ].includes(route.name);
+    document.querySelectorAll(".topbar-home[href]").forEach(function (link) {
+      var isCurrent = (
+        (chapterRoute && link.getAttribute("href") === "#home") ||
+        (assessmentRoute && link.getAttribute("href") === "#assessments")
+      );
+      link.classList.toggle("is-current", Boolean(isCurrent));
+      if (isCurrent) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
   }
 
   function parseRoute() {
@@ -873,6 +901,10 @@
       el("p", "tutorial-section__explanation", "Slow down here: trace state line by line, challenge a tempting misconception, transfer the model to a fresh situation, then check what you can explain without running code.")
     );
 
+    var visualGallery = renderChapterVisualGallery(chapter);
+    if (visualGallery) {
+      section.append(visualGallery);
+    }
     if (deepDive.mentalModel && typeof deepDive.mentalModel === "object") {
       section.append(renderMentalModel(deepDive.mentalModel));
     }
@@ -902,6 +934,60 @@
     if (deepDive.checkpoint && typeof deepDive.checkpoint === "object") {
       section.append(renderCheckpoint(chapter, deepDive.checkpoint));
     }
+    return section;
+  }
+
+  function renderChapterVisualGallery(chapter) {
+    if (!chapter || String(chapter.id) !== "py12") {
+      return null;
+    }
+    var visuals = [
+      {
+        src: "assets/illustrations/problem-solving/decomposition-roadmap.svg",
+        title: "Turn a prompt into checkpoints",
+        caption: "Separate the contract, examples, state, transition, and verification before choosing an algorithm.",
+        alt: "A problem-decomposition roadmap that divides one large prompt into smaller connected and verifiable steps."
+      },
+      {
+        src: "assets/illustrations/problem-solving/dynamic-programming-table.svg",
+        title: "Reuse solved states",
+        caption: "Memoization caches repeated calls; tabulation orders the same dependencies in a table.",
+        alt: "Repeated recursive states flowing into a memo cache and then into a dynamic-programming table with a highlighted final answer."
+      },
+      {
+        src: "assets/illustrations/problem-solving/knapsack-choice.svg",
+        title: "Compare take with skip",
+        caption: "A 0/1 item creates two branches. The state keeps only the best feasible value for the remaining capacity.",
+        alt: "A backpack and candidate items branching into take and skip choices before combining into the best feasible value."
+      },
+      {
+        src: "assets/illustrations/problem-solving/problem-pattern-map.svg",
+        title: "Match the shape to a strategy",
+        caption: "Binary search, two pointers, traversal, dynamic programming, and greedy reasoning each depend on a recognizable input promise.",
+        alt: "A strategy map connecting binary search, two pointers, graph traversal, dynamic programming, and greedy interval selection."
+      }
+    ];
+    var section = el("section", "chapter-visuals");
+    var heading = el("header", "deep-dive-heading");
+    var grid = el("div", "chapter-visuals__grid");
+    heading.append(
+      el("span", "eyebrow", "Visual field guide"),
+      el("h3", null, "See the state before writing the loop"),
+      el("p", null, "Use each diagram as a prediction tool. Describe the arrows aloud, then translate only those dependencies into code.")
+    );
+    visuals.forEach(function (visual) {
+      var figure = el("figure", "chapter-visual");
+      var image = el("img");
+      var caption = el("figcaption");
+      image.src = visual.src;
+      image.alt = visual.alt;
+      image.loading = "lazy";
+      image.decoding = "async";
+      caption.append(el("strong", null, visual.title), el("span", null, visual.caption));
+      figure.append(image, caption);
+      grid.append(figure);
+    });
+    section.append(heading, grid);
     return section;
   }
 
@@ -1404,7 +1490,12 @@
 
     var hints = renderHintPanel(exercise);
     problemGrid.append(brief, hints);
-    problem.append(problemHeader, problemGrid);
+    var conceptVisual = renderExerciseConceptVisual(exercise);
+    problem.append(problemHeader);
+    if (conceptVisual) {
+      problem.append(conceptVisual);
+    }
+    problem.append(problemGrid);
 
     var examples = el("section", "examples-section");
     var examplesHeading = el("header", "section-heading section-heading--row");
@@ -1430,6 +1521,69 @@
     wrapper.append(shell);
     workspaceWrite(STORAGE_KEYS.lastExercise, exerciseId);
     return wrapper;
+  }
+
+  function renderExerciseConceptVisual(exercise) {
+    var exerciseId = String(exercise && exercise.id || "");
+    if (!exerciseId.startsWith("py12-")) {
+      return null;
+    }
+    var visualByExercise = {
+      "py12-two-sum": {
+        src: "assets/illustrations/problem-solving/decomposition-roadmap.svg",
+        title: "Decompose before optimizing",
+        caption: "Separate the pair contract, discovery order, and no-match case before choosing a complement lookup.",
+        alt: "A roadmap dividing one large problem into smaller verifiable tasks."
+      },
+      "py12-interval-scheduling": {
+        src: "assets/illustrations/problem-solving/problem-pattern-map.svg",
+        title: "A greedy rule needs a promise",
+        caption: "Earliest finish is safe because an exchange argument preserves room for every compatible task that follows.",
+        alt: "A strategy map connecting input promises to several algorithm families."
+      },
+      "py12-knapsack": {
+        src: "assets/illustrations/problem-solving/knapsack-choice.svg",
+        title: "Every item creates take and skip branches",
+        caption: "The capacity state compares both legal futures while the one-use rule controls the table's update direction.",
+        alt: "A backpack and candidate items branching into take and skip choices."
+      }
+    };
+    var dynamicProgrammingExercises = new Set([
+      "py12-climbing-stairs",
+      "py12-grid-paths",
+      "py12-coin-change",
+      "py12-house-robber",
+      "py12-subset-sum",
+      "py12-lcs",
+      "py12-edit-distance"
+    ]);
+    var visual = visualByExercise[exerciseId];
+    if (!visual && dynamicProgrammingExercises.has(exerciseId)) {
+      visual = {
+        src: "assets/illustrations/problem-solving/dynamic-programming-table.svg",
+        title: "Name each state before filling it",
+        caption: "Base cases anchor the table; dependency arrows determine a safe evaluation order and whether storage can be compressed.",
+        alt: "Repeated recursive states flowing through memoization into an ordered dynamic-programming table."
+      };
+    }
+    if (!visual) {
+      return null;
+    }
+
+    var figure = el("figure", "problem-concept-visual");
+    var image = el("img");
+    var caption = el("figcaption");
+    image.src = visual.src;
+    image.alt = visual.alt;
+    image.loading = "eager";
+    image.decoding = "async";
+    caption.append(
+      el("span", "eyebrow", "Visual reasoning cue"),
+      el("strong", null, visual.title),
+      el("p", null, visual.caption)
+    );
+    figure.append(image, caption);
+    return figure;
   }
 
   function renderSpecBlock(label, value) {
@@ -3647,7 +3801,7 @@
     });
     return {
       schemaVersion: 2,
-      contentVersion: "2026-07-assessments-v1",
+      contentVersion: "2026-07-problem-solving-v2",
       passedIds: Array.from(passed).sort(),
       drafts: serializedDrafts,
       learningProgress: serializedLearning,
@@ -4229,6 +4383,10 @@
   }
 
   function getRanks() {
+    var fallbackMaxExercises = validExerciseIds.size;
+    var fallbackMaxStars = Array.from(exerciseById.values()).reduce(function (sum, exercise) {
+      return sum + getDifficulty(exercise);
+    }, 0);
     var fallback = [
       { level: 1, name: "PEP Explorer", minStars: 0, minExercises: 0, description: "Begin with precise traces and small programs." },
       { level: 2, name: "Indent Apprentice", minStars: 8, minExercises: 3, description: "Build dependable first programs." },
@@ -4237,7 +4395,7 @@
       { level: 5, name: "Collection Alchemist", minStars: 91, minExercises: 36, description: "Transform Python collections cleanly." },
       { level: 6, name: "Recursion Ranger", minStars: 132, minExercises: 52, description: "Navigate self-similar problems." },
       { level: 7, name: "Algorithm Architect", minStars: 181, minExercises: 72, description: "Design with invariants and complexity in mind." },
-      { level: 8, name: "Pythonic Grandmaster", minStars: 239, minExercises: 92, description: "Every challenge is green." }
+      { level: 8, name: "Pythonic Grandmaster", minStars: fallbackMaxStars, minExercises: fallbackMaxExercises, description: "Every challenge is green." }
     ];
     var source = Array.isArray(learning.ranks) && learning.ranks.length === 8 ? learning.ranks : fallback;
     return source.slice().sort(function (a, b) { return Number(a.level) - Number(b.level); }).map(function (rank, index) {
@@ -4450,12 +4608,15 @@
   }
 
   function renderChapterArt(chapter, className) {
-    var number = Math.max(1, Math.min(11, Number(chapter.number) || 1));
+    var number = Math.max(1, Math.min(12, Number(chapter.number) || 1));
     var index = number - 1;
     var column = index % 4;
     var row = Math.floor(index / 4);
     var art = el("div", className);
     var label = el("span", "chapter-art__label", "PY" + padChapter(number));
+    if (String(chapter.id) === "py12") {
+      art.classList.add("chapter-art--problem-solving");
+    }
     art.style.backgroundPosition = "0 0, " + (column * 100 / 3) + "% " + (row * 100 / 2) + "%";
     art.setAttribute("role", "img");
     art.setAttribute("aria-label", "Illustration for " + chapter.title);

@@ -35,7 +35,12 @@ test("required playground assets remain public", async () => {
     "/assessment-ui.css",
     "/starter-code.js",
     "/test-data/tests-py01-03.js",
+    "/test-data/tests-py12.js",
     "/assets/vendor/ace/ace.js",
+    "/assets/illustrations/problem-solving/decomposition-roadmap.svg",
+    "/assets/illustrations/problem-solving/dynamic-programming-table.svg",
+    "/assets/illustrations/problem-solving/knapsack-choice.svg",
+    "/assets/illustrations/problem-solving/problem-pattern-map.svg",
     "/docs/screenshots/dashboard.jpg",
   ]) {
     const result = await resolvePath(pathname);
@@ -105,6 +110,7 @@ test("solutions and backend or deployment files are not served", async () => {
   for (const pathname of [
     "/solution-code.js",
     "/Py01%20First%20Programs/First%20Programs.py",
+    "/Py12%20Problem%20Solving%20%26%20Dynamic%20Programming/Zero%20One%20Knapsack.py",
     "/scripts/serve.mjs",
     "/server/api.mjs",
     "/db/migrations/001_initial.sql",

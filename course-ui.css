@@ -298,6 +298,12 @@ pre {
   gap: 9px;
 }
 
+.site-primary-nav {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
 .topbar-home,
 .icon-button,
 .profile-button {
@@ -324,6 +330,13 @@ pre {
   border-color: var(--border-strong);
   color: var(--primary);
   transform: translateY(-1px);
+}
+
+.topbar-home.is-current {
+  border-color: color-mix(in srgb, var(--primary) 44%, var(--border));
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--primary) 68%, transparent);
 }
 
 .icon-button {
@@ -1950,6 +1963,91 @@ pre {
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--primary-softer) 75%, transparent), transparent 38%),
     var(--surface);
+}
+
+.chapter-visuals {
+  margin-top: 28px;
+  padding: clamp(18px, 3vw, 30px);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 92% 4%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 34%),
+    color-mix(in srgb, var(--surface-2) 82%, var(--surface));
+}
+
+.chapter-visuals .deep-dive-heading {
+  max-width: 760px;
+}
+
+.chapter-visuals .deep-dive-heading p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.chapter-visuals__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.chapter-visual {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  grid-template-rows: minmax(190px, 1fr) auto;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.chapter-visual:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
+
+.chapter-visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 190px;
+  max-height: 290px;
+  object-fit: contain;
+  padding: 12px;
+  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+}
+
+.chapter-visual figcaption {
+  display: grid;
+  gap: 5px;
+  padding: 16px 17px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.chapter-visual figcaption strong {
+  color: var(--text-strong);
+  font-size: 0.82rem;
+}
+
+.chapter-visual figcaption span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.chapter-art--problem-solving::before {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 16%, transparent), transparent 52%),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(255, 255, 255, 0.04) 32px);
+  content: "";
+  pointer-events: none;
 }
 
 .mental-model,
@@ -4119,6 +4217,52 @@ pre {
   border-bottom: 1px solid var(--border);
 }
 
+.problem-concept-visual {
+  display: grid;
+  overflow: hidden;
+  grid-template-columns: minmax(220px, 0.42fr) minmax(0, 0.58fr);
+  align-items: stretch;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary-softer) 70%, transparent), transparent 68%),
+    var(--surface-2);
+}
+
+.problem-concept-visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 245px;
+  min-height: 205px;
+  object-fit: contain;
+  padding: 14px;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+
+.problem-concept-visual figcaption {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(20px, 3vw, 34px);
+}
+
+.problem-concept-visual figcaption strong {
+  margin-top: 3px;
+  color: var(--text-strong);
+  font-size: clamp(1rem, 2vw, 1.28rem);
+}
+
+.problem-concept-visual figcaption p {
+  max-width: 660px;
+  margin: 8px 0 0;
+  color: var(--muted-strong);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
 .run-history-result__header strong {
   color: var(--text-strong);
   font-size: 0.73rem;
@@ -4483,6 +4627,7 @@ pre {
   }
 
   .guided-practice__grid,
+  .chapter-visuals__grid,
   .deep-reference-grid,
   .knowledge-check__options,
   .runbook-toolbox__grid,
@@ -4516,6 +4661,17 @@ pre {
 
   .problem-panel__header {
     flex-direction: column;
+  }
+
+  .problem-concept-visual {
+    grid-template-columns: 1fr;
+  }
+
+  .problem-concept-visual img {
+    min-height: 180px;
+    max-height: 230px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
   }
 
   .exercise-pager {
