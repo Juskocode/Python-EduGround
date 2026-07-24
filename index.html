@@ -12,7 +12,9 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <script src="theme-bootstrap.js"></script>
     <link rel="stylesheet" href="course-ui.css" />
+    <link rel="stylesheet" href="landing-ui.css" />
     <link rel="stylesheet" href="dashboard-ui.css" />
+    <link rel="stylesheet" href="stage-recap-ui.css" />
     <link rel="stylesheet" href="learning-clinic.css" />
     <link rel="stylesheet" href="rounding-lab.css" />
     <link rel="stylesheet" href="class-page.css" />
@@ -23,7 +25,7 @@
 
     <header class="site-topbar">
       <div class="page-shell site-topbar__inner">
-        <a class="site-brand" href="#home" aria-label="Python EduGround home">
+        <a class="site-brand" href="#welcome" aria-label="Python EduGround welcome page">
           <span class="site-brand__mark" aria-hidden="true"><span>&gt;</span>_</span>
           <span class="site-brand__copy">
             <strong>Python EduGround</strong>
@@ -33,6 +35,10 @@
 
         <div class="site-actions">
           <nav class="site-primary-nav" aria-label="Primary navigation">
+            <a class="topbar-home" href="#welcome" aria-label="Open the welcome page">
+              <span aria-hidden="true">◇</span>
+              <span>Home</span>
+            </a>
             <a class="topbar-home" href="#home" aria-label="Open chapter dashboard">
               <span aria-hidden="true">⌂</span>
               <span>Chapters</span>
@@ -121,7 +127,10 @@
     <script src="class-page.js" defer></script>
     <script src="rounding-model.js" defer></script>
     <script src="rounding-lab.js" defer></script>
+    <script src="stage-recaps.js" defer></script>
     <script src="dashboard-model.js" defer></script>
+    <script src="landing-view.js" defer></script>
+    <script src="stage-recap-view.js" defer></script>
     <script src="dashboard-view.js" defer></script>
     <script src="assessment-data.js" defer></script>
     <script src="assessment-engine.js" defer></script>

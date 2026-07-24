@@ -55,6 +55,9 @@
     : null;
   var dashboardModel = window.DASHBOARD_MODEL || null;
   var dashboardView = window.DASHBOARD_VIEW || null;
+  var landingView = window.LANDING_VIEW || null;
+  var stageRecapView = window.STAGE_RECAP_VIEW || null;
+  var stageRecaps = window.STAGE_RECAPS || {};
   var assessmentData = window.ASSESSMENT_DATA || { version: 1, blocks: [] };
   var assessmentEngine = window.ASSESSMENT_ENGINE || {};
   var audio = window.APP_AUDIO || createSilentAudio();
@@ -193,7 +196,10 @@
     closeProfile();
 
     var view;
-    if (parsed.name === "chapter") {
+    if (parsed.name === "landing") {
+      view = renderLanding();
+      document.title = "Learn Python · Python EduGround";
+    } else if (parsed.name === "chapter") {
       view = renderChapterHub(parsed.chapter);
       document.title = parsed.chapter.title + " · Python EduGround";
     } else if (parsed.name === "exercises") {
@@ -217,6 +223,9 @@
     } else if (parsed.name === "assessment-mode") {
       view = assessmentRooms.renderMode(parsed.block, parsed.mode);
       document.title = (parsed.mode === "theory" ? "Theory" : "Practical") + " · " + parsed.block.title;
+    } else if (parsed.name === "stage-recap") {
+      view = renderStageRecap(parsed.block);
+      document.title = "Stage recap · " + parsed.block.title;
     } else {
       view = renderDashboard();
       document.title = "Python EduGround · Learning Path";
@@ -273,6 +282,7 @@
   function syncPrimaryNavigation(route) {
     var chapterRoute = route && [
       "home",
+      "stage-recap",
       "chapter",
       "exercises",
       "tutorial",
@@ -283,8 +293,10 @@
       "assessment-block",
       "assessment-mode"
     ].includes(route.name);
+    var landingRoute = route && route.name === "landing";
     document.querySelectorAll(".topbar-home[href]").forEach(function (link) {
       var isCurrent = (
+        (landingRoute && link.getAttribute("href") === "#welcome") ||
         (chapterRoute && link.getAttribute("href") === "#home") ||
         (assessmentRoute && link.getAttribute("href") === "#assessments")
       );
@@ -307,7 +319,10 @@
     }
 
     decoded = decoded.replace(/^\/+|\/+$/g, "");
-    if (!decoded || decoded === "home") {
+    if (!decoded || decoded === "welcome") {
+      return { name: "landing" };
+    }
+    if (decoded === "home") {
       return { name: "home" };
     }
 
@@ -345,6 +360,10 @@
       return { name: "assessments" };
     }
 
+    if (parts[0] === "stage" && assessmentById.has(parts[1]) && parts[2] === "recap") {
+      return { name: "stage-recap", block: assessmentById.get(parts[1]) };
+    }
+
     if (parts[0] === "assessment" && assessmentById.has(parts[1])) {
       var block = assessmentById.get(parts[1]);
       if (!parts[2]) {
@@ -359,6 +378,9 @@
   }
 
   function getRouteAnnouncement(route) {
+    if (route.name === "landing") {
+      return "Opened the Python EduGround welcome page.";
+    }
     if (route.name === "chapter") {
       return "Opened " + route.chapter.title + ".";
     }
@@ -383,34 +405,35 @@
     if (route.name === "assessment-mode") {
       return "Opened the " + route.mode + " room for " + route.block.title + ".";
     }
+    if (route.name === "stage-recap") {
+      return "Opened the stage recap for " + route.block.title + ".";
+    }
     return "Opened the chapter dashboard.";
   }
 
-  function renderDashboard() {
+  function buildDashboardSnapshot() {
     var stats = getOverallStats();
     var rank = getCurrentRank(stats);
     var nextRank = getNextRank(rank);
     var assessmentStats = getAssessmentStats();
     var badges = getBadgeStates(stats);
 
-    if (!dashboardModel || typeof dashboardModel.build !== "function" ||
-        !dashboardView || typeof dashboardView.render !== "function") {
-      var unavailable = el("div", "page-shell empty-state");
-      unavailable.append(
-        el("strong", null, "The learning dashboard could not load."),
-        el("p", null, "Refresh the page so the dashboard assets can be loaded in order.")
-      );
-      return unavailable;
+    if (!dashboardModel || typeof dashboardModel.build !== "function") {
+      return null;
     }
 
-    return dashboardView.render(dashboardModel.build({
+    return dashboardModel.build({
       chapters: chapters.map(function (chapter) {
+        var classMaterial = classMaterials[String(chapter.id)] || {};
         return {
           id: String(chapter.id),
           number: Number(chapter.number),
           title: chapter.title,
           summary: chapter.summary,
           topics: chapter.topics,
+          recapQuestions: Array.isArray(classMaterial.recapQuestions)
+            ? classMaterial.recapQuestions
+            : [],
           exercises: getChapterProgress(chapter),
           guide: getChapterLearningProgress(chapter),
           exerciseItems: getExercises(chapter).map(function (exercise) {
@@ -423,13 +446,17 @@
         };
       }),
       assessmentBlocks: (Array.isArray(assessmentData.blocks) ? assessmentData.blocks : []).map(function (block) {
+        var blockStats = getAssessmentBlockStats(block);
         return {
           id: String(block.id),
           number: Number(block.number),
           title: block.title,
           chapters: Array.isArray(block.chapters) ? block.chapters.map(String) : [],
-          passedModes: getAssessmentBlockStats(block).passedModes,
-          totalModes: 2
+          passedModes: blockStats.passedModes,
+          totalModes: 2,
+          modes: blockStats.modes,
+          references: Array.isArray(block.references) ? block.references : [],
+          recap: stageRecaps[String(block.id)] || null
         };
       }),
       stats: stats,
@@ -441,7 +468,53 @@
       totalAssessmentModes: assessmentStats.totalModes,
       lastExerciseId: workspaceRead(STORAGE_KEYS.lastExercise),
       note: course.note
-    }));
+    });
+  }
+
+  function renderUnavailablePage(title, message) {
+    var unavailable = el("div", "page-shell empty-state");
+    unavailable.append(
+      el("strong", null, title),
+      el("p", null, message)
+    );
+    return unavailable;
+  }
+
+  function renderLanding() {
+    var model = buildDashboardSnapshot();
+    if (!model || !landingView || typeof landingView.render !== "function") {
+      return renderUnavailablePage(
+        "The welcome page could not load.",
+        "Refresh the page so the landing assets can be loaded in order."
+      );
+    }
+    return landingView.render(model);
+  }
+
+  function renderDashboard() {
+    var model = buildDashboardSnapshot();
+    if (!model || !dashboardView || typeof dashboardView.render !== "function") {
+      return renderUnavailablePage(
+        "The learning dashboard could not load.",
+        "Refresh the page so the dashboard assets can be loaded in order."
+      );
+    }
+    return dashboardView.render(model);
+  }
+
+  function renderStageRecap(block) {
+    var model = buildDashboardSnapshot();
+    var blockId = String(block && block.id || "");
+    var stage = model && Array.isArray(model.stages)
+      ? model.stages.find(function (candidate) { return candidate.id === blockId; })
+      : null;
+    if (!stage || !stageRecapView || typeof stageRecapView.render !== "function") {
+      return renderUnavailablePage(
+        "This stage recap could not load.",
+        "Return to the roadmap and choose one of the four available stage recaps."
+      );
+    }
+    return stageRecapView.render(stage, model);
   }
 
   function renderStat(label, value, symbol) {
@@ -5600,16 +5673,29 @@
     var progressBlock = assessmentProgress && assessmentProgress.blocks
       ? assessmentProgress.blocks[String(block.id)]
       : null;
-    var passedModes = ["theory", "practical"].reduce(function (total, mode) {
+    var modes = ["theory", "practical"].map(function (mode) {
       var modeState = progressBlock && progressBlock[mode] ? progressBlock[mode] : null;
       var history = modeState && Array.isArray(modeState.history)
         ? modeState.history
         : [];
-      return total + (modeState && modeState.completed || history.some(function (attempt) {
+      var completed = Boolean(modeState && modeState.completed || history.some(function (attempt) {
         return Boolean(attempt.passed);
-      }) ? 1 : 0);
-    }, 0);
-    return { passedModes: passedModes };
+      }));
+      var bestHistoryScore = history.reduce(function (best, attempt) {
+        return Math.max(best, Number(attempt && attempt.score) || 0);
+      }, 0);
+      return {
+        id: mode,
+        completed: completed,
+        active: Boolean(modeState && modeState.active),
+        attempted: Boolean(modeState && (modeState.active || history.length)),
+        bestScore: Math.max(Number(modeState && modeState.bestScore) || 0, bestHistoryScore)
+      };
+    });
+    return {
+      passedModes: modes.filter(function (mode) { return mode.completed; }).length,
+      modes: modes
+    };
   }
 
   function getAssessmentEndingAtChapter(chapter) {

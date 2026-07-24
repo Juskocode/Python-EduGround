@@ -59,6 +59,9 @@
       title: String(source.title || "Chapter"),
       summary: String(source.summary || ""),
       topics: Array.isArray(source.topics) ? source.topics.slice(0, 3).map(String) : [],
+      recapQuestions: Array.isArray(source.recapQuestions)
+        ? source.recapQuestions.filter(Boolean).slice(0, 5).map(String)
+        : [],
       exercises: exercises,
       guide: guide,
       exerciseItems: exerciseItems
@@ -205,6 +208,186 @@
     return { id: "upcoming", label: "Upcoming", tone: "muted" };
   }
 
+  function normalizeReferences(references) {
+    return Array.isArray(references)
+      ? references
+        .filter(function (reference) {
+          return reference && reference.url;
+        })
+        .map(function (reference) {
+          return {
+            label: String(reference.label || "Python documentation"),
+            description: String(reference.description || ""),
+            url: String(reference.url)
+          };
+        })
+      : [];
+  }
+
+  function normalizeAssessmentModes(modes, assessmentId) {
+    var source = Array.isArray(modes) ? modes : [];
+    return ["theory", "practical"].map(function (modeId) {
+      var mode = source.find(function (candidate) {
+        return candidate && String(candidate.id) === modeId;
+      }) || {};
+      return {
+        id: modeId,
+        label: modeId === "theory" ? "Theory room" : "Practical room",
+        href: "#assessment/" + encodeURIComponent(assessmentId) + "/" + modeId,
+        completed: Boolean(mode.completed),
+        active: Boolean(mode.active),
+        attempted: Boolean(mode.attempted),
+        bestScore: Math.max(0, Math.min(100, Number(mode.bestScore) || 0))
+      };
+    });
+  }
+
+  function deriveRecapState(stageStatus) {
+    var statusId = stageStatus && stageStatus.id ? stageStatus.id : "upcoming";
+    if (statusId === "complete") {
+      return { id: "complete", label: "Checkpoint passed", tone: "success" };
+    }
+    if (statusId === "checkpoint") {
+      return { id: "ready", label: "Ready to prove", tone: "warning" };
+    }
+    if (statusId === "active") {
+      return { id: "learning", label: "Learning in progress", tone: "primary" };
+    }
+    return { id: "preview", label: "Preview the stage", tone: "muted" };
+  }
+
+  function normalizeRecap(sourceRecap, stageId, stageChapters, assessment, stageStatus) {
+    var source = sourceRecap && typeof sourceRecap === "object" ? sourceRecap : {};
+    var uniqueTopics = [];
+    stageChapters.forEach(function (chapter) {
+      chapter.topics.forEach(function (topic) {
+        if (!uniqueTopics.includes(topic)) {
+          uniqueTopics.push(topic);
+        }
+      });
+    });
+    var guide = stageChapters.reduce(function (result, chapter) {
+      result.done += chapter.guide.done;
+      result.total += chapter.guide.total;
+      return result;
+    }, { done: 0, total: 0 });
+    var exercises = stageChapters.reduce(function (result, chapter) {
+      result.done += chapter.exercises.done;
+      result.total += chapter.exercises.total;
+      result.stars += chapter.exercises.stars;
+      result.maxStars += chapter.exercises.maxStars;
+      return result;
+    }, { done: 0, total: 0, stars: 0, maxStars: 0 });
+    var chapterPrompts = stageChapters.map(function (chapter) {
+      return {
+        chapterId: chapter.id,
+        chapterNumber: chapter.number,
+        chapterTitle: chapter.title,
+        prompt: chapter.recapQuestions[0] ||
+          "Explain the most important idea from " + chapter.title + " using a fresh example."
+      };
+    });
+    return {
+      id: String(source.id || stageId + "-recap"),
+      href: "#stage/" + encodeURIComponent(stageId) + "/recap",
+      title: String(source.title || "Stage recap"),
+      summary: String(source.summary || "Reconnect the stage ideas before opening the timed checkpoint."),
+      outcomes: Array.isArray(source.outcomes) ? source.outcomes.filter(Boolean).map(String) : [],
+      recall: Array.isArray(source.recall)
+        ? source.recall.filter(function (item) { return item && item.prompt; }).map(function (item) {
+          return {
+            prompt: String(item.prompt),
+            answer: String(item.answer || "Explain your reasoning, then verify it with a small example.")
+          };
+        })
+        : [],
+      bridge: String(source.bridge || ""),
+      topics: uniqueTopics,
+      chapterPrompts: chapterPrompts,
+      aggregate: {
+        guide: guide,
+        exercises: exercises
+      },
+      references: assessment.references,
+      assessment: assessment,
+      state: deriveRecapState(stageStatus),
+      status: stageStatus,
+      award: source.award && typeof source.award === "object"
+        ? {
+          id: String(source.award.id || "python-pathforger"),
+          name: String(source.award.name || "Python Pathforger"),
+          monogram: String(source.award.monogram || "PY∞"),
+          description: String(source.award.description || "")
+        }
+        : null,
+      nextAction: null
+    };
+  }
+
+  function deriveRecapNextAction(stage, nextStage) {
+    var assessment = stage.assessment;
+    var activeMode = assessment && assessment.modes.find(function (mode) {
+      return mode.active;
+    });
+    if (activeMode) {
+      return {
+        kind: "assessment",
+        label: "Continue " + activeMode.label.toLowerCase(),
+        href: activeMode.href
+      };
+    }
+    var unfinishedGuide = stage.chapters.find(function (chapter) {
+      return chapter.guide.done < chapter.guide.total;
+    });
+    if (unfinishedGuide) {
+      return {
+        kind: "guide",
+        label: unfinishedGuide.guide.done ? "Continue chapter " + padNumber(unfinishedGuide.number) : "Learn chapter " + padNumber(unfinishedGuide.number),
+        href: "#chapter/" + encodeURIComponent(unfinishedGuide.id) + "/tutorials"
+      };
+    }
+    var unfinishedExercise = null;
+    stage.chapters.some(function (chapter) {
+      unfinishedExercise = chapter.exerciseItems.find(function (exercise) {
+        return !exercise.passed;
+      }) || null;
+      return Boolean(unfinishedExercise);
+    });
+    if (unfinishedExercise) {
+      return {
+        kind: "exercise",
+        label: "Practise " + unfinishedExercise.title,
+        href: "#exercise/" + encodeURIComponent(unfinishedExercise.id)
+      };
+    }
+    var unfinishedMode = assessment && assessment.modes.find(function (mode) {
+      return !mode.completed;
+    });
+    if (unfinishedMode) {
+      return {
+        kind: "assessment",
+        label: "Open " + unfinishedMode.label.toLowerCase(),
+        href: unfinishedMode.href
+      };
+    }
+    if (nextStage && nextStage.chapters[0]) {
+      return {
+        kind: "next-stage",
+        label: "Begin stage " + padNumber(nextStage.number),
+        href: "#chapter/" + encodeURIComponent(nextStage.chapters[0].id) + "/tutorials"
+      };
+    }
+    return {
+      kind: "achievement",
+      label: "View all achievements",
+      href: "#profile/badges"
+    };
+  }
+
+  function padNumber(value) {
+    return String(asCount(value)).padStart(2, "0");
+  }
+
   function deriveStepState(isComplete, isCurrent) {
     if (isComplete) {
       return { id: "complete", label: "Complete" };
@@ -343,7 +526,9 @@
         id: String(block.id || ""),
         title: String(block.title || "Stage assessment"),
         passedModes: asCount(block.passedModes),
-        totalModes: asCount(block.totalModes) || 2
+        totalModes: asCount(block.totalModes) || 2,
+        references: normalizeReferences(block.references),
+        modes: normalizeAssessmentModes(block.modes, String(block.id || ""))
       };
       var combinedDone = stageChapters.reduce(function (total, chapter) {
         return total + chapter.combined.done;
@@ -351,19 +536,28 @@
       var combinedTotal = stageChapters.reduce(function (total, chapter) {
         return total + chapter.combined.total;
       }, 0);
-      return {
+      var status = deriveStageStatus(stageChapters, assessment);
+      var stage = {
         id: assessment.id || "stage-" + (index + 1),
         number: asCount(block.number) || index + 1,
         title: assessment.title,
         chapters: stageChapters,
         assessment: assessment,
-        status: deriveStageStatus(stageChapters, assessment),
+        status: status,
         progress: {
           done: combinedDone,
           total: combinedTotal,
           percent: combinedTotal ? Math.round(combinedDone / combinedTotal * 100) : 0
         }
       };
+      stage.recap = normalizeRecap(
+        block.recap,
+        stage.id,
+        stageChapters,
+        assessment,
+        status
+      );
+      return stage;
     });
     var assignedChapterIds = new Set();
     stages.forEach(function (stage) {
@@ -407,6 +601,36 @@
       stages.length === 0 ||
       stages.every(function (stage) { return stage.status.id === "complete"; })
     );
+    stages.forEach(function (stage, index) {
+      if (stage.recap) {
+        stage.recap.nextAction = deriveRecapNextAction(stage, stages[index + 1] || null);
+      }
+    });
+    var finalStage = stages[stages.length - 1] || null;
+    var finalAwardSource = finalStage && finalStage.recap ? finalStage.recap.award : null;
+    var earlierStagesComplete = stages.length > 1 && stages.slice(0, -1).every(function (stage) {
+      return stage.status.id === "complete";
+    });
+    var awardState = completed
+      ? { id: "unlocked", label: "Unlocked", tone: "success" }
+      : earlierStagesComplete && finalStage && finalStage.status.id === "checkpoint"
+        ? { id: "ready", label: "Ready to earn", tone: "warning" }
+        : { id: "locked", label: "Locked", tone: "muted" };
+    var completionAward = finalAwardSource ? {
+      id: finalAwardSource.id,
+      name: finalAwardSource.name,
+      monogram: finalAwardSource.monogram,
+      description: finalAwardSource.description,
+      state: awardState,
+      href: awardState.id === "ready" && finalStage.assessment
+        ? "#assessment/" + encodeURIComponent(finalStage.assessment.id)
+        : awardState.id === "unlocked"
+          ? "#profile/badges"
+          : ""
+    } : null;
+    if (finalStage && finalStage.recap && completionAward) {
+      finalStage.recap.award = completionAward;
+    }
     var resume = attachResumeContext(
       deriveJourneyResume(chapters, stages, source.lastExerciseId),
       stages
@@ -443,6 +667,8 @@
         { label: "Assessments", value: asCount(source.passedAssessmentModes) + " / " + asCount(source.totalAssessmentModes), detail: "timed rooms passed" }
       ],
       stages: stages,
+      pathComplete: completed,
+      completionAward: completionAward,
       overview: deriveOverview(chapters, stages, resume),
       note: String(source.note || "")
     };

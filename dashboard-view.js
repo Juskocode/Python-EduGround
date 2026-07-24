@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  var stageRecapView = window.STAGE_RECAP_VIEW || null;
+
   function el(tagName, className, textContent) {
     var element = document.createElement(tagName);
     if (className) {
@@ -435,6 +437,10 @@
     chapterNav.append(chapterList);
     path.append(routeTrack, routeProgress, chapterNav);
 
+    if (stage.recap) {
+      path.append(renderRecapStop(stage.recap));
+    }
+
     if (stage.assessment && stage.assessment.id) {
       var assessment = link(
         "#assessment/" + encodeURIComponent(stage.assessment.id),
@@ -469,7 +475,39 @@
       path.append(assessment);
     }
     item.append(header, path);
+    if (
+      stage.recap &&
+      stage.recap.award &&
+      stageRecapView &&
+      typeof stageRecapView.renderAward === "function"
+    ) {
+      item.append(stageRecapView.renderAward(stage.recap.award, { compact: true }));
+    }
     return item;
+  }
+
+  function renderRecapStop(recap) {
+    var recapLink = link(
+      recap.href,
+      "learning-stage__recap learning-stage__recap--" + recap.state.id
+    );
+    var copy = el("span", "learning-stage__recap-copy");
+    recapLink.dataset.stageRecap = String(recap.id);
+    recapLink.setAttribute(
+      "aria-label",
+      recap.title + ", " + recap.state.label.toLowerCase()
+    );
+    copy.append(
+      el("span", "eyebrow", "Stage recap"),
+      el("strong", null, recap.title),
+      el("small", null, "Reconnect all three chapters")
+    );
+    recapLink.append(
+      el("span", "learning-stage__recap-icon", "↻"),
+      copy,
+      el("span", "learning-stage__recap-open", "Review →")
+    );
+    return recapLink;
   }
 
   function getStagePathState(stage, stageIndex, currentStageIndex) {
