@@ -36,6 +36,7 @@
       renderHeader(model),
       renderResume(model.resume),
       renderMilestones(model.milestones),
+      renderOverview(model.overview),
       renderRoadmap(model.stages)
     );
     if (model.note) {
@@ -54,9 +55,10 @@
     title.id = "home-title";
     header.setAttribute("aria-labelledby", title.id);
     copy.append(
-      el("p", "eyebrow", "Your Python learning path"),
+      el("p", "eyebrow", "Learning dashboard"),
       title,
-      el("p", "home-header__lede", model.introduction)
+      el("p", "home-header__lede", model.introduction),
+      renderHeaderMeta(model)
     );
     rank.style.setProperty("--rank-accent", model.rank.accent);
     rankCopy.append(
@@ -69,6 +71,19 @@
     rank.append(rankLevel, rankCopy);
     header.append(copy, rank);
     return header;
+  }
+
+  function renderHeaderMeta(model) {
+    var meta = el("div", "home-header__meta");
+    var overview = model.overview || {};
+    [
+      (overview.chapters || 0) + " chapters",
+      (Array.isArray(model.stages) ? model.stages.length : 0) + " learning stages",
+      "Practice + timed proof"
+    ].forEach(function (label) {
+      meta.append(el("span", null, label));
+    });
+    return meta;
   }
 
   function renderResume(resume) {
@@ -116,8 +131,41 @@
       );
     }
     body.append(actions);
+    if (Array.isArray(resume.steps) && resume.steps.length > 0) {
+      body.append(renderResumeSteps(resume.steps));
+    }
     section.append(art, body);
     return section;
+  }
+
+  function renderResumeSteps(steps) {
+    var nav = el("nav", "home-resume__steps");
+    var heading = el("span", "home-resume__steps-label", "Recommended sequence");
+    var list = el("ol");
+    nav.setAttribute("aria-label", "Recommended learning sequence");
+    steps.forEach(function (step, index) {
+      var item = el("li", "home-resume-step home-resume-step--" + step.state.id);
+      var stepLink = link(step.href, null);
+      var marker = el(
+        "span",
+        "home-resume-step__marker",
+        step.state.id === "complete" ? "✓" : index + 1
+      );
+      var copy = el("span", "home-resume-step__copy");
+      copy.append(
+        el("strong", null, step.label),
+        el("small", null, step.detail)
+      );
+      stepLink.append(
+        marker,
+        copy,
+        el("span", "home-resume-step__state", step.state.label)
+      );
+      item.append(stepLink);
+      list.append(item);
+    });
+    nav.append(heading, list);
+    return nav;
   }
 
   function renderResumeArt(chapter) {
@@ -127,7 +175,7 @@
       art.setAttribute("aria-hidden", "true");
       return art;
     }
-    var number = Math.max(1, Math.min(11, Number(chapter.number) || 1));
+    var number = Math.max(1, Math.min(12, Number(chapter.number) || 1));
     var index = number - 1;
     var column = index % 4;
     var row = Math.floor(index / 4);
@@ -181,17 +229,124 @@
     return section;
   }
 
+  function renderOverview(overview) {
+    var section = el("section", "home-overview");
+    var heading = el("header", "home-overview__heading");
+    var grid = el("div", "home-overview__grid");
+    var journey = el("article", "home-overview-card home-overview-card--journey");
+    var skills = el("article", "home-overview-card home-overview-card--skills");
+    var progressValue = overview && overview.progress ? overview.progress : {
+      done: 0,
+      total: 0,
+      percent: 0
+    };
+
+    section.setAttribute("aria-labelledby", "home-overview-title");
+    heading.append(
+      el("p", "eyebrow", "Learning compass"),
+      el("h2", null, "See the whole path without losing your next step."),
+      el("p", null, "Use progress as a signal, not a score: revisit the model, practise from memory, then prove recall under time.")
+    );
+    heading.querySelector("h2").id = "home-overview-title";
+
+    var journeyTop = el("div", "home-overview-card__top");
+    var percent = el("strong", "home-overview-card__percent", progressValue.percent + "%");
+    var journeyCopy = el("div");
+    journeyCopy.append(
+      el("span", "eyebrow", "Whole-path progress"),
+      el("h3", null, progressValue.done + " of " + progressValue.total + " milestones")
+    );
+    journeyTop.append(percent, journeyCopy);
+    journey.append(
+      journeyTop,
+      progress(
+        progressValue.done,
+        progressValue.total,
+        progressValue.done + " of " + progressValue.total + " learning milestones complete"
+      ),
+      renderOverviewMetrics(overview)
+    );
+    if (overview && overview.currentStage) {
+      var currentStage = el("div", "home-overview-card__stage");
+      var currentCopy = el("span");
+      currentCopy.append(
+        el("small", null, "Current stage"),
+        el("strong", null, "Stage " + pad(overview.currentStage.number) + " · " + overview.currentStage.title)
+      );
+      currentStage.append(
+        currentCopy,
+        el("span", null, overview.currentStage.status.label)
+      );
+      journey.append(currentStage);
+    }
+
+    var focus = overview && overview.focus ? overview.focus : null;
+    skills.append(
+      el("span", "eyebrow", "Skills in focus"),
+      el("h3", null, focus ? focus.title : "Choose a chapter to begin"),
+      el(
+        "p",
+        null,
+        focus
+          ? "These are the ideas behind your recommended next action."
+          : "Each chapter introduces a small set of ideas and a place to prove them."
+      )
+    );
+    var topicList = el("ul", "home-overview-card__topics");
+    (focus && Array.isArray(focus.topics) ? focus.topics : []).forEach(function (topic) {
+      topicList.append(el("li", null, topic));
+    });
+    skills.append(topicList);
+    if (overview && overview.nextChapter) {
+      var next = link(
+        "#chapter/" + encodeURIComponent(overview.nextChapter.id),
+        "home-overview-card__next"
+      );
+      var nextCopy = el("span");
+      nextCopy.append(
+        el("small", null, "On the horizon · Chapter " + pad(overview.nextChapter.number)),
+        el("strong", null, overview.nextChapter.title)
+      );
+      next.append(nextCopy, el("span", null, "Preview →"));
+      skills.append(next);
+    }
+
+    grid.append(journey, skills);
+    section.append(heading, grid);
+    return section;
+  }
+
+  function renderOverviewMetrics(overview) {
+    var metrics = el("dl", "home-overview-card__metrics");
+    [
+      ["Mastered", overview ? overview.mastered : 0],
+      ["In progress", overview ? overview.active : 0],
+      ["To explore", overview ? overview.upcoming : 0]
+    ].forEach(function (metric) {
+      var item = el("div");
+      item.append(el("dt", null, metric[0]), el("dd", null, metric[1]));
+      metrics.append(item);
+    });
+    return metrics;
+  }
+
   function renderRoadmap(stages) {
     var section = el("section", "home-roadmap");
     var heading = el("header", "home-roadmap__heading");
     heading.append(
       el("div", null),
-      el("span", "section-heading__count", stages.length + " stages")
+      el(
+        "span",
+        "section-heading__count",
+        stages.reduce(function (total, stage) {
+          return total + stage.chapters.length;
+        }, 0) + " chapters · " + stages.length + " stages"
+      )
     );
     heading.firstElementChild.append(
       el("p", "eyebrow", "Curriculum roadmap"),
-      el("h2", null, "Learn in stages, prove it at each checkpoint."),
-      el("p", null, "Each chapter combines a solution-free guide and executable exercises. Complete a stage, then test recall and practical fluency under time.")
+      el("h2", null, "Choose a chapter by skill, then prove what you learned."),
+      el("p", null, "Every chapter pairs a solution-free class with executable exercises. The cards expose skills and progress before you commit to the next lesson.")
     );
     var list = el("ol", "learning-stage-list");
     stages.forEach(function (stage) {
@@ -206,13 +361,22 @@
     var header = el("header", "learning-stage__header");
     var marker = el("span", "learning-stage__number", pad(stage.number));
     var copy = el("div", "learning-stage__copy");
+    var stageProgress = el("div", "learning-stage__progress");
     var status = el("span", "learning-stage__status", stage.status.label);
     copy.append(
       el("span", "eyebrow", "Stage " + pad(stage.number)),
       el("h3", null, stage.title),
-      el("p", null, stage.progress.done + " of " + stage.progress.total + " learning milestones complete")
+      el("p", null, stage.chapters.length + " chapters · " + stage.progress.done + " of " + stage.progress.total + " milestones")
     );
-    header.append(marker, copy, status);
+    stageProgress.append(
+      progress(
+        stage.progress.done,
+        stage.progress.total,
+        stage.title + ": " + stage.progress.done + " of " + stage.progress.total + " milestones complete"
+      ),
+      el("strong", null, stage.progress.percent + "%")
+    );
+    header.append(marker, copy, stageProgress, status);
 
     var chapterNav = el("nav", "learning-stage__chapters");
     var chapterList = el("ol");
@@ -222,22 +386,25 @@
     });
     chapterNav.append(chapterList);
 
-    var assessment = link(
-      "#assessment/" + encodeURIComponent(stage.assessment.id),
-      "learning-stage__assessment"
-    );
-    var assessmentCopy = el("span");
-    assessmentCopy.append(
-      el("span", "eyebrow", "Timed checkpoint"),
-      el("strong", null, stage.assessment.title),
-      el("small", null, stage.assessment.passedModes + " / " + stage.assessment.totalModes + " rooms passed · 60/100 required")
-    );
-    assessment.append(
-      el("span", "learning-stage__assessment-icon", "◷"),
-      assessmentCopy,
-      el("span", "learning-stage__assessment-open", stage.status.id === "checkpoint" ? "Start checkpoint →" : "Open rooms →")
-    );
-    item.append(header, chapterNav, assessment);
+    item.append(header, chapterNav);
+    if (stage.assessment && stage.assessment.id) {
+      var assessment = link(
+        "#assessment/" + encodeURIComponent(stage.assessment.id),
+        "learning-stage__assessment"
+      );
+      var assessmentCopy = el("span");
+      assessmentCopy.append(
+        el("span", "eyebrow", "Timed checkpoint"),
+        el("strong", null, stage.assessment.title),
+        el("small", null, stage.assessment.passedModes + " / " + stage.assessment.totalModes + " rooms passed · 60/100 required")
+      );
+      assessment.append(
+        el("span", "learning-stage__assessment-icon", "◷"),
+        assessmentCopy,
+        el("span", "learning-stage__assessment-open", stage.status.id === "checkpoint" ? "Start checkpoint →" : "Open rooms →")
+      );
+      item.append(assessment);
+    }
     return item;
   }
 
@@ -247,10 +414,14 @@
       "#chapter/" + encodeURIComponent(chapter.id),
       "path-chapter path-chapter--" + chapter.state.tone
     );
-    var marker = el("span", "path-chapter__marker", pad(chapter.number));
+    var top = el("span", "path-chapter__top");
+    var marker = el("span", "path-chapter__marker", "PY" + pad(chapter.number));
     var copy = el("span", "path-chapter__copy");
     var topics = el("span", "path-chapter__topics");
     var metrics = el("span", "path-chapter__metrics");
+    var chapterProgress = el("span", "path-chapter__progress");
+    var progressLabel = el("span", "path-chapter__progress-label");
+    var footer = el("span", "path-chapter__footer");
     var state = el("span", "path-chapter__state", chapter.state.label);
     copy.append(
       el("strong", null, chapter.title),
@@ -263,7 +434,21 @@
       el("span", null, chapter.exercises.done + "/" + chapter.exercises.total + " exercises"),
       el("span", null, chapter.guide.done + "/" + chapter.guide.total + " guide")
     );
-    chapterLink.append(marker, copy, topics, metrics, state, el("span", "path-chapter__open", "→"));
+    progressLabel.append(
+      el("span", null, "Chapter progress"),
+      el("strong", null, chapter.combined.percent + "%")
+    );
+    chapterProgress.append(
+      progressLabel,
+      progress(
+        chapter.combined.done,
+        chapter.combined.total,
+        chapter.title + ": " + chapter.combined.done + " of " + chapter.combined.total + " learning milestones complete"
+      )
+    );
+    top.append(marker, state);
+    footer.append(metrics, el("span", "path-chapter__open", "Open chapter →"));
+    chapterLink.append(top, copy, topics, chapterProgress, footer);
     item.append(chapterLink);
     return item;
   }

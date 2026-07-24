@@ -58,7 +58,7 @@
       number: asCount(source.number),
       title: String(source.title || "Chapter"),
       summary: String(source.summary || ""),
-      topics: Array.isArray(source.topics) ? source.topics.slice(0, 2).map(String) : [],
+      topics: Array.isArray(source.topics) ? source.topics.slice(0, 3).map(String) : [],
       exercises: exercises,
       guide: guide,
       exerciseItems: exerciseItems
@@ -190,6 +190,9 @@
       return chapter.combined.done > 0;
     }) || passedModes > 0;
 
+    if (mastered && totalModes === 0) {
+      return { id: "complete", label: "Stage complete", tone: "success" };
+    }
     if (mastered && totalModes > 0 && passedModes === totalModes) {
       return { id: "complete", label: "Stage complete", tone: "success" };
     }
@@ -200,6 +203,127 @@
       return { id: "active", label: "In progress", tone: "primary" };
     }
     return { id: "upcoming", label: "Upcoming", tone: "muted" };
+  }
+
+  function deriveStepState(isComplete, isCurrent) {
+    if (isComplete) {
+      return { id: "complete", label: "Complete" };
+    }
+    if (isCurrent) {
+      return { id: "current", label: "Next" };
+    }
+    return { id: "upcoming", label: "Later" };
+  }
+
+  function attachResumeContext(resume, stages) {
+    if (!resume || !resume.chapter) {
+      return resume;
+    }
+
+    var chapter = resume.chapter;
+    var stage = stages.find(function (candidate) {
+      return candidate.chapters.some(function (stageChapter) {
+        return stageChapter.id === chapter.id;
+      });
+    }) || null;
+    var guideComplete = chapter.guide.total > 0 && chapter.guide.done === chapter.guide.total;
+    var exercisesComplete = chapter.exercises.total > 0 &&
+      chapter.exercises.done === chapter.exercises.total;
+    var assessmentComplete = Boolean(stage && stage.status.id === "complete");
+    var currentStep = resume.kind === "assessment"
+      ? "assessment"
+      : resume.kind === "exercise"
+        ? "exercises"
+        : "guide";
+
+    resume.stage = stage ? {
+      id: stage.id,
+      number: stage.number,
+      title: stage.title,
+      status: stage.status,
+      progress: stage.progress
+    } : null;
+    resume.steps = [
+      {
+        id: "guide",
+        label: "Learn the model",
+        detail: chapter.guide.done + " / " + chapter.guide.total + " sections",
+        href: "#chapter/" + encodeURIComponent(chapter.id) + "/tutorials",
+        state: deriveStepState(guideComplete, currentStep === "guide")
+      },
+      {
+        id: "exercises",
+        label: "Practise with tests",
+        detail: chapter.exercises.done + " / " + chapter.exercises.total + " passed",
+        href: "#chapter/" + encodeURIComponent(chapter.id) + "/exercises",
+        state: deriveStepState(exercisesComplete, currentStep === "exercises")
+      }
+    ];
+
+    if (stage && stage.assessment && stage.assessment.id) {
+      resume.steps.push({
+        id: "assessment",
+        label: "Prove it under time",
+        detail: stage.assessment.passedModes + " / " + stage.assessment.totalModes + " rooms",
+        href: "#assessment/" + encodeURIComponent(stage.assessment.id),
+        state: deriveStepState(assessmentComplete, currentStep === "assessment")
+      });
+    }
+    return resume;
+  }
+
+  function deriveOverview(chapters, stages, resume) {
+    var combined = chapters.reduce(function (result, chapter) {
+      result.done += chapter.combined.done;
+      result.total += chapter.combined.total;
+      if (chapter.state.id === "mastered") {
+        result.mastered += 1;
+      } else if (chapter.state.id === "upcoming") {
+        result.upcoming += 1;
+      } else {
+        result.active += 1;
+      }
+      return result;
+    }, { done: 0, total: 0, mastered: 0, active: 0, upcoming: 0 });
+    var currentStage = stages.find(function (stage) {
+      return stage.status.id !== "complete";
+    }) || stages[stages.length - 1] || null;
+    var currentChapterIndex = resume && resume.chapter
+      ? chapters.findIndex(function (chapter) { return chapter.id === resume.chapter.id; })
+      : -1;
+    var nextChapter = chapters.slice(Math.max(0, currentChapterIndex + 1)).find(function (chapter) {
+      return chapter.state.id !== "mastered";
+    }) || null;
+
+    return {
+      chapters: chapters.length,
+      mastered: combined.mastered,
+      active: combined.active,
+      upcoming: combined.upcoming,
+      progress: {
+        done: combined.done,
+        total: combined.total,
+        percent: combined.total ? Math.round(combined.done / combined.total * 100) : 0
+      },
+      currentStage: currentStage ? {
+        number: currentStage.number,
+        title: currentStage.title,
+        status: currentStage.status,
+        progress: currentStage.progress
+      } : null,
+      focus: resume && resume.chapter ? {
+        id: resume.chapter.id,
+        title: resume.chapter.title,
+        topics: resume.chapter.topics,
+        percent: resume.chapter.combined.percent
+      } : null,
+      nextChapter: nextChapter ? {
+        id: nextChapter.id,
+        number: nextChapter.number,
+        title: nextChapter.title,
+        topics: nextChapter.topics
+      } : null
+    };
   }
 
   function build(input) {
@@ -241,6 +365,36 @@
         }
       };
     });
+    var assignedChapterIds = new Set();
+    stages.forEach(function (stage) {
+      stage.chapters.forEach(function (chapter) {
+        assignedChapterIds.add(chapter.id);
+      });
+    });
+    var independentChapters = chapters.filter(function (chapter) {
+      return !assignedChapterIds.has(chapter.id);
+    });
+    if (independentChapters.length > 0) {
+      var combinedDone = independentChapters.reduce(function (total, chapter) {
+        return total + chapter.combined.done;
+      }, 0);
+      var combinedTotal = independentChapters.reduce(function (total, chapter) {
+        return total + chapter.combined.total;
+      }, 0);
+      stages.push({
+        id: "independent-practice",
+        number: stages.length + 1,
+        title: "Independent Problem Solving",
+        chapters: independentChapters,
+        assessment: null,
+        status: deriveStageStatus(independentChapters, null),
+        progress: {
+          done: combinedDone,
+          total: combinedTotal,
+          percent: combinedTotal ? Math.round(combinedDone / combinedTotal * 100) : 0
+        }
+      });
+    }
     var stats = source.stats && typeof source.stats === "object" ? source.stats : {};
     var rank = source.rank && typeof source.rank === "object" ? source.rank : {};
     var nextRank = source.nextRank && typeof source.nextRank === "object" ? source.nextRank : null;
@@ -253,7 +407,10 @@
       stages.length === 0 ||
       stages.every(function (stage) { return stage.status.id === "complete"; })
     );
-    var resume = deriveJourneyResume(chapters, stages, source.lastExerciseId);
+    var resume = attachResumeContext(
+      deriveJourneyResume(chapters, stages, source.lastExerciseId),
+      stages
+    );
 
     return {
       heading: completed
@@ -286,6 +443,7 @@
         { label: "Assessments", value: asCount(source.passedAssessmentModes) + " / " + asCount(source.totalAssessmentModes), detail: "timed rooms passed" }
       ],
       stages: stages,
+      overview: deriveOverview(chapters, stages, resume),
       note: String(source.note || "")
     };
   }

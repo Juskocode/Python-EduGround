@@ -79,6 +79,18 @@ test("a fresh learner starts with the first chapter learning guide", () => {
   assert.equal(model.resume.href, "#chapter/py01/tutorials");
   assert.equal(model.resume.action, "Start learning");
   assert.equal(model.stages[0].status.id, "upcoming");
+  assert.deepEqual(
+    Array.from(model.resume.steps, (step) => [step.id, step.state.id]),
+    [
+      ["guide", "current"],
+      ["exercises", "upcoming"],
+      ["assessment", "upcoming"],
+    ]
+  );
+  assert.equal(model.overview.chapters, 2);
+  assert.equal(model.overview.progress.percent, 0);
+  assert.equal(model.overview.focus.id, "py01");
+  assert.equal(model.overview.nextChapter.id, "py02");
 });
 
 test("an unfinished last exercise resumes directly in the editor", () => {
@@ -161,4 +173,34 @@ test("a fully mastered and assessed path routes the learner to achievements", ()
   assert.equal(model.resume.eyebrow, "Path complete");
   assert.equal(model.resume.href, "#profile/badges");
   assert.equal(model.resume.action, "View achievements");
+});
+
+test("chapters outside assessment blocks remain discoverable as independent practice", () => {
+  const py01 = makeChapter("py01", 1);
+  const py12 = makeChapter("py12", 12, {
+    title: "Problem Solving Patterns",
+    topics: ["dynamic programming", "knapsack", "state transitions"],
+  });
+  const model = dashboard.build(makeInput([py01, py12], {
+    assessmentBlocks: [
+      {
+        id: "stage-one",
+        number: 1,
+        title: "Stage one checkpoint",
+        chapters: ["py01"],
+        passedModes: 0,
+        totalModes: 2,
+      },
+    ],
+  }));
+
+  assert.equal(model.stages.length, 2);
+  assert.equal(model.stages[1].id, "independent-practice");
+  assert.equal(model.stages[1].title, "Independent Problem Solving");
+  assert.deepEqual(
+    Array.from(model.stages[1].chapters, (chapter) => chapter.id),
+    ["py12"]
+  );
+  assert.equal(model.stages[1].assessment, null);
+  assert.equal(model.overview.chapters, 2);
 });
