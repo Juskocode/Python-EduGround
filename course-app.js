@@ -37,6 +37,7 @@
 
   var course = window.COURSE_DATA;
   var testData = window.EXERCISE_TESTS || {};
+  var solutionShape = window.SOLUTION_SHAPE || null;
   var starterCode = window.STARTER_CODE || {};
   var learning = window.LEARNING_CONTENT || {};
   var toolboxByChapter = window.LEARNING_TOOLBOX || {};
@@ -1495,6 +1496,10 @@
       success.append(successList);
       brief.append(success);
     }
+    var techniqueContract = renderTechniqueContract(testSpec);
+    if (techniqueContract) {
+      brief.append(techniqueContract);
+    }
 
     var hints = renderHintPanel(exercise);
     problemGrid.append(brief, hints);
@@ -1621,6 +1626,43 @@
     var block = el("div", "spec-block");
     block.append(el("span", "spec-block__label", label), el("p", null, value));
     return block;
+  }
+
+  function renderTechniqueContract(testSpec) {
+    var rules = testSpec && Array.isArray(testSpec.sourceRules)
+      ? testSpec.sourceRules
+      : [];
+    if (!rules.length) {
+      return null;
+    }
+    var section = el("section", "technique-contract");
+    var list = el("ul");
+    section.append(
+      el("span", "technique-contract__eyebrow", "Technique contract"),
+      el("h3", null, "Show the idea in your code"),
+      el(
+        "p",
+        null,
+        "For this exercise, correct output is only part of the goal. The full test run also checks these visible implementation requirements."
+      )
+    );
+    rules.forEach(function (rule) {
+      var item = el("li");
+      item.append(
+        el("span", "technique-contract__check", "◇"),
+        el("strong", null, String(rule.label || "Use the requested technique"))
+      );
+      list.append(item);
+    });
+    section.append(
+      list,
+      el(
+        "small",
+        null,
+        "These checks are lightweight coaching heuristics. They inspect code shape without loading or revealing a repository solution."
+      )
+    );
+    return section;
   }
 
   function renderExercisePager(exercises, index) {
@@ -1899,7 +1941,13 @@
     );
     testCasesPanel.hidden = activeTab !== "tests";
     testCasesPanel.append(
-      el("p", "ide-dock__coach", "Choose one case, predict the output, then run your code. Locked cases protect the full challenge."),
+      el(
+        "p",
+        "ide-dock__coach",
+        Array.isArray(testSpec.sourceRules) && testSpec.sourceRules.length
+          ? "Predict one output case at a time. The full run also checks the visible technique contract shown beside the editor."
+          : "Choose one case, predict the output, then run your code. Locked cases protect the full challenge."
+      ),
       renderTestPlan(testSpec, exerciseId)
     );
     resultPanel.hidden = activeTab !== "results";
@@ -2166,6 +2214,39 @@
 
   function clampNumber(value, minimum, maximum) {
     return Math.min(maximum, Math.max(minimum, Number(value)));
+  }
+
+  function evaluateTechniqueResults(code, testSpec) {
+    var rules = testSpec && Array.isArray(testSpec.sourceRules)
+      ? testSpec.sourceRules
+      : [];
+    if (!rules.length) {
+      return [];
+    }
+    if (!solutionShape || typeof solutionShape.evaluate !== "function") {
+      return [{
+        id: "technique-engine-unavailable",
+        name: "Technique review",
+        hidden: false,
+        passed: false,
+        expected: "The requested implementation technique can be reviewed",
+        actual: "The technique checker could not load. Your output tests still ran, but this exercise cannot award stars yet."
+      }];
+    }
+    return solutionShape.evaluate(code, rules).results.map(function (result) {
+      return {
+        id: "technique-" + result.id,
+        name: result.label,
+        hidden: false,
+        passed: Boolean(result.passed),
+        expected: "Use the requested implementation technique",
+        actual: result.feedback
+      };
+    });
+  }
+
+  function isTechniqueResult(result) {
+    return Boolean(result && typeof result.id === "string" && result.id.indexOf("technique-") === 0);
   }
 
   function getIdeResultBadge(stored) {
@@ -3465,11 +3546,18 @@
     );
 
     try {
-      var results = await pythonRunner.run(code, testSpec.mode, selectedTests);
+      var outputResults = await pythonRunner.run(code, testSpec.mode, selectedTests);
       if (workspaceEpoch !== runWorkspaceEpoch) {
         return;
       }
-      var stored = { scope: scope, results: results, tests: selectedTests, completedAt: Date.now() };
+      var techniqueResults = evaluateTechniqueResults(code, testSpec);
+      var results = outputResults.concat(techniqueResults);
+      var stored = {
+        scope: scope,
+        results: results,
+        tests: selectedTests,
+        completedAt: Date.now()
+      };
       runResults.set(exerciseId, stored);
 
       if (isCurrentExercise(exerciseId)) {
@@ -3480,7 +3568,10 @@
       }
       updateIdeResultBadge(exerciseId, stored);
 
-      var allPassed = results.length === selectedTests.length && results.every(function (result) {
+      var allPassed =
+        outputResults.length === selectedTests.length &&
+        results.length === selectedTests.length + techniqueResults.length &&
+        results.every(function (result) {
         return result.passed;
       });
       if (allPassed) {
@@ -3587,19 +3678,31 @@
 
   function renderStoredResults(exercise, testSpec, stored, container) {
     var results = stored.results || [];
+    var behaviorResults = results.filter(function (result) { return !isTechniqueResult(result); });
+    var techniqueResults = results.filter(isTechniqueResult);
     var passedCount = results.filter(function (result) { return result.passed; }).length;
     var allPassed = results.length > 0 && passedCount === results.length;
+    var behaviorPassed = behaviorResults.length > 0 && behaviorResults.every(function (result) {
+      return result.passed;
+    });
+    var techniquePassed = techniqueResults.length === 0 || techniqueResults.every(function (result) {
+      return result.passed;
+    });
     var awardsProgress = stored.scope === "all";
     var summary = el("header", "results-summary " + (allPassed ? "results-summary--pass" : "results-summary--fail"));
     var icon = el("span", "results-summary__icon", allPassed ? "✓" : "×");
     var copy = el("div", "results-summary__copy");
     var title = allPassed
-      ? awardsProgress ? "All tests passed" : "All visible examples passed"
-      : passedCount + " of " + results.length + " tests passed";
+      ? techniqueResults.length
+        ? awardsProgress ? "Behavior and technique checks passed" : "Visible checks passed"
+        : awardsProgress ? "All tests passed" : "All visible examples passed"
+      : passedCount + " of " + results.length + " checks passed";
     var message = allPassed
       ? awardsProgress
         ? "Green result: this exercise now awards its difficulty stars."
         : "The examples are green. Run the full suite to check hidden cases and collect stars."
+      : behaviorPassed && !techniquePassed
+        ? "Your output is correct. Open the technique check to see which requested idea still needs to appear in the code."
       : "Open each failed case to compare the expected value, actual value, and traceback.";
     icon.setAttribute("aria-hidden", "true");
     copy.append(el("strong", null, title), el("span", null, message));
@@ -3608,14 +3711,20 @@
 
     var list = el("div", "result-list");
     results.forEach(function (result, index) {
-      var definition = (stored.tests || []).find(function (test) { return test.id === result.id; }) || (stored.tests || [])[index];
+      var definition = (stored.tests || []).find(function (test) { return test.id === result.id; });
+      if (!definition && !isTechniqueResult(result)) {
+        definition = (stored.tests || [])[index];
+      }
       list.append(renderTestResult(result, definition, testSpec.mode, index));
     });
     container.append(list);
-    announce(passedCount + " of " + results.length + " tests passed for " + exercise.title + ".");
+    announce(passedCount + " of " + results.length + " checks passed for " + exercise.title + ".");
   }
 
   function renderTestResult(result, definition, mode, index) {
+    if (isTechniqueResult(result)) {
+      return renderTechniqueResult(result);
+    }
     var details = el("details", "test-result " + (result.passed ? "test-result--pass" : "test-result--fail"));
     var summary = el("summary");
     var icon = el("span", "test-result__icon", result.passed ? "✓" : "×");
@@ -3645,6 +3754,28 @@
     if (result.traceback) {
       body.append(renderResultField("Traceback", result.traceback, true));
     }
+    details.append(body);
+    return details;
+  }
+
+  function renderTechniqueResult(result) {
+    var details = el(
+      "details",
+      "test-result test-result--technique " + (result.passed ? "test-result--pass" : "test-result--fail")
+    );
+    var summary = el("summary");
+    var icon = el("span", "test-result__icon", result.passed ? "✓" : "×");
+    var title = el("strong", null, result.name || "Technique review");
+    var kind = el("span", "test-kind test-kind--technique", "Technique");
+    var body = el("div", "test-result__body test-result__body--technique");
+    icon.setAttribute("aria-hidden", "true");
+    summary.append(icon, title, kind);
+    details.open = !result.passed;
+    details.append(summary);
+    body.append(
+      renderResultField("Technique goal", result.expected || "Use the requested implementation technique"),
+      renderResultField("Coach feedback", result.actual || "Review the exercise technique contract.")
+    );
     details.append(body);
     return details;
   }

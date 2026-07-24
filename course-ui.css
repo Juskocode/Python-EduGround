@@ -6118,3 +6118,93 @@ body.is-resizing-ide:has(.ide-pane-resizer--editor.is-dragging) {
     background: ButtonText;
   }
 }
+
+/* Visible implementation contracts for exercises that teach a specific technique. */
+.technique-contract {
+  padding: 13px 14px;
+  margin-top: 14px;
+  border: 1px solid color-mix(in srgb, var(--info) 34%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--info-soft) 54%, var(--surface));
+}
+
+.technique-contract__eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--info);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.technique-contract h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 0.86rem;
+}
+
+.technique-contract > p {
+  margin: 5px 0 10px;
+  color: var(--muted-strong);
+  font-size: 0.73rem;
+  line-height: 1.5;
+}
+
+.technique-contract ul {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  margin: 0 0 9px;
+  list-style: none;
+}
+
+.technique-contract li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-strong);
+  font-size: 0.72rem;
+}
+
+.technique-contract__check {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--info) 45%, var(--border));
+  border-radius: 7px;
+  color: var(--info);
+  font-family: var(--font-mono);
+  font-weight: 900;
+}
+
+.technique-contract small {
+  display: block;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--info) 18%, var(--border));
+  color: var(--muted);
+  font-size: 0.64rem;
+  line-height: 1.45;
+}
+
+.test-result--technique {
+  border-left: 3px solid var(--info);
+}
+
+.test-kind--technique {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.test-result__body--technique {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 620px) {
+  .test-result__body--technique {
+    grid-template-columns: 1fr;
+  }
+}
