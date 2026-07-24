@@ -16,13 +16,16 @@ Deployment, backup, restore, reverse-proxy, and rollback commands are maintained
 Without PostgreSQL, the browser stores these values under the exact current origin:
 
 - exercise drafts and passed exercise IDs;
-- tutorial, runbook, and class-material markers;
+- tutorial, runbook, class-material, and guided-room markers;
+- editable classroom Python and sample-input drafts;
 - timed-assessment deadlines, answers, drafts, summaries, and recent results;
 - editor keymap, theme, sound preference, and last route.
 
-Typing saves a draft after a short delay. **Save** flushes it immediately, and
-**Download .py** creates a portable local file. A database outage does not remove or
-disable this browser copy.
+Exercise typing saves a draft after a short delay. **Save** flushes it immediately,
+and **Download .py** creates a portable local file. Embedded classroom labs keep
+their code and sample input in a separate bounded store; a classroom **Run** flushes
+that draft immediately. A database outage does not remove or disable either browser
+copy.
 
 Browser storage is origin-specific. These are different workspaces:
 
@@ -60,9 +63,13 @@ durable session marker for UI state. Operators should leave the development-only
 After sign-in:
 
 - passed exercise IDs and learning markers merge by set union;
+- guided-room completion markers merge with other learning markers but remain
+  separate from passed exercises and stars;
 - assessment histories and completion/best-score evidence merge monotonically;
 - fields introduced by a newer release are retained when an older client syncs;
 - a current local exercise draft wins when local and account drafts both exist;
+- a current local classroom-lab draft wins for the same lab, while missing account
+  lab drafts are added only within the classroom draft budget;
 - active drafts, active assessments, and editor settings remain last-writer-wins;
 - state updates are merged while the learner's PostgreSQL row is locked;
 - **Save** stores the exact source in `user_files` and its canonical `exNN.py`
@@ -79,6 +86,55 @@ rather than certified grading. The worker is not a sandbox for untrusted pasted
 code: Pyodide exposes a JavaScript bridge and CSP-permitted runtime network access.
 The separate tab capability prevents worker code from using an attached session
 cookie to reach account APIs.
+
+## Guided-room progress and classroom lab drafts
+
+Guided room completion uses the existing learning-progress object. Each completed
+answer or code task contributes a stable `room:<task id>` marker to its chapter.
+This marker is idempotent and synchronizes through PostgreSQL `user_state`, but it
+does not add a passed exercise ID, award an exercise star, create an assessment
+score, or create a submission file. A classroom **Run** is only an experiment;
+only a successful **Check answer** or **Check task** creates the room marker.
+
+Editable lecture demonstrations, lesson-note examples, and guided code tasks use a
+separate local-storage base key:
+
+```text
+fp-playground.class-labs.v1
+```
+
+The active workspace scope is appended in the same way as the other workspace
+keys. Anonymous work uses the base key and an account cache uses
+`fp-playground.class-labs.v1.user.<user UUID>`. Each entry is keyed by
+`<chapter id>/<lab id>` and stores two strings: the current Python source and the
+current sample-input text.
+
+Classroom edits are saved after a 250 ms delay and flushed immediately when Python
+runs. When the code and sample input both equal the authored defaults, the override
+is removed instead of storing a duplicate. **Reset** restores those defaults and
+deletes the corresponding saved override.
+
+Client-side classroom limits are independent of the API's overall `user_state`
+limit:
+
+| Classroom draft data | Bound |
+| --- | --- |
+| Python source in one lab | 12,000 characters |
+| Sample input in one lab | 2,000 characters |
+| Parsed or merged lab entries | 160 |
+| Combined UTF-8 source and input across all labs | 64,000 bytes |
+
+The most recently edited entries are kept when the aggregate budget requires old
+entries to be removed. During account merge, an existing current-workspace entry
+wins for the same lab; missing remote entries are admitted only while the
+64,000-byte budget permits. The resulting `classLabDrafts` object is serialized
+inside PostgreSQL `user_state` and follows the normal account sync lifecycle.
+
+Classroom labs deliberately do not call the canonical file API. Neither **Run** nor
+**Check task** writes `user_files` or materializes a chapter `exNN.py` mirror.
+Within a guided code task, **Run** uses the learner's edited sample input; **Check
+task** uses the authored canonical task input. Both preserve the current editor and
+input draft.
 
 ## Canonical chapter files
 
@@ -125,7 +181,7 @@ adds the worker-resistant session capability:
 | --- | --- | --- |
 | `users` | Normalized email, display name, scrypt password record, creation time | Parent learner record |
 | `sessions` | SHA-256 session-token and client-capability hashes with expiries | Cascades with `users` |
-| `user_state` | Forward-compatible JSON progress, drafts, settings, and assessment state | Cascades with `users` |
+| `user_state` | Forward-compatible JSON progress, exercise/classroom drafts, settings, and assessment state | Cascades with `users` |
 | `user_files` | One canonical source snapshot per learner/exercise | Cascades with `users` |
 | `test_runs` | Bounded normalized run records reported by the learner device | Cascades with `users` |
 | `schema_migrations` | Applied migration names, checksums, and timestamps | Operational metadata |
@@ -284,7 +340,7 @@ sessions, or delete an account.
 - the `submissions_data` volume or managed submission mount for immediate file
   mirrors;
 - the existing `COMPOSE_PROJECT_NAME`;
-- stable exercise, learning-marker, and assessment IDs.
+- stable exercise, classroom-lab, guided-room learning-marker, and assessment IDs.
 
 On a new domain, the learner signs in again because cookies are origin-bound. The
 same database restores account state and saved sources. If a new-origin local draft
