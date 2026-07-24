@@ -1693,14 +1693,25 @@
     var exerciseId = String(exercise.id);
     var tests = Array.isArray(testSpec.tests) ? testSpec.tests : [];
     var section = el("section", "ide-section");
+    section.dataset.ideWorkspace = exerciseId;
     var heading = el("header", "section-heading section-heading--row ide-section__heading");
     var headingCopy = el("div");
+    var headingActions = el("div", "ide-section__actions");
+    var focusButton = el("button", "ide-focus-button", "Focus editor");
+    focusButton.type = "button";
+    focusButton.dataset.ideFocus = exerciseId;
+    focusButton.setAttribute("aria-pressed", "false");
+    focusButton.setAttribute("aria-label", "Focus the editor and hide the lesson panel");
     headingCopy.append(
       el("p", "eyebrow", "Python workspace"),
       el("h2", null, "Code and feedback"),
       el("p", null, "Run uses visible examples; Run tests adds hidden cases and awards stars.")
     );
-    heading.append(headingCopy, el("span", "section-heading__count", visibleCount + " visible · " + hiddenCount + " hidden"));
+    headingActions.append(
+      el("span", "section-heading__count", visibleCount + " visible · " + hiddenCount + " hidden"),
+      focusButton
+    );
+    heading.append(headingCopy, headingActions);
 
     var layout = el("div", "ide-layout");
     var editorShell = el("section", "ide-editor-shell");
@@ -1803,8 +1814,7 @@
     editorShell.setAttribute("aria-label", "Python editor for " + exercise.title);
     editorShell.append(topbar, frame, statusbar);
 
-    var plan = renderTestPlan(testSpec);
-    layout.append(editorShell, plan);
+    layout.append(editorShell);
 
     var runtime = el("p", "runtime-note");
     runtime.append(
@@ -1843,41 +1853,157 @@
     outputHeading.append(outputHeadingCopy, el("span", null, "Expected · actual · traceback"));
     output.append(outputHeading, submissionSave, results, runtimeDetails);
 
-    section.append(heading, layout, output, renderRunHistory(exercise));
+    var storedResult = runResults.get(exerciseId);
+    var activeTab = storedResult ? "results" : "tests";
+    var dock = el("section", "ide-dock");
+    var dockTablist = el("div", "ide-dock__tabs");
+    var testCasesPanel = createIdeDockPanel(exerciseId, "tests");
+    var resultPanel = createIdeDockPanel(exerciseId, "results");
+    var historyPanel = createIdeDockPanel(exerciseId, "history");
+    dock.dataset.ideDock = exerciseId;
+    dock.setAttribute("aria-label", "Tests, results, and run history");
+    dockTablist.setAttribute("role", "tablist");
+    dockTablist.setAttribute("aria-label", "Workspace feedback");
+    dockTablist.setAttribute("aria-orientation", "horizontal");
+    dockTablist.append(
+      createIdeDockTab(exerciseId, "tests", "Test cases", String(tests.length), activeTab === "tests"),
+      createIdeDockTab(exerciseId, "results", "Result", getIdeResultBadge(storedResult), activeTab === "results"),
+      createIdeDockTab(exerciseId, "history", "History", getIdeHistoryBadge(exerciseId), activeTab === "history")
+    );
+    testCasesPanel.hidden = activeTab !== "tests";
+    testCasesPanel.append(
+      el("p", "ide-dock__coach", "Choose one case, predict the output, then run your code. Locked cases protect the full challenge."),
+      renderTestPlan(testSpec, exerciseId)
+    );
+    resultPanel.hidden = activeTab !== "results";
+    resultPanel.append(output);
+    historyPanel.hidden = activeTab !== "history";
+    historyPanel.append(renderRunHistory(exercise));
+    dock.append(dockTablist, testCasesPanel, resultPanel, historyPanel);
+
+    section.append(heading, layout, dock);
     return section;
   }
 
-  function renderTestPlan(testSpec) {
-    var aside = el("aside", "test-plan-panel");
+  function createIdeDockTab(exerciseId, name, label, badge, selected) {
+    var button = el("button", "ide-dock__tab" + (selected ? " is-active" : ""));
+    var tabId = "ide-tab-" + domId(exerciseId) + "-" + name;
+    var panelId = "ide-panel-" + domId(exerciseId) + "-" + name;
+    var badgeNode = el("span", "ide-dock__badge", badge);
+    button.type = "button";
+    button.id = tabId;
+    button.dataset.ideTab = name;
+    button.dataset.ideExercise = exerciseId;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", String(selected));
+    button.setAttribute("aria-controls", panelId);
+    button.tabIndex = selected ? 0 : -1;
+    if (name === "results") {
+      badgeNode.dataset.ideResultBadge = exerciseId;
+    } else if (name === "history") {
+      badgeNode.dataset.ideHistoryBadge = exerciseId;
+    }
+    button.append(el("span", null, label), badgeNode);
+    return button;
+  }
+
+  function createIdeDockPanel(exerciseId, name) {
+    var panel = el("div", "ide-dock__panel ide-dock__panel--" + name);
+    panel.id = "ide-panel-" + domId(exerciseId) + "-" + name;
+    panel.dataset.idePanel = name;
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", "ide-tab-" + domId(exerciseId) + "-" + name);
+    panel.tabIndex = 0;
+    if (name === "results") {
+      panel.setAttribute("aria-live", "polite");
+    }
+    return panel;
+  }
+
+  function getIdeResultBadge(stored) {
+    var results = stored && Array.isArray(stored.results) ? stored.results : [];
+    if (!results.length) {
+      return "New";
+    }
+    return results.filter(function (result) { return result.passed; }).length + "/" + results.length;
+  }
+
+  function getIdeHistoryBadge(exerciseId) {
+    if (!currentUser || !authToken) {
+      return "Local";
+    }
+    var state = runHistoryByExercise.get(exerciseId);
+    if (!state || state.status === "loading") {
+      return "…";
+    }
+    if (state.status === "error") {
+      return "!";
+    }
+    return String(Array.isArray(state.runs) ? state.runs.length : 0);
+  }
+
+  function renderTestPlan(testSpec, exerciseId) {
+    var aside = el("section", "test-plan-panel");
     var header = el("header", "test-plan-panel__header");
+    var headerCopy = el("div");
     var tests = Array.isArray(testSpec.tests) ? testSpec.tests : [];
-    aside.tabIndex = 0;
     aside.setAttribute("aria-label", "Planned test cases");
-    header.append(el("h3", null, "Test cases"), el("span", null, tests.length + " total"));
+    headerCopy.append(el("h3", null, "Test cases"), el("p", null, "Inspect one contract example at a time."));
+    header.append(
+      headerCopy,
+      el("span", null, tests.length + " total")
+    );
     aside.append(header);
-    var list = el("ol", "test-plan-list");
+    var selector = el("div", "test-case-selector");
+    var details = el("div", "test-case-details");
+    selector.setAttribute("role", "tablist");
+    selector.setAttribute("aria-label", "Select a test case");
+    selector.setAttribute("aria-orientation", "horizontal");
     tests.forEach(function (test, index) {
-      var item = el("li", "test-plan-case" + (test.hidden ? " is-hidden" : ""));
+      var selected = index === 0;
+      var caseId = "test-case-" + domId(exerciseId) + "-" + index;
+      var panelId = "test-case-panel-" + domId(exerciseId) + "-" + index;
+      var button = el(
+        "button",
+        "test-case-chip" + (selected ? " is-active" : "") + (test.hidden ? " is-locked" : ""),
+        test.hidden ? "Locked " + (index + 1) : "Case " + (index + 1)
+      );
+      var item = el("article", "test-plan-case" + (test.hidden ? " is-hidden" : ""));
       var heading = el("div", "test-plan-case__heading");
       var number = el("span", "test-plan-case__number", String(index + 1));
       var copy = el("div");
+      button.type = "button";
+      button.id = caseId;
+      button.dataset.testCase = String(index);
+      button.dataset.testCaseExercise = exerciseId;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", String(selected));
+      button.setAttribute("aria-controls", panelId);
+      button.tabIndex = selected ? 0 : -1;
       copy.append(el("strong", null, test.hidden ? "Hidden test" : test.name), el("span", null, test.hidden ? "Unlocks after Run tests" : "Visible example"));
       heading.append(number, copy, el("span", "test-kind", test.hidden ? "Hidden" : "Visible"));
+      item.id = panelId;
+      item.dataset.testCasePanel = String(index);
+      item.setAttribute("role", "tabpanel");
+      item.setAttribute("aria-labelledby", caseId);
+      item.tabIndex = 0;
+      item.hidden = !selected;
       item.append(heading);
       if (test.hidden) {
-        item.append(el("p", "test-plan-case__masked", "Input and expectation stay masked until the suite returns."));
+        item.append(el("p", "test-plan-case__masked", "Locked case: its input and expectation stay masked. Run tests to receive pass or fail feedback without revealing the answer."));
       } else {
         item.append(
           renderPlanDatum("Input", formatTestInput(test, testSpec.mode)),
           renderPlanDatum("Expected", formatPlannedExpected(test, testSpec.mode))
         );
       }
-      list.append(item);
+      selector.append(button);
+      details.append(item);
     });
     if (!tests.length) {
-      list.append(el("li", "empty-state", "No tests are defined for this exercise."));
+      details.append(el("p", "empty-state", "No tests are defined for this exercise."));
     }
-    aside.append(list);
+    aside.append(selector, details);
     return aside;
   }
 
@@ -1885,6 +2011,114 @@
     var datum = el("div", "test-plan-datum");
     datum.append(el("span", null, label), el("code", null, value));
     return datum;
+  }
+
+  function activateIdeTab(exerciseId, name, moveFocus) {
+    var workspace = elements.main.querySelector("[data-ide-workspace='" + cssEscape(exerciseId) + "']");
+    if (!workspace) {
+      return;
+    }
+    var selectedTab = null;
+    workspace.querySelectorAll("button[data-ide-tab]").forEach(function (tab) {
+      var selected = tab.dataset.ideTab === name;
+      tab.classList.toggle("is-active", selected);
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected) {
+        selectedTab = tab;
+      }
+    });
+    workspace.querySelectorAll("[data-ide-panel]").forEach(function (panel) {
+      panel.hidden = panel.dataset.idePanel !== name;
+    });
+    if (moveFocus && selectedTab) {
+      selectedTab.focus();
+    }
+  }
+
+  function activateTestCase(button, moveFocus) {
+    var testPlan = button && button.closest(".test-plan-panel");
+    if (!testPlan) {
+      return;
+    }
+    var name = button.dataset.testCase;
+    testPlan.querySelectorAll("button[data-test-case]").forEach(function (candidate) {
+      var selected = candidate.dataset.testCase === name;
+      candidate.classList.toggle("is-active", selected);
+      candidate.setAttribute("aria-selected", String(selected));
+      candidate.tabIndex = selected ? 0 : -1;
+    });
+    testPlan.querySelectorAll("[data-test-case-panel]").forEach(function (panel) {
+      panel.hidden = panel.dataset.testCasePanel !== name;
+    });
+    if (moveFocus) {
+      button.focus();
+    }
+  }
+
+  function toggleIdeFocus(exerciseId, force) {
+    var workspace = elements.main.querySelector("[data-ide-workspace='" + cssEscape(exerciseId) + "']");
+    var workbench = workspace && workspace.closest(".exercise-workbench");
+    var button = workspace && workspace.querySelector("button[data-ide-focus='" + cssEscape(exerciseId) + "']");
+    if (!workbench || !button) {
+      return false;
+    }
+    var focused = typeof force === "boolean"
+      ? force
+      : !workbench.classList.contains("is-editor-focused");
+    workbench.classList.toggle("is-editor-focused", focused);
+    button.classList.toggle("is-active", focused);
+    button.setAttribute("aria-pressed", String(focused));
+    button.setAttribute(
+      "aria-label",
+      focused ? "Exit focused editor and show the lesson panel" : "Focus the editor and hide the lesson panel"
+    );
+    button.textContent = focused ? "Exit focus" : "Focus editor";
+    window.requestAnimationFrame(function () {
+      window.dispatchEvent(new Event("resize"));
+    });
+    announce(
+      focused
+        ? "Editor focus enabled. The lesson is hidden; press Escape to bring it back."
+        : "Editor focus closed. The lesson and code workspace are both visible."
+    );
+    return focused;
+  }
+
+  function updateIdeResultBadge(exerciseId, stored, status) {
+    var badge = elements.main.querySelector("[data-ide-result-badge='" + cssEscape(exerciseId) + "']");
+    if (!badge) {
+      return;
+    }
+    if (status === "running") {
+      badge.textContent = "…";
+      badge.className = "ide-dock__badge is-running";
+      return;
+    }
+    if (status === "error") {
+      badge.textContent = "!";
+      badge.className = "ide-dock__badge is-failing";
+      return;
+    }
+    var results = stored && Array.isArray(stored.results) ? stored.results : [];
+    badge.textContent = getIdeResultBadge(stored);
+    badge.className = "ide-dock__badge";
+    if (results.length) {
+      badge.classList.add(results.every(function (result) { return result.passed; }) ? "is-passing" : "is-failing");
+    }
+  }
+
+  function updateIdeHistoryBadge(exerciseId) {
+    var badge = elements.main.querySelector("[data-ide-history-badge='" + cssEscape(exerciseId) + "']");
+    if (!badge) {
+      return;
+    }
+    badge.textContent = getIdeHistoryBadge(exerciseId);
+    badge.className = "ide-dock__badge";
+    var state = runHistoryByExercise.get(exerciseId);
+    if (state && state.status === "error") {
+      badge.classList.add("is-failing");
+    }
   }
 
   function renderResultsEmpty() {
@@ -2125,7 +2359,22 @@
     var checkpointButton = event.target.closest("button[data-checkpoint-option]");
     var badgeButton = event.target.closest("button[data-open-badge]");
     var closeDialogButton = event.target.closest("button[data-close-badge-dialog]");
+    var ideTabButton = event.target.closest("button[data-ide-tab]");
+    var testCaseButton = event.target.closest("button[data-test-case]");
+    var ideFocusButton = event.target.closest("button[data-ide-focus]");
 
+    if (ideTabButton) {
+      activateIdeTab(ideTabButton.dataset.ideExercise, ideTabButton.dataset.ideTab, false);
+      return;
+    }
+    if (testCaseButton) {
+      activateTestCase(testCaseButton, false);
+      return;
+    }
+    if (ideFocusButton) {
+      toggleIdeFocus(ideFocusButton.dataset.ideFocus);
+      return;
+    }
     if (hintButton) {
       revealNextHint(hintButton.dataset.revealHint);
       return;
@@ -2881,6 +3130,8 @@
     if (results) {
       results.replaceChildren(renderResultsEmpty());
     }
+    updateIdeResultBadge(exerciseId, null);
+    activateIdeTab(exerciseId, "tests", false);
     announce("Clean starter restored for " + exerciseById.get(exerciseId).title + ".");
   }
 
@@ -2948,6 +3199,8 @@
     audio.playSubmit();
     setIdeControlsLocked(true);
     button.textContent = scope === "visible" ? "Running…" : "Running tests…";
+    updateIdeResultBadge(exerciseId, null, "running");
+    activateIdeTab(exerciseId, "results", false);
     resultsContainer.setAttribute("aria-busy", "true");
     renderRunStatus(
       resultsContainer,
@@ -2971,6 +3224,7 @@
           renderStoredResults(exercise, testSpec, stored, resultsContainer);
         }
       }
+      updateIdeResultBadge(exerciseId, stored);
 
       var allPassed = results.length === selectedTests.length && results.every(function (result) {
         return result.passed;
@@ -3014,6 +3268,7 @@
           renderRunStatus(resultsContainer, error instanceof Error ? error.message : String(error), true);
         }
       }
+      updateIdeResultBadge(exerciseId, null, "error");
     } finally {
       if (activeRun && activeRun.token === runToken) {
         activeRun = null;
@@ -3023,6 +3278,7 @@
         if (resultsContainer) {
           resultsContainer.removeAttribute("aria-busy");
         }
+        activateIdeTab(exerciseId, "results", false);
         setIdeControlsLocked(false);
       }
       if (button.isConnected) {
@@ -4065,6 +4321,7 @@
     if (exercise && current) {
       current.replaceWith(renderRunHistory(exercise));
     }
+    updateIdeHistoryBadge(exerciseId);
   }
 
   function persistRunDetails(exerciseId, scope, results, allPassed, completedAt, sessionToken) {
@@ -4290,13 +4547,65 @@
   }
 
   function handleDocumentKeydown(event) {
+    var ideTab = event.target && event.target.closest
+      ? event.target.closest("button[data-ide-tab]")
+      : null;
+    if (ideTab && handleRovingTabKeydown(event, ideTab, "button[data-ide-tab]", function (nextTab) {
+      activateIdeTab(nextTab.dataset.ideExercise, nextTab.dataset.ideTab, true);
+    })) {
+      return;
+    }
+    var testCase = event.target && event.target.closest
+      ? event.target.closest("button[data-test-case]")
+      : null;
+    if (testCase && handleRovingTabKeydown(event, testCase, "button[data-test-case]", function (nextCase) {
+      activateTestCase(nextCase, true);
+    })) {
+      return;
+    }
     if (event.key !== "Escape") {
       return;
+    }
+    var focusedWorkbench = elements.main.querySelector(".exercise-workbench.is-editor-focused");
+    if (focusedWorkbench) {
+      var workspace = focusedWorkbench.querySelector("[data-ide-workspace]");
+      if (workspace) {
+        var focusToggle = workspace.querySelector("button[data-ide-focus]");
+        event.preventDefault();
+        toggleIdeFocus(workspace.dataset.ideWorkspace, false);
+        if (focusToggle) {
+          focusToggle.focus();
+        }
+        return;
+      }
     }
     if (!elements.profilePanel.hidden) {
       closeProfile();
       elements.profileButton.focus();
     }
+  }
+
+  function handleRovingTabKeydown(event, current, selector, activate) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return false;
+    }
+    var tablist = current.closest("[role='tablist']");
+    var tabs = tablist ? Array.from(tablist.querySelectorAll(selector)) : [];
+    if (!tabs.length) {
+      return false;
+    }
+    var currentIndex = Math.max(0, tabs.indexOf(current));
+    var nextIndex;
+    if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabs.length - 1;
+    } else {
+      nextIndex = (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    }
+    event.preventDefault();
+    activate(tabs[nextIndex]);
+    return true;
   }
 
   function toggleTheme() {

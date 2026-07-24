@@ -127,8 +127,10 @@ test.afterEach(async () => {
 
 test("a signed-in learner can reopen and copy persisted run evidence", async ({ page }) => {
   const history = page.locator(`[data-run-history="${EXERCISE_ID}"]`);
+  const historyTab = page.locator('[data-ide-tab="history"]');
 
   await page.goto(`/#exercise/${EXERCISE_ID}`);
+  await historyTab.click();
   await expect(history).toBeVisible();
   await expect(history).toContainText(/learner-device evidence/iu);
 
@@ -137,6 +139,7 @@ test("a signed-in learner can reopen and copy persisted run evidence", async ({ 
   await expect(historicRun).toContainText("Historic greeting mismatch");
 
   await page.reload();
+  await historyTab.click();
   await expect(history).toBeVisible();
   await expect(history.locator("[data-run-history-item]")).toHaveCount(1);
 
