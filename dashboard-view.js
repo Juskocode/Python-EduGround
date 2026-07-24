@@ -333,40 +333,78 @@
   function renderRoadmap(stages) {
     var section = el("section", "home-roadmap");
     var heading = el("header", "home-roadmap__heading");
+    var safeStages = Array.isArray(stages) ? stages : [];
+    var currentStageIndex = safeStages.findIndex(function (stage) {
+      return stage.status && stage.status.id !== "complete";
+    });
+    if (currentStageIndex < 0 && safeStages.length) {
+      currentStageIndex = safeStages.length - 1;
+    }
+    section.setAttribute("aria-labelledby", "home-roadmap-title");
     heading.append(
       el("div", null),
       el(
         "span",
         "section-heading__count",
-        stages.reduce(function (total, stage) {
+        safeStages.reduce(function (total, stage) {
           return total + stage.chapters.length;
-        }, 0) + " chapters · " + stages.length + " stages"
+        }, 0) + " chapters · " + safeStages.length + " stages"
       )
     );
     heading.firstElementChild.append(
       el("p", "eyebrow", "Curriculum roadmap"),
       el("h2", null, "Choose a chapter by skill, then prove what you learned."),
-      el("p", null, "Every chapter pairs a solution-free class with executable exercises. The cards expose skills and progress before you commit to the next lesson.")
+      el("p", null, "Follow each three-chapter route from class material to executable practice, then use the timed checkpoint to prove recall.")
     );
+    heading.querySelector("h2").id = "home-roadmap-title";
     var list = el("ol", "learning-stage-list");
-    stages.forEach(function (stage) {
-      list.append(renderStage(stage));
+    list.setAttribute("aria-label", "Python curriculum stages");
+    safeStages.forEach(function (stage, index) {
+      list.append(renderStage(stage, index, currentStageIndex));
     });
     section.append(heading, list);
     return section;
   }
 
-  function renderStage(stage) {
-    var item = el("li", "learning-stage learning-stage--" + stage.status.tone);
+  function renderStage(stage, stageIndex, currentStageIndex) {
+    var stageState = getStagePathState(stage, stageIndex, currentStageIndex);
+    var item = el(
+      "li",
+      "learning-stage learning-stage--" + stage.status.tone +
+        " learning-stage--" + stageState
+    );
     var header = el("header", "learning-stage__header");
     var marker = el("span", "learning-stage__number", pad(stage.number));
     var copy = el("div", "learning-stage__copy");
     var stageProgress = el("div", "learning-stage__progress");
-    var status = el("span", "learning-stage__status", stage.status.label);
+    var status = el(
+      "span",
+      "learning-stage__status",
+      stageState === "completed"
+        ? "Completed"
+        : stageState === "current"
+          ? stage.status.id === "checkpoint" ? "Checkpoint ready" : "Current stage"
+          : "Upcoming"
+    );
+    var progressCopy = el("span", "learning-stage__progress-copy");
+    var stageTitleId = "roadmap-stage-" + String(stage.id).replace(/[^a-z0-9-]/giu, "-");
+    var currentChapterIndex = getCurrentChapterIndex(stage, stageState);
+    var checkpointState = getCheckpointPathState(stage, stageState);
+    var routeFill = getStageRouteFill(stage, stageState, currentChapterIndex);
+    item.dataset.roadmapStage = String(stage.id);
+    item.dataset.stageState = stageState;
+    item.setAttribute("aria-labelledby", stageTitleId);
+    item.style.setProperty("--stage-route-fill", String(routeFill));
+    marker.setAttribute("aria-hidden", "true");
     copy.append(
       el("span", "eyebrow", "Stage " + pad(stage.number)),
       el("h3", null, stage.title),
       el("p", null, stage.chapters.length + " chapters · " + stage.progress.done + " of " + stage.progress.total + " milestones")
+    );
+    copy.querySelector("h3").id = stageTitleId;
+    progressCopy.append(
+      el("strong", null, stage.progress.percent + "%"),
+      el("small", null, stage.progress.done + " / " + stage.progress.total)
     );
     stageProgress.append(
       progress(
@@ -374,55 +412,167 @@
         stage.progress.total,
         stage.title + ": " + stage.progress.done + " of " + stage.progress.total + " milestones complete"
       ),
-      el("strong", null, stage.progress.percent + "%")
+      progressCopy
     );
     header.append(marker, copy, stageProgress, status);
 
+    var path = el("div", "learning-stage__path");
+    var routeTrack = el("span", "learning-stage__route-track");
+    var routeProgress = el("span", "learning-stage__route-progress");
+    routeTrack.setAttribute("aria-hidden", "true");
+    routeProgress.setAttribute("aria-hidden", "true");
     var chapterNav = el("nav", "learning-stage__chapters");
     var chapterList = el("ol");
     chapterNav.setAttribute("aria-label", stage.title + " chapters");
-    stage.chapters.forEach(function (chapter) {
-      chapterList.append(renderChapterItem(chapter));
+    stage.chapters.forEach(function (chapter, chapterIndex) {
+      chapterList.append(
+        renderChapterItem(
+          chapter,
+          getChapterPathState(chapter, chapterIndex, stageState, currentChapterIndex)
+        )
+      );
     });
     chapterNav.append(chapterList);
+    path.append(routeTrack, routeProgress, chapterNav);
 
-    item.append(header, chapterNav);
     if (stage.assessment && stage.assessment.id) {
       var assessment = link(
         "#assessment/" + encodeURIComponent(stage.assessment.id),
-        "learning-stage__assessment"
+        "learning-stage__assessment learning-stage__assessment--" + checkpointState
       );
       var assessmentCopy = el("span");
+      assessment.dataset.stageCheckpoint = String(stage.id);
+      assessment.dataset.checkpointState = checkpointState;
+      assessment.setAttribute(
+        "aria-label",
+        stage.assessment.title + ", " +
+          (checkpointState === "completed"
+            ? "completed"
+            : checkpointState === "current" ? "current checkpoint" : "upcoming checkpoint")
+      );
+      if (checkpointState === "current") {
+        assessment.setAttribute("aria-current", "step");
+      }
       assessmentCopy.append(
         el("span", "eyebrow", "Timed checkpoint"),
         el("strong", null, stage.assessment.title),
         el("small", null, stage.assessment.passedModes + " / " + stage.assessment.totalModes + " rooms passed · 60/100 required")
       );
       assessment.append(
-        el("span", "learning-stage__assessment-icon", "◷"),
+        el(
+          "span",
+          "learning-stage__assessment-icon",
+          checkpointState === "completed" ? "✓" : "60"
+        ),
         assessmentCopy,
-        el("span", "learning-stage__assessment-open", stage.status.id === "checkpoint" ? "Start checkpoint →" : "Open rooms →")
+        el(
+          "span",
+          "learning-stage__assessment-open",
+          checkpointState === "completed"
+            ? "Passed"
+            : checkpointState === "current" ? "Start →" : "Preview →"
+        )
       );
-      item.append(assessment);
+      path.append(assessment);
     }
+    item.append(header, path);
     return item;
   }
 
-  function renderChapterItem(chapter) {
-    var item = el("li");
+  function getStagePathState(stage, stageIndex, currentStageIndex) {
+    if (stage.status && stage.status.id === "complete") {
+      return "completed";
+    }
+    if (stageIndex === currentStageIndex) {
+      return "current";
+    }
+    return stageIndex < currentStageIndex ? "completed" : "upcoming";
+  }
+
+  function getCurrentChapterIndex(stage, stageState) {
+    if (stageState !== "current") {
+      return -1;
+    }
+    var chapters = Array.isArray(stage.chapters) ? stage.chapters : [];
+    var activeIndex = chapters.findIndex(function (chapter) {
+      return chapter.state.id === "active" || chapter.state.id === "review";
+    });
+    if (activeIndex >= 0) {
+      return activeIndex;
+    }
+    return chapters.findIndex(function (chapter) {
+      return chapter.state.id !== "mastered";
+    });
+  }
+
+  function getChapterPathState(chapter, chapterIndex, stageState, currentChapterIndex) {
+    if (chapter.state.id === "mastered" || stageState === "completed") {
+      return "completed";
+    }
+    if (stageState === "current" && chapterIndex === currentChapterIndex) {
+      return "current";
+    }
+    return "upcoming";
+  }
+
+  function getCheckpointPathState(stage, stageState) {
+    if (
+      stageState === "completed" ||
+      (stage.assessment &&
+        stage.assessment.totalModes > 0 &&
+        stage.assessment.passedModes === stage.assessment.totalModes)
+    ) {
+      return "completed";
+    }
+    if (stageState === "current" && stage.status.id === "checkpoint") {
+      return "current";
+    }
+    return "upcoming";
+  }
+
+  function getStageRouteFill(stage, stageState, currentChapterIndex) {
+    if (stageState === "completed" || stage.status.id === "checkpoint") {
+      return 1;
+    }
+    var chapterCount = Math.max(stage.chapters.length, 1);
+    var currentPosition = currentChapterIndex < 0 ? 0 : currentChapterIndex / chapterCount;
+    var progressPosition = Math.min(Math.max(stage.progress.percent, 0), 100) / 100 * 0.75;
+    return Math.max(currentPosition, progressPosition);
+  }
+
+  function renderChapterItem(chapter, pathState) {
+    var item = el("li", "path-chapter-stop path-chapter-stop--" + pathState);
     var chapterLink = link(
       "#chapter/" + encodeURIComponent(chapter.id),
-      "path-chapter path-chapter--" + chapter.state.tone
+      "path-chapter path-chapter--" + chapter.state.tone +
+        " path-chapter--" + pathState
     );
-    var top = el("span", "path-chapter__top");
-    var marker = el("span", "path-chapter__marker", "PY" + pad(chapter.number));
+    var marker = el("span", "path-chapter__marker");
+    var markerPrefix = el("span", "path-chapter__marker-prefix", "py");
+    var markerValue = el(
+      "strong",
+      null,
+      pathState === "completed" ? "✓" : pathState === "current" ? "›" : pad(chapter.number)
+    );
     var copy = el("span", "path-chapter__copy");
     var topics = el("span", "path-chapter__topics");
-    var metrics = el("span", "path-chapter__metrics");
-    var chapterProgress = el("span", "path-chapter__progress");
-    var progressLabel = el("span", "path-chapter__progress-label");
     var footer = el("span", "path-chapter__footer");
-    var state = el("span", "path-chapter__state", chapter.state.label);
+    var stateLabel = pathState === "completed"
+      ? "Completed"
+      : pathState === "current" ? "Current" : "Upcoming";
+    var state = el("span", "path-chapter__state", stateLabel);
+    chapterLink.dataset.chapterNode = String(chapter.id);
+    chapterLink.dataset.nodeState = pathState;
+    chapterLink.setAttribute(
+      "aria-label",
+      "Chapter " + pad(chapter.number) + ", " + chapter.title + ", " +
+        stateLabel.toLowerCase() + ", " + chapter.combined.percent + " percent complete"
+    );
+    if (pathState === "current") {
+      chapterLink.setAttribute("aria-current", "step");
+    }
+    marker.setAttribute("aria-hidden", "true");
+    marker.append(markerPrefix, markerValue);
     copy.append(
       el("strong", null, chapter.title),
       el("small", null, chapter.summary)
@@ -430,25 +580,21 @@
     chapter.topics.forEach(function (topic) {
       topics.append(el("span", null, topic));
     });
-    metrics.append(
-      el("span", null, chapter.exercises.done + "/" + chapter.exercises.total + " exercises"),
-      el("span", null, chapter.guide.done + "/" + chapter.guide.total + " guide")
+    footer.append(
+      state,
+      el("span", "path-chapter__percent", chapter.combined.percent + "%")
     );
-    progressLabel.append(
-      el("span", null, "Chapter progress"),
-      el("strong", null, chapter.combined.percent + "%")
-    );
-    chapterProgress.append(
-      progressLabel,
+    chapterLink.append(
+      marker,
+      copy,
+      topics,
       progress(
         chapter.combined.done,
         chapter.combined.total,
         chapter.title + ": " + chapter.combined.done + " of " + chapter.combined.total + " learning milestones complete"
-      )
+      ),
+      footer
     );
-    top.append(marker, state);
-    footer.append(metrics, el("span", "path-chapter__open", "Open chapter →"));
-    chapterLink.append(top, copy, topics, chapterProgress, footer);
     item.append(chapterLink);
     return item;
   }

@@ -97,7 +97,7 @@ test("the full-width editor places test cases in an accessible bottom dock", asy
   expect(geometry.pageScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
   await expect(editor).toBeVisible();
   await expect(layout).toBeVisible();
-  await expect(testsPanel.getByText("Test cases", { exact: true })).toBeVisible();
+  await expect(testsPanel.getByText(/Choose one case/iu)).toBeVisible();
 });
 
 test("the case picker shows one contract at a time and keeps hidden data masked", async ({
