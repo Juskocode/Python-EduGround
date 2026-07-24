@@ -89,7 +89,7 @@ git diff --check
 
 The classroom tests verify:
 
-- exact coverage of all 11 chapters and 990 planned minutes;
+- exact coverage of all 12 chapters and 1,080 planned minutes;
 - stable IDs and deeply frozen content;
 - complete preparation, schedule, activity, practice, recap, and homework fields;
 - Python compilation, execution, and exact labelled output for every lecture demonstration;

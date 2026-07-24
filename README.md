@@ -1,6 +1,6 @@
 # Python EduGround
 
-Python EduGround turns the 11 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL. The repository also ships a hardened container topology, secure-cookie account boundary, mandatory PostgreSQL and browser/accessibility gates, and a reviewable CI/release pipeline.
+Python EduGround turns the 12 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL. The repository also ships a hardened container topology, secure-cookie account boundary, mandatory PostgreSQL and browser/accessibility gates, and a reviewable CI/release pipeline.
 
 ## Product tour
 
@@ -34,11 +34,11 @@ Python EduGround turns the 11 exercise chapters in this repository into a local-
 
 | Area | Included |
 | --- | --- |
-| Curriculum | 11 chapters, 92 exercises, 281 exercise tests, and 239 collectible difficulty stars |
-| Classroom material | Eleven distinct 90-minute classes: 990 planned minutes, 44 summary outcomes, 55 lesson-plan blocks, 11 executable lecture demonstrations with labelled output, 22 collaborative activities, 44 independent-practice prompts, 55 recap questions, and 11 transfer-focused homework briefs |
-| Guided learning | 44 lesson-note sections, 55 runbook phases, 55 mental-model steps, 22 guided practices, 11 concept clinics with 66 worked trace rows, 33 misconception probes, and 33 transfer prompts, plus one interactive number-line lab, 38 coaching exchanges, and 43 toolbox cards |
+| Curriculum | 12 chapters, 102 exercises, 316 exercise tests, and 274 collectible difficulty stars |
+| Classroom material | Twelve distinct 90-minute classes: 1,080 planned minutes, 48 summary outcomes, 60 lesson-plan blocks, 12 executable lecture demonstrations with labelled output, 24 collaborative activities, 48 independent-practice prompts, 60 recap questions, and 12 transfer-focused homework briefs |
+| Guided learning | 48 lesson-note sections, 60 runbook phases, 60 mental-model steps, 24 guided practices, 12 concept clinics with 72 worked trace rows, 36 misconception probes, and 36 transfer prompts, plus one interactive number-line lab, 42 coaching exchanges, and 47 toolbox cards |
 | Timed assessments | Four chapter blocks, each with 15 theory questions in 20 minutes and five practical tasks in 60 minutes; theory and practical pass independently at 60/100 |
-| Reference material | 70 glossary terms, 66 debugging checks, one checkpoint per chapter, and 62 curated official Python documentation links: 42 in chapter guides and 20 in assessments |
+| Reference material | 77 glossary terms, 73 debugging checks, one checkpoint per chapter, and 67 curated official Python documentation links: 46 in chapter guides and 21 in assessments |
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, and progressive hints |
 | Editor | Vendored Ace with a persistent Sublime or Vim keymap, fixed Monokai theme, Python highlighting, autocomplete, search, folding, line numbers, and copy/paste controls |
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
@@ -61,9 +61,11 @@ Every chapter is presented as a complete class:
 
 Concepts that benefit from direct manipulation can also include a focused lab. Chapter 2 provides an accessible number-line explorer for comparing `round`, `math.floor`, `math.ceil`, `int`, and `math.trunc` across positive values, negative values, exact integers, and ties-to-even.
 
+Chapter 12 adds a complete problem-solving track: decomposition and counterexamples, justified greedy selection, memoization, bottom-up tabulation, capacity and reachability states, and paired-sequence tables. Its ten exercises progress from Two Sum and interval scheduling through climbing stairs, grid paths, 0/1 knapsack, coin change, maximum non-adjacent sum, subset sum, longest common subsequence, and edit distance. Four original local SVG diagrams support the class and each exercise reuses a relevant visual reasoning cue without exposing its solution.
+
 Lesson notes, concept clinics, and runbooks can be marked understood. Their progress persists separately from graded exercise passes, so reading material never awards exercise stars. The desktop class view includes a course rail and an on-page contents rail; both collapse into keyboard-accessible disclosures on smaller screens.
 
-The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10–11 capstone. Each room keeps its own active deadline, drafts, recent attempts, and best score; assessment results do not award exercise stars. See [docs/ASSESSMENTS.md](docs/ASSESSMENTS.md) for the room rules, source transparency, scoring, official references, and client-side security limitations.
+The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10–12 capstone. Each room keeps its own active deadline, drafts, recent attempts, and best score; assessment results do not award exercise stars. See [docs/ASSESSMENTS.md](docs/ASSESSMENTS.md) for the room rules, source transparency, scoring, official references, and client-side security limitations.
 
 ## Run locally
 
@@ -198,13 +200,13 @@ submissions/<user UUID>/
 │   └── ...
 ├── Py02 Simple data/
 │   └── ...
-└── Py11 Divide and Conquer/
+└── Py12 Problem Solving & Dynamic Programming/
     ├── ex00.py
-    ├── ex01.py
-    └── ex02.py
+    ├── ...
+    └── ex09.py
 ```
 
-The server owns this 92-file mapping. Learner input cannot select a path, and these files never share the repository's original `Py*/` solution directories. PostgreSQL remains authoritative; reading a saved account file recreates a missing mirror.
+The server owns this 102-file mapping. Learner input cannot select a path, and these files never share the repository's original `Py*/` solution directories. PostgreSQL remains authoritative; reading a saved account file recreates a missing mirror.
 
 ## What is saved
 
@@ -232,8 +234,8 @@ git diff --check
 ```
 
 `npm run validate` performs the deterministic offline checks for application and
-backend syntax/tests, the security policy, all 11 chapter definitions, all 92
-exercise definitions, all 281 exercise tests, every solution-free starter, every
+backend syntax/tests, the security policy, all 12 chapter definitions, all 102
+exercise definitions, all 316 exercise tests, every solution-free starter, every
 lesson section and runbook phase, all concept clinics, the rounding lab, toolbox
 cards, and the complete classroom/assessment schema. It also verifies cookie/origin
 helpers, database TLS configuration, migration manifests, public-file isolation,
@@ -292,11 +294,11 @@ conflict journeys remain explicit roadmap items.
 | `course-app.js` | Router and application orchestration for persistence, profile, editor, runner controls, and shared result rendering |
 | `dashboard-model.js` | Pure resume-target, stage-status, and milestone derivation for the home learning path |
 | `dashboard-view.js` / `dashboard-ui.css` | Focused stage-based home renderer and responsive presentation |
-| `class-materials.js` | Eleven deeply frozen 90-minute class syllabi with preparation, schedules, demos, activities, retrieval practice, and homework |
+| `class-materials.js` | Twelve deeply frozen 90-minute class syllabi with preparation, schedules, demos, activities, retrieval practice, and homework |
 | `class-page.js` / `class-page.css` | Reusable documentation renderer with course navigation, contents rail, lecture code/output, supplied learning sections, and mobile disclosures |
 | `learning-content.js` | Ranks, badges, tutorials, deep dives, checkpoints, and runbooks |
 | `learning-toolbox.js` | Per-chapter Python functionality guide with conversions, imports, results, cautions, and copyable examples |
-| `learning-clinics.js` | Eleven immutable, solution-free worked traces, misconception probes, and transfer sets |
+| `learning-clinics.js` | Twelve immutable, solution-free worked traces, misconception probes, and transfer sets |
 | `concept-clinic.js` / `learning-clinic.css` | Accessible clinic component and its isolated responsive styling |
 | `rounding-model.js` | Tested Python-compatible floor, ceiling, truncation, and ties-to-even comparisons for the Chapter 2 lab |
 | `rounding-lab.js` / `rounding-lab.css` | Self-contained interactive number-line controller, derived view state, listeners, and styling |
@@ -305,14 +307,15 @@ conflict journeys remain explicit roadmap items.
 | `assessment-room.js` | Assessment routes, timed-room controller, practical editor, submission flow, and results |
 | `assessment-ui.css` | Responsive light/dark assessment hub, room, editor, and result styling |
 | `exercise-data.js` | Chapters, prompts, topics, source paths, and hints |
-| `test-data/` | 186 visible and 95 hidden learning checks |
+| `test-data/` | 206 visible and 110 hidden learning checks |
 | `starter-code.js` | Generated solution-free starters and public function signatures |
 | `solution-code.js` | Build-time repository artifact that is deliberately not loaded by the learner page |
 | `audio-feedback.js` | Synthesized click, result, and achievement cues |
 | `python-runner-worker.mjs` | Dedicated-worker Python execution, output capture, timeout handling, and traceback capture |
 | `assets/vendor/ace/` | Pinned Ace 1.44.0 runtime, Monokai theme, Sublime/Vim keymaps, and license |
+| `assets/illustrations/problem-solving/` | Original accessible SVG field guide for decomposition, state tables, knapsack choices, and strategy recognition |
 | `server/` | Same-origin HTTP API, authentication, PostgreSQL access, security helpers, and static serving |
-| `server/exercise-manifest.mjs` | Stable 92-exercise mapping to chapter directories and zero-based `exNN.py` names |
+| `server/exercise-manifest.mjs` | Stable 102-exercise mapping to chapter directories and zero-based `exNN.py` names |
 | `server/submission-files.mjs` | Atomic, private per-user filesystem mirror with traversal and symlink protection |
 | `server/runtime-security.mjs` | Cookie, origin, trusted-proxy, browser-header, and HTTP resource policy |
 | `server/database-config.mjs` | Bounded `PG*`/URL configuration and verified PostgreSQL TLS |

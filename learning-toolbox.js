@@ -435,5 +435,46 @@
         example: "samples = repeat(\n    lambda: tuple(range(100)),\n    repeat=3,\n    number=500,\n)\nprint(min(samples))",
       },
     ],
+
+    py12: [
+      {
+        kind: "Standard library · memoization",
+        syntax: "@cache",
+        description: "Stores a function result for each distinct hashable argument tuple and reuses it when the same state is requested again.",
+        useWhen: "A clear recursive recurrence revisits states and the reachable state space is reasonably bounded.",
+        result: "A wrapped callable with an unbounded memoization dictionary and cache inspection helpers.",
+        caution: "Arguments must be hashable, cached mutable return values remain shared, and an unbounded cache can retain memory for the process lifetime.",
+        importCode: "from functools import cache",
+        example: "@cache\ndef signal_routes(distance):\n    if distance == 0:\n        return 1\n    if distance < 0:\n        return 0\n    return signal_routes(distance - 2) + signal_routes(distance - 5)\n\nprint(signal_routes(10))",
+      },
+      {
+        kind: "Standard library · memoization",
+        syntax: "@lru_cache(maxsize=None)",
+        description: "Caches recent calls and can operate as an unbounded dynamic-programming memo when maxsize is None.",
+        useWhen: "Cached recursion needs hit statistics, cache clearing, or an explicit future option to bound retained states.",
+        result: "A wrapped callable exposing cache_info and cache_clear methods.",
+        caution: "Keyword order can create distinct cache keys, arguments and results stay referenced, and caching does not repair an incorrect or non-terminating recurrence.",
+        importCode: "from functools import lru_cache",
+        example: "@lru_cache(maxsize=None)\ndef tile_patterns(width):\n    if width < 2:\n        return 1\n    return tile_patterns(width - 1) + tile_patterns(width - 2)\n\nprint(tile_patterns(8))\nprint(tile_patterns.cache_info().hits > 0)",
+      },
+      {
+        kind: "Built-in · associative state",
+        syntax: "state.get(key, default)",
+        description: "Reads a dictionary entry while supplying an explicit value for a state that has not been stored.",
+        useWhen: "Dynamic-programming states are sparse, irregular, or naturally described by tuples rather than dense integer ranges.",
+        result: "The stored value when present, otherwise the supplied default without modifying the dictionary.",
+        caution: "A default such as zero must be mathematically valid for the recurrence; get cannot distinguish a missing key from a stored value equal to that default.",
+        example: "best_cost = {(0, 0): 0, (0, 1): 4}\nleft_cost = best_cost.get((1, 0), float(\"inf\"))\nprint(left_cost)\nprint((1, 0) in best_cost)",
+      },
+      {
+        kind: "Built-in · sentinel",
+        syntax: "float(\"inf\")",
+        description: "Creates positive infinity, a convenient initial value when every finite candidate should replace an unreachable minimum.",
+        useWhen: "A minimization recurrence needs to distinguish unreachable states from valid finite costs.",
+        result: "A floating-point infinity that compares greater than ordinary finite numeric values.",
+        caution: "Infinity is not an error marker by itself and can propagate through arithmetic. Convert the final unreachable state to the contract's required representation.",
+        example: "candidates = [12, 7, 19]\nbest = float(\"inf\")\nfor candidate in candidates:\n    best = min(best, candidate)\nprint(best)\nprint(float(\"inf\") + 1)",
+      },
+    ],
   };
 })();

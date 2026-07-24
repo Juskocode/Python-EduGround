@@ -8,6 +8,7 @@ const dataFiles = [
   "test-data/tests-py01-03.js",
   "test-data/tests-py04-07.js",
   "test-data/tests-py08-11.js",
+  "test-data/tests-py12.js",
 ];
 
 globalThis.window = {};

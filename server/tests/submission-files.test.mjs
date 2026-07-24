@@ -36,10 +36,14 @@ test("trusted exercise manifest follows every repository chapter and exercise or
     }))
   );
 
-  assert.equal(EXERCISE_COUNT, 92);
+  assert.equal(EXERCISE_COUNT, 102);
   assert.deepEqual(listExerciseFiles(), JSON.parse(JSON.stringify(expected)));
   assert.equal(getExerciseFile("py01-first-programs").relativePath, "Py01 First Programs/ex00.py");
   assert.equal(getExerciseFile("py08-knapsack").relativePath, "Py08 Recursion/ex10.py");
+  assert.equal(
+    getExerciseFile("py12-edit-distance").relativePath,
+    "Py12 Problem Solving & Dynamic Programming/ex09.py"
+  );
   assert.equal(getExerciseFile("not-an-exercise"), null);
 });
 

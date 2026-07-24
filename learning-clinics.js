@@ -780,6 +780,80 @@
         "Compare the number of probes made by interval halving and a left-to-right scan for 8, 64, and 1,024 sorted items.",
       ],
     },
+
+    py12: {
+      id: "py12-state-transition-clinic",
+      title: "Turn a branching story into a reusable state graph",
+      description: "Dynamic programming begins before a table exists. A state must preserve every fact that changes future choices while discarding irrelevant history. A transition partitions complete solutions by one decision, and base states anchor that recurrence. Trace a fence-colouring count using two categories of partial designs, then observe why those categories contain enough history while exact colour sequences do not.",
+      exampleCode: [
+        "post_count = 4",
+        "colour_count = 3",
+        "ends_same = 0",
+        "ends_different = colour_count",
+        "",
+        "for _ in range(2, post_count + 1):",
+        "    next_same = ends_different",
+        "    next_different = (ends_same + ends_different) * (colour_count - 1)",
+        "    ends_same = next_same",
+        "    ends_different = next_different",
+        "",
+        "print(ends_same + ends_different)",
+      ].join("\n"),
+      trace: [
+        {
+          step: "Define the categories",
+          state: "ends_same counts valid colourings whose final two posts match; ends_different counts those whose final two posts differ",
+          reasoning: "Future legality depends on the final run length category, not the complete sequence of colours already assigned.",
+        },
+        {
+          step: "Colour the first post",
+          state: "ends_same == 0; ends_different == 3",
+          reasoning: "One post cannot match a predecessor, and each of the three available colours creates one distinct initial design.",
+        },
+        {
+          step: "Add the second post",
+          state: "next_same == 3; next_different == 6",
+          reasoning: "Matching preserves one colour choice from each prior design, while changing colour provides two alternatives for each design.",
+        },
+        {
+          step: "Add the third post",
+          state: "next_same == 6; next_different == 18",
+          reasoning: "Only a previously different ending may become same without creating three equal posts; either prior category may change colour.",
+        },
+        {
+          step: "Add the fourth post",
+          state: "next_same == 18; next_different == 48",
+          reasoning: "The same transition is reused because the state categories contain precisely the suffix information governing the next choice.",
+        },
+        {
+          step: "Publish the final state",
+          state: "ends_same + ends_different == 66",
+          reasoning: "The two categories are disjoint and cover every valid complete colouring, so their sum is the requested total.",
+        },
+      ],
+      misconceptions: [
+        {
+          belief: "Dynamic programming means filling any two-dimensional table.",
+          correction: "The essential work is defining reusable states and valid transitions; the storage may be recursive, one-dimensional, sparse, or compressed.",
+          probe: "State what best_one_back means after each iteration without referring to its variable name.",
+        },
+        {
+          belief: "The state must remember the complete colour sequence to enforce the rule.",
+          correction: "Only the category of the final run affects the next legal choices, so earlier exact colours can be merged safely.",
+          probe: "Give two different three-post designs that share one ending category and therefore have equal numbers of legal next choices.",
+        },
+        {
+          belief: "Rolling variables can be updated in any order because they contain only numbers.",
+          correction: "Each transition needs values from the previous stage; overwriting one too early changes the dependency graph and therefore the recurrence.",
+          probe: "Overwrite ends_same before calculating next_different and identify which previous category count becomes unavailable.",
+        },
+      ],
+      transferPrompts: [
+        "Model the minimum energy needed to cross platforms when each move advances one or two positions and landing costs differ.",
+        "Define prefix states for comparing two short labels, then draw dependency arrows for matching and non-matching final characters.",
+        "Explain why descending capacity updates represent one copy per item while ascending updates represent reusable copies.",
+      ],
+    },
   };
 
   function deepFreeze(value) {

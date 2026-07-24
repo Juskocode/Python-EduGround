@@ -1363,6 +1363,131 @@
       },
       nextSteps: "Use the complete course toolkit to compare representations and algorithms, write proof-oriented tests, and explain not only what code returns but why it remains correct as inputs grow.",
     },
+
+    py12: {
+      id: "py12-problem-solving-dp-class",
+      audience: "Learners who can implement loops, collections, recursion, and search algorithms and now need a disciplined framework for solving unfamiliar optimization and counting problems.",
+      prerequisites: [
+        "Trace recursive decision trees and explain base cases, progress measures, and return-value combination in plain language.",
+        "Use lists, dictionaries, sets, tuple keys, nested loops, and asymptotic notation in small Python programs.",
+        "Distinguish correctness evidence from runtime evidence when comparing two implementations of the same contract.",
+      ],
+      estimatedMinutes: 90,
+      preparation: [
+        "Solve one tiny include-or-skip problem by listing every candidate and marking valid solutions before class.",
+        "Review Fibonacci recursion and record which argument values repeat while evaluating a moderately small input.",
+        "Bring one proposed greedy rule and a counterexample showing that an attractive local choice can fail globally.",
+      ],
+      pageSummary: [
+        "Systematic problem solving begins by stating a precise contract, drawing legal choices, defining the smallest sufficient state, and anchoring transitions with direct base answers.",
+        "Greedy algorithms commit without revisiting choices and therefore require a structural proof such as an exchange argument; passing examples alone cannot establish that safety.",
+        "Dynamic programming removes repeated work when optimal substructure and overlapping subproblems coexist, using memoization or dependency-ordered tabulation to solve each state once.",
+        "Capacity, reachability, grid, non-adjacent selection, and two-sequence problems share reusable recurrence patterns, but update direction and state meaning remain problem-specific correctness obligations.",
+      ],
+      lessonPlan: [
+        {
+          label: "Counterexample warm-up",
+          minutes: 10,
+          purpose: "Learners challenge local-choice rules on tiny inputs and distinguish plausible heuristics from algorithms with demonstrated structural support.",
+        },
+        {
+          label: "State and recurrence lecture",
+          minutes: 20,
+          purpose: "Build a vocabulary of contracts, states, choices, transitions, base cases, overlap, and optimal substructure through one branching model.",
+        },
+        {
+          label: "Tabulation trace demonstration",
+          minutes: 20,
+          purpose: "Translate a recurrence into dependency order, initialize boundary states, and verify every table entry against a hand-worked example.",
+        },
+        {
+          label: "Pattern design workshop",
+          minutes: 25,
+          purpose: "Teams model capacity, grid, subset, and paired-prefix scenarios while defending dimensions, update direction, and impossible-state representation.",
+        },
+        {
+          label: "Algorithm defense and exit ticket",
+          minutes: 15,
+          purpose: "Learners present correctness and complexity arguments, then independently choose a strategy for a fresh transfer scenario.",
+        },
+      ],
+      lectureDemo: {
+        title: "Minimize charging stops along a route",
+        setup: "A delivery robot can advance one or two checkpoints, and each visited checkpoint charges a different energy fee before the robot continues.",
+        code: [
+          "def minimum_route_fee(fees):",
+          "    previous_two = 0",
+          "    previous_one = 0",
+          "",
+          "    for fee in fees:",
+          "        current = fee + min(previous_two, previous_one)",
+          "        previous_two = previous_one",
+          "        previous_one = current",
+          "",
+          "    return min(previous_two, previous_one)",
+          "",
+          "checkpoint_fees = [6, 2, 5, 3, 7]",
+          "print(minimum_route_fee(checkpoint_fees))",
+        ].join("\n"),
+        expectedOutput: "5",
+        teachingPoints: [
+          "The state at each prefix boundary records the minimum fee of reaching a checkpoint, not the complete path or every earlier choice.",
+          "Every arrival comes from one or two checkpoints back, so those two optimal subanswers cover all legal final moves.",
+          "The update order preserves both previous-stage dependencies until current has been calculated, after which the oldest value can be forgotten.",
+          "The final minimum represents stepping beyond the route from either of the last two checkpoints without charging an invented destination fee.",
+        ],
+        questions: [
+          "What complete sentence describes previous_one immediately after an iteration finishes?",
+          "Why are two rolling values sufficient, and which recurrence would require retaining more history?",
+          "How would a forbidden checkpoint change the state representation and impossible-value policy?",
+        ],
+      },
+      classActivities: [
+        {
+          title: "State-definition tribunal",
+          format: "Groups rotate through scenario cards while one learner proposes a state and peers attempt to distinguish merged histories.",
+          minutes: 20,
+          prompt: "For each scenario, define a minimal state, present two histories mapped to it, and prove that their available futures are equivalent.",
+          evidence: "A state table listing dimensions, meanings, valid ranges, base cases, and one rejected state that forgets necessary information.",
+        },
+        {
+          title: "Update-direction laboratory",
+          format: "Pairs hand-trace ascending and descending one-dimensional capacity updates, then exchange traces for independent verification and correction.",
+          minutes: 18,
+          prompt: "Use one item and several capacities to demonstrate exactly when a fresh table value becomes readable and what reuse policy results.",
+          evidence: "Two annotated capacity rows plus a written explanation connecting read-after-write behavior to zero-or-one and unlimited item models.",
+        },
+      ],
+      independentPractice: [
+        "Draw the complete decision tree for a four-item include-or-skip problem, then circle nodes representing identical future subproblems.",
+        "Write a recurrence and base values for counting routes through a small grid containing one blocked coordinate.",
+        "Compare memoization and tabulation for a sparse state space, including reachable states, call depth, allocation, and evaluation order.",
+        "Construct a coin system where choosing the largest denomination first is not optimal, then explain why dynamic programming still covers the better combination.",
+      ],
+      recapQuestions: [
+        "What test determines whether two partial histories can safely share one dynamic-programming state?",
+        "Why does a successful local choice still require an exchange argument before a greedy algorithm is trusted?",
+        "How do memoization and tabulation evaluate the same recurrence in different orders?",
+        "Why can reversing one compressed-table loop change an item from single-use to reusable?",
+        "How should time complexity be derived from state count and transition work?",
+      ],
+      homework: {
+        brief: "Design and defend a dynamic-programming solution for a fresh resource-allocation or sequence-comparison scenario without copying any graded exercise wording or implementation.",
+        deliverables: [
+          "A contract with valid inputs, output meaning, boundary policy, and at least five hand-calculated examples.",
+          "A state definition, recurrence, base cases, and dependency diagram that together form a complete correctness explanation.",
+          "A brute-force reference for small inputs and an optimized memoized or tabulated implementation compared against it.",
+          "Focused tests including empty, impossible, tie, and scale cases plus accurate time and auxiliary-space analysis.",
+        ],
+        selfReview: [
+          "Every state contains all and only the information that changes future legal choices.",
+          "Each transition corresponds to a complete and non-overlapping category of solutions.",
+          "My evaluation order initializes every dependency before reading it and preserves required previous-stage values.",
+          "I tested proposed greedy shortcuts with counterexamples rather than assuming local improvement implies global optimality.",
+        ],
+      },
+      nextSteps: "Apply the modelling workflow to graphs, shortest paths, interval dynamic programming, and reconstruction tasks that return an optimal witness rather than only its value.",
+    },
   };
 
   function deepFreeze(value) {

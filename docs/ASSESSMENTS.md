@@ -11,7 +11,7 @@ Open `#assessments` from the top navigation to see every block and the learner's
 | 1 · Core Python Control Flow | 1–3: First Programs; Simple Data; Flow, Conditionals & Iteration | 15 questions · 20 minutes | Independently paraphrased from supplied PE01, 17 October 2019 |
 | 2 · Functions and Sequences | 4–6: Functions; Strings & Tuples; Lists | 15 questions · 20 minutes | Independently paraphrased from supplied PE02, 7 November 2019 |
 | 3 · Mappings, Sets, and Recursion | 7–9: Dictionaries & Sets; Recursion; FP with Collections | 15 questions · 20 minutes | Independently paraphrased from supplied PE03, 29 November 2019 |
-| 4 · Functional Tools and Lazy Algorithms | 10–11: Effect-Free Programming; Divide and Conquer | 15 questions · 20 minutes | Independently paraphrased from supplied PE04, 19 December 2019 |
+| 4 · Functional Tools and Problem-Solving Algorithms | 10–12: Effect-Free Programming; Divide and Conquer; Problem Solving & Dynamic Programming | 15 questions · 20 minutes | PE04 paraphrases plus an original dynamic-programming extension |
 
 The supplied source-file order was `2019.pdf` (PE01), `2019 (1).pdf` (PE02), `2019 (2).pdf` (PE03), and `2019 (3).pdf` (PE04). Those PDFs are source material only and are not published by the web app.
 
@@ -47,7 +47,7 @@ Assessment state includes the active attempt ID, start and deadline timestamps, 
 
 One anonymous workspace and one locally cached workspace per account prevent one signed-in learner's drafts and results from appearing to another learner on the same browser. The first sign-in merges anonymous work into that account and clears the transferred anonymous workspace. Signing out returns to a fresh or existing anonymous workspace without exposing account data. Future sign-ins merge the account's local cache with its server state.
 
-Assessment practical drafts are not written to `user_files` and do not create chapter `exNN.py` files. That canonical file workflow belongs only to the 92 normal exercises. Use **Download .py** in the assessment editor when a separate local copy of a practical answer is needed.
+Assessment practical drafts are not written to `user_files` and do not create chapter `exNN.py` files. That canonical file workflow belongs only to the 102 normal exercises. Use **Download .py** in the assessment editor when a separate local copy of a practical answer is needed.
 
 See [Persistence and PostgreSQL operations](PERSISTENCE.md) for deployment upgrades, merge behaviour, backups, and browser-origin limitations.
 
@@ -79,13 +79,14 @@ Each block page links directly to focused sections of the official Python 3 docu
 - [Defining functions](https://docs.python.org/3/tutorial/controlflow.html#defining-functions) — calls, parameters, return values, and recursive definitions.
 - [Recursion-depth safeguard](https://docs.python.org/3/library/sys.html#sys.getrecursionlimit) — the interpreter's recursion limit.
 
-### Chapters 10–11
+### Chapters 10–12
 
 - [Functional Programming HOWTO](https://docs.python.org/3/howto/functional.html) — iterators, generators, mapping, filtering, and composable functions.
 - [List comprehensions](https://docs.python.org/3/tutorial/datastructures.html#list-comprehensions) — readable transformations and filters.
 - [Generators](https://docs.python.org/3/tutorial/classes.html#generators) — lazy functions that preserve local state.
 - [`itertools`](https://docs.python.org/3/library/itertools.html) — efficient iterator building blocks.
 - [`functools.reduce()`](https://docs.python.org/3/library/functools.html#functools.reduce) — cumulative reduction into one result.
+- [`functools.cache()`](https://docs.python.org/3/library/functools.html#functools.cache) — memoizing repeated function states with hashable arguments.
 
 ## Source and security transparency
 

@@ -92,5 +92,15 @@ window.STARTER_CODE = {
   "py10-shortening-numbers": "# Keep these public function names and parameters so the tests can call your code.\ndef shorten(suffixes, base):\n    # TODO: replace pass with your implementation.\n    pass\n",
   "py11-bubble-sort": "# Keep these public function names and parameters so the tests can call your code.\ndef bubble_sort(alist):\n    # TODO: replace pass with your implementation.\n    pass\n",
   "py11-count-zeros": "# Keep these public function names and parameters so the tests can call your code.\ndef count_zeros(f):\n    # TODO: replace pass with your implementation.\n    pass\n",
-  "py11-bitonic-point": "# Keep these public function names and parameters so the tests can call your code.\ndef bitonic_point(f):\n    # TODO: replace pass with your implementation.\n    pass\n"
+  "py11-bitonic-point": "# Keep these public function names and parameters so the tests can call your code.\ndef bitonic_point(f):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-two-sum": "# Keep these public function names and parameters so the tests can call your code.\ndef two_sum_indices(numbers, target):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-interval-scheduling": "# Keep these public function names and parameters so the tests can call your code.\ndef select_intervals(intervals):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-climbing-stairs": "# Keep these public function names and parameters so the tests can call your code.\ndef climbing_ways(steps):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-grid-paths": "# Keep these public function names and parameters so the tests can call your code.\ndef grid_paths(rows, columns, blocked=()):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-knapsack": "# Keep these public function names and parameters so the tests can call your code.\ndef knapsack_value(capacity, weights, values):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-coin-change": "# Keep these public function names and parameters so the tests can call your code.\ndef minimum_coins(coins, amount):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-house-robber": "# Keep these public function names and parameters so the tests can call your code.\ndef max_non_adjacent_sum(values):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-subset-sum": "# Keep these public function names and parameters so the tests can call your code.\ndef has_subset_sum(numbers, target):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-lcs": "# Keep these public function names and parameters so the tests can call your code.\ndef lcs_length(left, right):\n    # TODO: replace pass with your implementation.\n    pass\n",
+  "py12-edit-distance": "# Keep these public function names and parameters so the tests can call your code.\ndef edit_distance(source, destination):\n    # TODO: replace pass with your implementation.\n    pass\n"
 };

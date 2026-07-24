@@ -82,7 +82,7 @@ cookie to reach account APIs.
 
 ## Canonical chapter files
 
-The server owns a stable mapping from all 92 exercise IDs to chapter directories
+The server owns a stable mapping from all 102 exercise IDs to chapter directories
 and zero-based filenames. The browser sends only an exercise ID and source text; it
 cannot choose a server path.
 
@@ -95,10 +95,10 @@ cannot choose a server path.
 ├── Py08 Recursion/
 │   ├── ex00.py
 │   └── ex10.py
-└── Py11 Divide and Conquer/
+└── Py12 Problem Solving & Dynamic Programming/
     ├── ex00.py
-    ├── ex01.py
-    └── ex02.py
+    ├── ...
+    └── ex09.py
 ```
 
 Writes use a temporary file, filesystem synchronization, and atomic rename.
