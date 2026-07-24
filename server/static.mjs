@@ -19,6 +19,7 @@ export const PUBLIC_ROOT_FILES = new Set([
   "stage-recap-view.js",
   "exercise-data.js",
   "favicon.svg",
+  "geospace-ui.css",
   "index.html",
   "concept-clinic.js",
   "learning-clinic.css",

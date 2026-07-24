@@ -421,8 +421,14 @@
     var path = el("div", "learning-stage__path");
     var routeTrack = el("span", "learning-stage__route-track");
     var routeProgress = el("span", "learning-stage__route-progress");
+    var routeBeacon = null;
     routeTrack.setAttribute("aria-hidden", "true");
     routeProgress.setAttribute("aria-hidden", "true");
+    if (stageState === "current") {
+      routeBeacon = el("span", "learning-stage__route-beacon");
+      routeBeacon.dataset.geoMotion = "roadmap-beacon";
+      routeBeacon.setAttribute("aria-hidden", "true");
+    }
     var chapterNav = el("nav", "learning-stage__chapters");
     var chapterList = el("ol");
     chapterNav.setAttribute("aria-label", stage.title + " chapters");
@@ -436,6 +442,9 @@
     });
     chapterNav.append(chapterList);
     path.append(routeTrack, routeProgress, chapterNav);
+    if (routeBeacon) {
+      path.append(routeBeacon);
+    }
 
     if (stage.recap) {
       path.append(renderRecapStop(stage.recap));

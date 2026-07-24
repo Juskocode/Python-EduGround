@@ -181,6 +181,7 @@
 
     title.id = "stage-recap-title";
     section.setAttribute("aria-labelledby", title.id);
+    section.append(renderRecapGeometry(stageNumber));
     copy.append(
       el("p", "eyebrow", "Stage " + pad(stageNumber) + " · Connect the ideas"),
       title,
@@ -211,6 +212,20 @@
       )
     );
     return section;
+  }
+
+  function renderRecapGeometry(stageNumber) {
+    var geometry = el("div", "stage-recap-hero__geometry");
+    geometry.dataset.geoMotion = "recap-radar";
+    geometry.setAttribute("aria-hidden", "true");
+    geometry.append(
+      el("span", "stage-recap-hero__ring stage-recap-hero__ring--outer"),
+      el("span", "stage-recap-hero__ring stage-recap-hero__ring--inner"),
+      el("span", "stage-recap-hero__crosshair"),
+      el("span", "stage-recap-hero__beacon"),
+      el("span", "stage-recap-hero__coordinate", "STAGE / " + pad(stageNumber))
+    );
+    return geometry;
   }
 
   function aggregateFromChapters(chapters) {
@@ -755,6 +770,7 @@
     );
 
     visual.setAttribute("aria-hidden", "true");
+    visual.dataset.geoMotion = "award-orbit";
     seal.append(
       el("span", "stage-award__orbit stage-award__orbit--outer"),
       el("span", "stage-award__orbit stage-award__orbit--inner"),

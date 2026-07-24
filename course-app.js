@@ -148,6 +148,7 @@
   var currentRoute = null;
   var selectedBadgeId = null;
   var signOutInProgress = false;
+  var geospaceMotionObserver = null;
   var pythonRunner = createPythonRunner();
   var assessmentRooms = createAssessmentRoomsController();
   var ideLayoutPreferences = readIdeLayoutPreferences();
@@ -176,6 +177,8 @@
   elements.main.addEventListener("submit", handleMainSubmit);
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("pointerdown", unlockAudio, { once: true });
+  document.addEventListener("pointerdown", showGeometricPressFeedback);
+  document.addEventListener("visibilitychange", syncGeospaceVisibility);
   document.addEventListener("keydown", handleDocumentKeydown);
   if (!deliberateLocalSignOut && clientCapability) {
     restoreAuthenticatedSession();
@@ -232,6 +235,7 @@
     }
 
     elements.main.replaceChildren(view);
+    refreshGeospaceMotion();
     renderProfile();
 
     if (parsed.name === "exercise") {
@@ -5516,10 +5520,96 @@
   function handleDocumentClick(event) {
     if (event.target.closest("a, button, summary")) {
       audio.playClick();
+      if (event.detail === 0) {
+        showGeometricPressFeedback(event);
+      }
     }
     if (!elements.profilePanel.hidden && !event.target.closest(".profile-menu")) {
       closeProfile();
     }
+  }
+
+  function showGeometricPressFeedback(event) {
+    if (
+      !event ||
+      event.button > 0 ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    var source = event.target && event.target.closest
+      ? event.target.closest([
+        ".button",
+        ".topbar-home",
+        ".icon-button",
+        ".profile-button",
+        ".landing-stage-card__link",
+        ".path-chapter",
+        ".learning-stage__recap",
+        ".learning-stage__assessment",
+        ".stage-recap-answer summary",
+        ".stage-recap-recall-card summary",
+        ".stage-recap-reference",
+        ".stage-award"
+      ].join(","))
+      : null;
+    if (!source) {
+      return;
+    }
+    var existing = document.querySelector(".geo-click-pulse");
+    if (existing) {
+      existing.remove();
+    }
+    var rect = source.getBoundingClientRect();
+    var x = Number(event.clientX);
+    var y = Number(event.clientY);
+    if (!x && !y) {
+      x = rect.left + rect.width / 2;
+      y = rect.top + rect.height / 2;
+    }
+    var pulse = document.createElement("span");
+    pulse.className = "geo-click-pulse";
+    pulse.setAttribute("aria-hidden", "true");
+    pulse.style.setProperty("--geo-pulse-x", x + "px");
+    pulse.style.setProperty("--geo-pulse-y", y + "px");
+    document.body.append(pulse);
+    pulse.addEventListener("animationend", function () {
+      pulse.remove();
+    }, { once: true });
+  }
+
+  function syncGeospaceVisibility() {
+    document.documentElement.classList.toggle("geo-motion-paused", document.hidden);
+  }
+
+  function refreshGeospaceMotion() {
+    syncGeospaceVisibility();
+    var layers = Array.from(elements.main.querySelectorAll("[data-geo-motion]"));
+    if (geospaceMotionObserver) {
+      geospaceMotionObserver.disconnect();
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      layers.forEach(function (layer) {
+        layer.classList.remove("is-geo-visible");
+      });
+      return;
+    }
+    if (typeof window.IntersectionObserver !== "function") {
+      layers.forEach(function (layer) {
+        layer.classList.add("is-geo-visible");
+      });
+      return;
+    }
+    if (!geospaceMotionObserver) {
+      geospaceMotionObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          entry.target.classList.toggle("is-geo-visible", entry.isIntersecting);
+        });
+      }, { rootMargin: "120px 0px" });
+    }
+    layers.forEach(function (layer) {
+      geospaceMotionObserver.observe(layer);
+    });
   }
 
   function handleDocumentKeydown(event) {

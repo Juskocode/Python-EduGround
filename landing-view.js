@@ -46,6 +46,7 @@
 
     title.id = "landing-title";
     section.setAttribute("aria-labelledby", title.id);
+    section.append(renderHeroGeometry());
     copy.append(
       el("p", "eyebrow", "A complete browser-based Python class"),
       title,
@@ -62,6 +63,24 @@
     copy.append(actions, renderHeroMetrics(model));
     section.append(copy, renderTerminalPreview());
     return section;
+  }
+
+  function renderHeroGeometry() {
+    var geometry = el("div", "landing-hero__geometry");
+    geometry.dataset.geoMotion = "hero-orbits";
+    geometry.setAttribute("aria-hidden", "true");
+    geometry.append(
+      el("span", "landing-hero__orbit landing-hero__orbit--outer"),
+      el("span", "landing-hero__orbit landing-hero__orbit--inner"),
+      el("span", "landing-hero__axis landing-hero__axis--x"),
+      el("span", "landing-hero__axis landing-hero__axis--y"),
+      el("span", "landing-hero__node landing-hero__node--one"),
+      el("span", "landing-hero__node landing-hero__node--two"),
+      el("span", "landing-hero__node landing-hero__node--three"),
+      el("span", "landing-hero__node landing-hero__node--four"),
+      el("span", "landing-hero__coordinates", "PY / 12 · 04 · 102")
+    );
+    return geometry;
   }
 
   function renderHeroMetrics(model) {
@@ -95,6 +114,7 @@
     var code = el("div", "landing-terminal__code");
     var output = el("div", "landing-terminal__output");
     visual.setAttribute("aria-hidden", "true");
+    visual.dataset.geoMotion = "code-console";
     dots.append(el("i"), el("i"), el("i"));
     chrome.append(dots, el("span", null, "first_steps.py"), el("span", null, "Python 3"));
     [
