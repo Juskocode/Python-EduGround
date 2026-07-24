@@ -27,7 +27,10 @@ test("the browser API is small, immutable, and returns structured coaching", () 
   assert.equal(typeof engine.validateRules, "function");
   assert.equal(Object.isFrozen(engine), true);
 
-  const report = engine.evaluate("first = input()\nsecond = input()\njoined = first + second", specs["py01-fixme"].sourceRules);
+  const report = engine.evaluate(
+    "first = input()\nsecond = input()\njoined = first + second\nprint(joined)",
+    specs["py01-fixme"].sourceRules
+  );
   assert.equal(report.passed, true);
   assert.equal(report.total, 2);
   assert.equal(report.passedCount, 2);
@@ -71,10 +74,28 @@ test("FIXME intention checks require real assignments and real concatenation", (
   assert.equal(failed.results[0].observedMatches, 1);
   assert.equal(failed.results[1].observedMatches, 0);
   assert.match(failed.results[0].feedback, /two named variables/iu);
-  assert.match(failed.results[1].feedback, /concatenation operator/iu);
+  assert.match(failed.results[1].feedback, /same variable/iu);
+
+  const hardcodedOutput = [
+    "left = 1",
+    "right = 2",
+    "total = left + right",
+    'print("Hello world!")',
+  ].join("\n");
+  const intended = [
+    'first = "Hello"',
+    'ending = " world!"',
+    "greeting = first + ending",
+    "print(greeting)",
+  ].join("\n");
+
+  assert.equal(engine.evaluate(hardcodedOutput, rules).passed, false);
+  assert.equal(engine.evaluate(hardcodedOutput, rules).results[0].passed, true);
+  assert.equal(engine.evaluate(hardcodedOutput, rules).results[1].passed, false);
+  assert.equal(engine.evaluate(intended, rules).passed, true);
 });
 
-test("the no-addition rule ignores prose but detects binary plus in executable code", () => {
+test("the no-addition rule ignores prose but detects binary plus in code and f-strings", () => {
   const rules = specs["py01-avoid-sums"].sourceRules;
   const intended = [
     'note = "left + right is not executable"',
@@ -87,6 +108,10 @@ test("the no-addition rule ignores prose but detects binary plus in executable c
 
   assert.equal(engine.evaluate(intended, rules).passed, true);
   assert.equal(engine.evaluate(binaryAddition, rules).passed, false);
+  assert.equal(engine.evaluate('print(f"{left + right}")', rules).passed, false);
+  assert.equal(engine.evaluate('print(rf"{left + right}")', rules).passed, false);
+  assert.equal(engine.evaluate('print(f"{{left + right}}")', rules).passed, true);
+  assert.equal(engine.evaluate('print(f"{\'left + right\'}")', rules).passed, true);
 });
 
 test("loop and recursion checks reject keyword-shaped prose and accept executable structure", () => {

@@ -38,13 +38,13 @@
         },
         {
           id: "fixme-string-concatenation",
-          label: "Combine values with concatenation",
+          label: "Build and print the concatenated value",
           target: "code",
-          pattern: "^\\s*[A-Za-z_]\\w*\\s*=(?!=)[^\\n]*\\+",
+          pattern: "^\\s*([A-Za-z_]\\w*)\\s*=(?!=)\\s*[A-Za-z_]\\w*\\s*\\+[^\\n]*$[\\s\\S]*?^\\s*print\\s*\\(\\s*\\1\\s*\\)",
           flags: "m",
           minMatches: 1,
-          passFeedback: "Your program uses concatenation to combine the prepared values.",
-          failFeedback: "Combine your variables with the string concatenation operator before printing.",
+          passFeedback: "Your program stores the concatenated result and prints that named value.",
+          failFeedback: "Store the concatenated result in a variable, then print that same variable.",
         },
       ],
       tests: [

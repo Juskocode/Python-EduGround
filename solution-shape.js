@@ -22,6 +22,20 @@
     return character === "\n" || character === "\r" ? character : " ";
   }
 
+  function hasFormattedStringPrefix(source, quoteIndex) {
+    let prefixStart = quoteIndex;
+    while (prefixStart > 0 && /[A-Za-z]/u.test(source[prefixStart - 1])) {
+      prefixStart -= 1;
+    }
+    const prefix = source.slice(prefixStart, quoteIndex);
+    return (
+      prefix.length > 0 &&
+      prefix.length <= 3 &&
+      /^[rRuUbBfF]+$/u.test(prefix) &&
+      /f/iu.test(prefix)
+    );
+  }
+
   function maskPythonNonCode(sourceValue) {
     const source = String(sourceValue ?? "");
     let result = "";
@@ -29,6 +43,11 @@
     let state = "code";
     let quote = "";
     let tripleQuoted = false;
+    let formattedString = false;
+    let expressionDepth = 0;
+    let expressionState = "code";
+    let expressionQuote = "";
+    let expressionTripleQuoted = false;
 
     while (index < source.length) {
       const character = source[index];
@@ -43,6 +62,86 @@
       }
 
       if (state === "string") {
+        if (formattedString && expressionDepth > 0) {
+          if (expressionState === "comment") {
+            result += maskCharacter(character);
+            index += 1;
+            if (character === "\n" || character === "\r") {
+              expressionState = "code";
+            }
+            continue;
+          }
+
+          if (expressionState === "string") {
+            if (character === "\\") {
+              result += " ";
+              index += 1;
+              if (index < source.length) {
+                result += maskCharacter(source[index]);
+                index += 1;
+              }
+              continue;
+            }
+            if (
+              expressionTripleQuoted &&
+              source.slice(index, index + 3) === expressionQuote.repeat(3)
+            ) {
+              result += "   ";
+              index += 3;
+              expressionState = "code";
+              expressionQuote = "";
+              expressionTripleQuoted = false;
+              continue;
+            }
+            if (!expressionTripleQuoted && character === expressionQuote) {
+              result += " ";
+              index += 1;
+              expressionState = "code";
+              expressionQuote = "";
+              continue;
+            }
+            result += maskCharacter(character);
+            index += 1;
+            continue;
+          }
+
+          if (character === "#") {
+            result += " ";
+            index += 1;
+            expressionState = "comment";
+            continue;
+          }
+          if (character === "'" || character === '"') {
+            expressionQuote = character;
+            expressionTripleQuoted =
+              source.slice(index, index + 3) === character.repeat(3);
+            const expressionQuoteLength = expressionTripleQuoted ? 3 : 1;
+            result += " ".repeat(expressionQuoteLength);
+            index += expressionQuoteLength;
+            expressionState = "string";
+            continue;
+          }
+          if (character === "{") {
+            result += character;
+            index += 1;
+            expressionDepth += 1;
+            continue;
+          }
+          if (character === "}") {
+            result += character;
+            index += 1;
+            expressionDepth -= 1;
+            if (expressionDepth === 0) {
+              expressionState = "code";
+            }
+            continue;
+          }
+
+          result += character;
+          index += 1;
+          continue;
+        }
+
         if (character === "\\") {
           result += " ";
           index += 1;
@@ -59,6 +158,7 @@
           state = "code";
           quote = "";
           tripleQuoted = false;
+          formattedString = false;
           continue;
         }
 
@@ -67,6 +167,30 @@
           index += 1;
           state = "code";
           quote = "";
+          formattedString = false;
+          continue;
+        }
+
+        if (formattedString && character === "{") {
+          if (source[index + 1] === "{") {
+            result += "  ";
+            index += 2;
+          } else {
+            result += character;
+            index += 1;
+            expressionDepth = 1;
+            expressionState = "code";
+          }
+          continue;
+        }
+
+        if (
+          formattedString &&
+          character === "}" &&
+          source[index + 1] === "}"
+        ) {
+          result += "  ";
+          index += 2;
           continue;
         }
 
@@ -85,6 +209,7 @@
       if (character === "'" || character === '"') {
         quote = character;
         tripleQuoted = source.slice(index, index + 3) === character.repeat(3);
+        formattedString = hasFormattedStringPrefix(source, index);
         const quoteLength = tripleQuoted ? 3 : 1;
         result += " ".repeat(quoteLength);
         index += quoteLength;

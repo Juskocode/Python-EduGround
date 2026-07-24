@@ -1764,10 +1764,13 @@
     focusButton.type = "button";
     focusButton.dataset.ideFocus = exerciseId;
     focusButton.setAttribute("aria-pressed", "false");
-    focusButton.setAttribute("aria-label", "Focus the editor and hide the lesson panel");
+    focusButton.setAttribute("aria-label", "Focus editor and hide the lesson panel");
     layoutResetButton.type = "button";
     layoutResetButton.dataset.ideLayoutReset = exerciseId;
-    layoutResetButton.setAttribute("aria-label", "Reset lesson, editor, and feedback pane sizes");
+    layoutResetButton.setAttribute(
+      "aria-label",
+      "Reset layout for lesson, editor, and feedback pane sizes"
+    );
     headingCopy.append(
       el("p", "eyebrow", "Python workspace"),
       el("h2", null, "Code and feedback"),
@@ -2400,7 +2403,7 @@
     button.setAttribute("aria-pressed", String(focused));
     button.setAttribute(
       "aria-label",
-      focused ? "Exit focused editor and show the lesson panel" : "Focus the editor and hide the lesson panel"
+      focused ? "Exit focus and show the lesson panel" : "Focus editor and hide the lesson panel"
     );
     button.textContent = focused ? "Exit focus" : "Focus editor";
     window.requestAnimationFrame(function () {
