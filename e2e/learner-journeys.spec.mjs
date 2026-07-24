@@ -132,6 +132,72 @@ test("editor preferences and a local draft survive reload", async ({ page }) => 
     .toContain('print("browser draft")');
 });
 
+test("the exercise workspace separates learning, coding, and file actions", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/#exercise/py01-first-programs");
+
+  const workbench = page.locator(".exercise-workbench");
+  const lesson = page.locator(".exercise-workbench__lesson");
+  const code = page.locator(".exercise-workbench__code");
+  await expect(workbench).toBeVisible();
+  await expect(lesson).toBeVisible();
+  await expect(code).toBeVisible();
+  await expect(page.locator('button[data-save-file="py01-first-programs"]')).toBeVisible();
+
+  const desktopGeometry = await page.evaluate(() => {
+    const lessonBox = document.querySelector(".exercise-workbench__lesson").getBoundingClientRect();
+    const codeBox = document.querySelector(".exercise-workbench__code").getBoundingClientRect();
+    const runBox = document.querySelector('button[data-run-scope="visible"]').getBoundingClientRect();
+    const testsBox = document.querySelector('button[data-run-scope="all"]').getBoundingClientRect();
+    return {
+      lesson: { x: lessonBox.x, y: lessonBox.y, width: lessonBox.width, height: lessonBox.height },
+      code: { x: codeBox.x, y: codeBox.y, width: codeBox.width, height: codeBox.height },
+      runY: runBox.y,
+      testsY: testsBox.y,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  expect(desktopGeometry.code.x).toBeGreaterThan(
+    desktopGeometry.lesson.x + desktopGeometry.lesson.width - 2
+  );
+  expect(Math.abs(desktopGeometry.code.y - desktopGeometry.lesson.y)).toBeLessThan(2);
+  expect(Math.abs(desktopGeometry.runY - desktopGeometry.testsY)).toBeLessThan(2);
+  expect(desktopGeometry.overflow).toBe(0);
+
+  const fileMenu = page.locator(".ide-tools > summary");
+  await fileMenu.click();
+  await expect(page.locator('button[data-copy-code="py01-first-programs"]')).toBeVisible();
+  await expect(page.locator('button[data-paste-code="py01-first-programs"]')).toBeVisible();
+  await expect(page.locator('button[data-download-file="py01-first-programs"]')).toBeVisible();
+  await expect(page.locator('button[data-reset-code="py01-first-programs"]')).toBeVisible();
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const tabletGeometry = await page.evaluate(() => {
+    const lessonBox = document.querySelector(".exercise-workbench__lesson").getBoundingClientRect();
+    const codeBox = document.querySelector(".exercise-workbench__code").getBoundingClientRect();
+    return {
+      lessonRight: lessonBox.x + lessonBox.width,
+      codeLeft: codeBox.x,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  expect(tabletGeometry.codeLeft).toBeGreaterThanOrEqual(tabletGeometry.lessonRight - 2);
+  expect(tabletGeometry.overflow).toBe(0);
+
+  await page.setViewportSize({ width: 800, height: 900 });
+  const narrowGeometry = await page.evaluate(() => {
+    const lessonBox = document.querySelector(".exercise-workbench__lesson").getBoundingClientRect();
+    const codeBox = document.querySelector(".exercise-workbench__code").getBoundingClientRect();
+    return {
+      lessonBottom: lessonBox.y + lessonBox.height,
+      codeTop: codeBox.y,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  expect(narrowGeometry.codeTop).toBeGreaterThanOrEqual(narrowGeometry.lessonBottom - 2);
+  expect(narrowGeometry.overflow).toBe(0);
+});
+
 test("a theory assessment deadline survives reload", async ({ page }) => {
   await page.goto("/#assessment/py01-py03/theory");
   const start = page.locator('button[data-assessment-start="theory"]');

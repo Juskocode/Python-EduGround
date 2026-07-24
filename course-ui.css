@@ -2962,7 +2962,55 @@ pre {
 }
 
 .exercise-page__shell {
-  --shell: 1500px;
+  --shell: 1780px;
+}
+
+.exercise-page__shell > .breadcrumbs {
+  margin-bottom: 14px;
+  padding-inline: 4px;
+}
+
+.exercise-workbench {
+  display: grid;
+  grid-template-columns: minmax(390px, 0.72fr) minmax(620px, 1.28fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.exercise-workbench__lesson,
+.exercise-workbench__code {
+  height: clamp(680px, calc(100dvh - 150px), 980px);
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.exercise-workbench__lesson {
+  scroll-padding-top: 14px;
+}
+
+.exercise-workbench__code {
+  scroll-padding-top: 12px;
+}
+
+.exercise-workbench__lesson::-webkit-scrollbar,
+.exercise-workbench__code::-webkit-scrollbar,
+.test-plan-panel::-webkit-scrollbar {
+  width: 9px;
+}
+
+.exercise-workbench__lesson::-webkit-scrollbar-thumb,
+.exercise-workbench__code::-webkit-scrollbar-thumb,
+.test-plan-panel::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 34%, transparent);
+  background-clip: padding-box;
 }
 
 .problem-panel {
@@ -2973,8 +3021,19 @@ pre {
   box-shadow: var(--shadow-md);
 }
 
+.exercise-workbench .problem-panel {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .exercise-page.is-passed .problem-panel {
   border-color: color-mix(in srgb, var(--success) 48%, var(--border));
+}
+
+.exercise-page.is-passed .exercise-workbench__lesson {
+  border-color: color-mix(in srgb, var(--success) 42%, var(--border));
 }
 
 .problem-panel__header {
@@ -2985,6 +3044,12 @@ pre {
   padding: clamp(25px, 4vw, 42px);
   border-bottom: 1px solid var(--border);
   background: linear-gradient(120deg, var(--surface), var(--primary-softer));
+}
+
+.exercise-workbench .problem-panel__header {
+  gap: 16px;
+  padding: 20px 22px 18px;
+  background: var(--surface);
 }
 
 .problem-panel__title-copy {
@@ -3026,6 +3091,11 @@ pre {
   font-size: clamp(2rem, 4.2vw, 4rem);
 }
 
+.exercise-workbench .problem-panel h1 {
+  margin-bottom: 10px;
+  font-size: clamp(1.65rem, 2.2vw, 2.35rem);
+}
+
 .exercise-pager {
   display: flex;
   flex: 0 0 auto;
@@ -3045,6 +3115,10 @@ pre {
   gap: 0;
 }
 
+.exercise-workbench .problem-grid {
+  grid-template-columns: 1fr;
+}
+
 .problem-brief,
 .hint-panel {
   min-width: 0;
@@ -3053,6 +3127,16 @@ pre {
 
 .problem-brief {
   border-right: 1px solid var(--border);
+}
+
+.exercise-workbench .problem-brief,
+.exercise-workbench .hint-panel {
+  padding: 20px 22px;
+}
+
+.exercise-workbench .problem-brief {
+  border-right: 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .problem-brief > h2,
@@ -3195,10 +3279,33 @@ pre {
   padding-top: 42px;
 }
 
+.exercise-workbench .examples-section {
+  padding: 20px 22px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.exercise-workbench .examples-section .section-heading {
+  margin-bottom: 13px;
+}
+
+.exercise-workbench .examples-section .section-heading h2 {
+  font-size: 1.08rem;
+}
+
+.exercise-workbench .examples-section .section-heading p {
+  margin-bottom: 0;
+  font-size: 0.73rem;
+}
+
 .example-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
   gap: 13px;
+}
+
+.exercise-workbench .example-grid {
+  grid-template-columns: 1fr;
 }
 
 .example-card {
@@ -3268,6 +3375,36 @@ pre {
   align-items: center;
 }
 
+.exercise-workbench .ide-section {
+  padding-top: 0;
+}
+
+.exercise-workbench .ide-section__heading {
+  gap: 18px;
+  padding: 14px 16px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.exercise-workbench .ide-section__heading .eyebrow {
+  margin-bottom: 2px;
+  font-size: 0.64rem;
+}
+
+.exercise-workbench .ide-section__heading h2 {
+  display: inline;
+  margin: 0 8px 0 0;
+  font-size: 1.15rem;
+}
+
+.exercise-workbench .ide-section__heading p:last-child {
+  display: inline;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
 .ide-layout {
   display: grid;
   overflow: hidden;
@@ -3276,6 +3413,49 @@ pre {
   border-radius: 18px;
   background: var(--code-bg);
   box-shadow: 0 24px 60px rgba(3, 9, 17, 0.25);
+}
+
+.exercise-workbench .ide-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(255px, 0.34fr);
+  border: 0;
+  border-bottom: 1px solid var(--code-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.exercise-workbench .ide-topbar {
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding-inline: 10px;
+}
+
+.exercise-workbench .ide-window-controls {
+  display: none;
+}
+
+.exercise-workbench .ide-file-tab {
+  max-width: 170px;
+  flex: 1 1 118px;
+  padding-inline: 9px;
+}
+
+.exercise-workbench .ide-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+.exercise-workbench .ide-mode-field {
+  padding-left: 4px;
+}
+
+.exercise-workbench .ide-mode-field > span {
+  display: none;
+}
+
+.exercise-workbench .ide-button {
+  padding-inline: 8px;
+  white-space: nowrap;
 }
 
 .ide-editor-shell {
@@ -3363,6 +3543,59 @@ pre {
   gap: 7px;
 }
 
+.ide-tools {
+  position: relative;
+}
+
+.ide-tools > summary {
+  display: inline-flex;
+  align-items: center;
+  list-style: none;
+}
+
+.ide-tools > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ide-tools > summary::after {
+  content: "⌄";
+  margin-left: 6px;
+  color: #9da9b7;
+  font-size: 0.72rem;
+  transition: transform 140ms ease;
+}
+
+.ide-tools[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.ide-tools__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  width: 178px;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #414b59;
+  border-radius: 10px;
+  background: #202630;
+  box-shadow: 0 18px 42px rgba(3, 9, 17, 0.42);
+}
+
+.ide-tools__menu .ide-button {
+  width: 100%;
+  justify-content: flex-start;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.ide-tools__menu .ide-button:hover {
+  border-color: #414b59;
+}
+
 .ide-mode-field {
   display: inline-flex;
   min-height: 34px;
@@ -3438,6 +3671,13 @@ pre {
   min-height: 540px;
 }
 
+.exercise-workbench .ide-editor-frame,
+.exercise-workbench .ace-editor-host,
+.exercise-workbench .code-editor-fallback {
+  height: clamp(410px, 50vh, 610px);
+  min-height: 410px;
+}
+
 .ide-editor-frame {
   position: relative;
   background: #272822;
@@ -3497,6 +3737,10 @@ pre {
   overflow-y: auto;
   background: #171c24;
   color: #dce3eb;
+}
+
+.exercise-workbench .test-plan-panel {
+  max-height: calc(clamp(410px, 50vh, 610px) + 87px);
 }
 
 .test-plan-panel__header {
@@ -3639,6 +3883,68 @@ pre {
   border-radius: 50%;
   background: var(--success);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.ide-output-panel {
+  background: var(--surface);
+}
+
+.ide-output-panel__header {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.ide-output-panel__header h3 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.ide-output-panel__header p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.ide-output-panel__header > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+}
+
+.ide-output-panel > .submission-save {
+  margin: 12px 16px 0;
+}
+
+.ide-output-panel > .test-results {
+  margin: 12px 16px 0;
+}
+
+.ide-runtime-details {
+  margin: 12px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.ide-runtime-details > summary {
+  padding: 9px 11px;
+  color: var(--muted-strong);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.ide-runtime-details .runtime-note {
+  padding: 0 11px 11px;
+  margin: 0;
+  line-height: 1.5;
 }
 
 .submission-save {
@@ -4028,6 +4334,12 @@ pre {
   border-top: 1px solid var(--border);
 }
 
+.exercise-workbench__code .run-history {
+  padding: 18px 16px 20px;
+  margin-top: 0;
+  background: var(--surface);
+}
+
 .run-history__header {
   display: flex;
   align-items: flex-start;
@@ -4249,6 +4561,21 @@ pre {
   padding: clamp(20px, 3vw, 34px);
 }
 
+.exercise-workbench .problem-concept-visual {
+  grid-template-columns: 1fr;
+}
+
+.exercise-workbench .problem-concept-visual img {
+  min-height: 155px;
+  max-height: 205px;
+  border-right: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.exercise-workbench .problem-concept-visual figcaption {
+  padding: 18px 22px;
+}
+
 .problem-concept-visual figcaption strong {
   margin-top: 3px;
   color: var(--text-strong);
@@ -4420,12 +4747,29 @@ pre {
     grid-template-columns: minmax(270px, 0.72fr) minmax(0, 1.28fr);
   }
 
+  .exercise-workbench {
+    grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr);
+  }
+
   .problem-grid {
     grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.8fr);
   }
 
   .ide-layout {
     grid-template-columns: minmax(0, 1fr) 310px;
+  }
+
+  .exercise-workbench .ide-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .exercise-workbench .ide-editor-shell {
+    border-right: 0;
+    border-bottom: 1px solid var(--code-border);
+  }
+
+  .exercise-workbench .test-plan-panel {
+    max-height: 300px;
   }
 
   .rank-ladder {
@@ -4437,9 +4781,47 @@ pre {
   }
 }
 
+@media (max-width: 980px) {
+  .exercise-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .exercise-workbench__lesson,
+  .exercise-workbench__code {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
+
+  .exercise-workbench__lesson,
+  .exercise-workbench__code,
+  .exercise-workbench .problem-panel {
+    border-radius: 14px;
+  }
+}
+
 @media (max-width: 900px) {
   .app-main {
     padding-top: 25px;
+  }
+
+  .exercise-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .exercise-workbench__lesson,
+  .exercise-workbench__code {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
+
+  .exercise-workbench__lesson,
+  .exercise-workbench__code,
+  .exercise-workbench .problem-panel {
+    border-radius: 14px;
   }
 
   .tutorial-hero,
@@ -4513,6 +4895,17 @@ pre {
 
   .test-plan-panel {
     max-height: 520px;
+  }
+
+  .exercise-workbench .test-plan-panel {
+    max-height: 520px;
+  }
+
+  .exercise-workbench .ide-editor-frame,
+  .exercise-workbench .ace-editor-host,
+  .exercise-workbench .code-editor-fallback {
+    height: 500px;
+    min-height: 500px;
   }
 
   .test-result__body {
@@ -4712,6 +5105,15 @@ pre {
     flex-wrap: wrap;
   }
 
+  .ide-tools {
+    flex: 1 1 72px;
+  }
+
+  .ide-tools > summary {
+    width: 100%;
+    justify-content: center;
+  }
+
   .ide-mode-field {
     flex: 1 1 140px;
     justify-content: space-between;
@@ -4734,6 +5136,23 @@ pre {
   .code-editor-fallback {
     height: 460px;
     min-height: 460px;
+  }
+
+  .exercise-workbench .ide-editor-frame,
+  .exercise-workbench .ace-editor-host,
+  .exercise-workbench .code-editor-fallback {
+    height: 460px;
+    min-height: 460px;
+  }
+
+  .ide-output-panel__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .ide-output-panel__header > span {
+    white-space: normal;
   }
 
   .ide-statusbar__details span:nth-child(2),
@@ -4972,6 +5391,13 @@ pre {
   .ide-editor-frame,
   .ace-editor-host,
   .code-editor-fallback {
+    height: 400px;
+    min-height: 400px;
+  }
+
+  .exercise-workbench .ide-editor-frame,
+  .exercise-workbench .ace-editor-host,
+  .exercise-workbench .code-editor-fallback {
     height: 400px;
     min-height: 400px;
   }

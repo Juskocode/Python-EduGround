@@ -1516,8 +1516,19 @@
     }
     examples.append(exampleGrid);
 
-    var ide = renderIdeWorkspace(exercise, testSpec, visibleTests.length, hiddenCount);
-    shell.append(problem, examples, ide, renderExerciseBottomNavigation(chapterExercises, exerciseIndex, chapter));
+    var lessonPane = el("section", "exercise-workbench__lesson");
+    lessonPane.setAttribute("aria-label", "Exercise lesson and visible examples");
+    lessonPane.tabIndex = 0;
+    lessonPane.append(problem, examples);
+
+    var codePane = el("section", "exercise-workbench__code");
+    codePane.setAttribute("aria-label", "Python code workspace and results");
+    codePane.tabIndex = 0;
+    codePane.append(renderIdeWorkspace(exercise, testSpec, visibleTests.length, hiddenCount));
+
+    var workbench = el("div", "exercise-workbench");
+    workbench.append(lessonPane, codePane);
+    shell.append(workbench, renderExerciseBottomNavigation(chapterExercises, exerciseIndex, chapter));
     wrapper.append(shell);
     workspaceWrite(STORAGE_KEYS.lastExercise, exerciseId);
     return wrapper;
@@ -1685,9 +1696,9 @@
     var heading = el("header", "section-heading section-heading--row ide-section__heading");
     var headingCopy = el("div");
     headingCopy.append(
-      el("p", "eyebrow", "Browser Python workspace"),
-      el("h2", null, "Write, run, and inspect"),
-      el("p", null, "Start from a clean template. Run checks visible examples; Run tests adds hidden cases and awards stars only when all pass.")
+      el("p", "eyebrow", "Python workspace"),
+      el("h2", null, "Code and feedback"),
+      el("p", null, "Run uses visible examples; Run tests adds hidden cases and awards stars.")
     );
     heading.append(headingCopy, el("span", "section-heading__count", visibleCount + " visible · " + hiddenCount + " hidden"));
 
@@ -1717,6 +1728,9 @@
     var resetButton = el("button", "ide-button ide-button--quiet", "Restart");
     var runButton = el("button", "ide-button ide-button--run", "Run");
     var testsButton = el("button", "ide-button ide-button--tests", "Run tests");
+    var tools = el("details", "ide-tools");
+    var toolsSummary = el("summary", "ide-button ide-button--quiet", "File");
+    var toolsMenu = el("div", "ide-tools__menu");
     modeSelect.dataset.editorMode = exerciseId;
     modeSelect.setAttribute("aria-label", "Editor keyboard mode");
     [
@@ -1741,15 +1755,22 @@
     downloadButton.setAttribute("aria-label", "Download current Python code as a .py file");
     resetButton.type = "button";
     resetButton.dataset.resetCode = exerciseId;
+    resetButton.title = "Restore the starter code";
     runButton.type = "button";
     runButton.dataset.runExercise = exerciseId;
     runButton.dataset.runScope = "visible";
+    runButton.title = "Run the visible examples (Shift + Enter)";
+    runButton.setAttribute("aria-label", "Run visible examples");
     testsButton.type = "button";
     testsButton.dataset.runExercise = exerciseId;
     testsButton.dataset.runScope = "all";
+    testsButton.title = "Run visible and hidden tests (Control or Command + Enter)";
+    toolsSummary.setAttribute("aria-label", "Open file and editing actions");
     runButton.disabled = !tests.some(function (test) { return !test.hidden; });
     testsButton.disabled = !tests.length;
-    actions.append(modeField, copyButton, pasteButton, saveButton, downloadButton, resetButton, runButton, testsButton);
+    toolsMenu.append(copyButton, pasteButton, downloadButton, resetButton);
+    tools.append(toolsSummary, toolsMenu);
+    actions.append(modeField, tools, saveButton, runButton, testsButton);
     topbar.append(windowControls, fileTab, actions);
 
     var frame = el("div", "ide-editor-frame");
@@ -1790,6 +1811,8 @@
       el("span", "runtime-note__dot"),
       document.createTextNode(" Python runs in a dedicated browser worker; only run code you trust. Account APIs require a tab key that is never sent to that worker. Drafts stay local by default; after sign-in, your own code and progress sync to your account. Repository solutions are never loaded into this page.")
     );
+    var runtimeDetails = el("details", "ide-runtime-details");
+    runtimeDetails.append(el("summary", null, "How this runner protects and saves your work"), runtime);
     var submissionSave = el(
       "p",
       "submission-save submission-save--" + (currentUser ? "ready" : "local"),
@@ -1810,7 +1833,17 @@
       results.append(renderResultsEmpty());
     }
 
-    section.append(heading, layout, runtime, submissionSave, results, renderRunHistory(exercise));
+    var output = el("section", "ide-output-panel");
+    var outputHeading = el("header", "ide-output-panel__header");
+    var outputHeadingCopy = el("div");
+    outputHeadingCopy.append(
+      el("h3", null, "Output"),
+      el("p", null, "Compare expected and actual values, then use the traceback to find the first useful line.")
+    );
+    outputHeading.append(outputHeadingCopy, el("span", null, "Expected · actual · traceback"));
+    output.append(outputHeading, submissionSave, results, runtimeDetails);
+
+    section.append(heading, layout, output, renderRunHistory(exercise));
     return section;
   }
 
@@ -1818,6 +1851,8 @@
     var aside = el("aside", "test-plan-panel");
     var header = el("header", "test-plan-panel__header");
     var tests = Array.isArray(testSpec.tests) ? testSpec.tests : [];
+    aside.tabIndex = 0;
+    aside.setAttribute("aria-label", "Planned test cases");
     header.append(el("h3", null, "Test cases"), el("span", null, tests.length + " total"));
     aside.append(header);
     var list = el("ol", "test-plan-list");
