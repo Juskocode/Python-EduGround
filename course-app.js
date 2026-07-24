@@ -7,6 +7,7 @@
     theme: "fp-playground.theme.v1",
     lastExercise: "fp-playground.last-exercise.v2",
     learning: "fp-playground.learning.v1",
+    classLabs: "fp-playground.class-labs.v1",
     assessments: "fp-playground.assessments.v1",
     editorMode: "fp-playground.editor-mode.v1",
     ideLayout: "fp-playground.ide-layout.v1",
@@ -22,6 +23,9 @@
     lesson: { min: 25, max: 60 },
     editor: { min: 40, max: 70 }
   };
+  var CLASS_LAB_CODE_LIMIT = 12000;
+  var CLASS_LAB_INPUT_LIMIT = 2000;
+  var CLASS_LAB_DRAFT_BUDGET = 64000;
 
   var elements = {
     main: document.getElementById("app-main"),
@@ -113,6 +117,7 @@
   var passed = new Set(readPassedIds());
   var drafts = readDrafts();
   var learningProgress = readLearningProgress();
+  var classLabDrafts = readClassLabDrafts();
   var assessmentProgress = readAssessmentProgress();
   var editorMode = readEditorMode();
   var currentUser = null;
@@ -128,6 +133,7 @@
   var runResults = new Map();
   var runHistoryByExercise = new Map();
   var draftPersistTimer = null;
+  var classLabPersistTimer = null;
   var stateSyncTimer = null;
   var suppressStateSync = false;
   var workspaceEpoch = 0;
@@ -153,6 +159,7 @@
   });
   window.addEventListener("pagehide", function () {
     flushDrafts();
+    flushClassLabDrafts();
     if (assessmentRooms) assessmentRooms.flush();
   });
   elements.themeToggle.addEventListener("click", toggleTheme);
@@ -162,6 +169,8 @@
   elements.profilePanel.addEventListener("submit", handleProfileSubmit);
   elements.main.addEventListener("click", handleMainClick);
   elements.main.addEventListener("change", handleMainChange);
+  elements.main.addEventListener("input", handleMainInput);
+  elements.main.addEventListener("submit", handleMainSubmit);
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("pointerdown", unlockAudio, { once: true });
   document.addEventListener("keydown", handleDocumentKeydown);
@@ -671,6 +680,12 @@
       chapters: navigationChapters,
       material: material,
       progressNode: renderLearningProgressPanel(chapter),
+      completedRoomTaskIds: getClassRoomTasks(material).filter(function (task) {
+        return isLearningUnderstood(chapter, getClassRoomProgressId(task.id));
+      }).map(function (task) {
+        return String(task.id);
+      }),
+      labDrafts: getClassLabDraftsForChapter(chapterId),
       lessonNodes: lessonNodes,
       deepDiveNode: deepDiveNode,
       runbookNode: runbookNode,
@@ -853,29 +868,48 @@
     var heading = el("header", "tutorial-section__heading");
     var number = el("span", "tutorial-section__number", String(index + 1).padStart(2, "0"));
     var title = el(headingTag || "h2", null, tutorial.title);
-    var codeBox = el("div", "tutorial-code");
-    var codeHeader = el("div", "tutorial-code__header");
-    var pre = el("pre");
-    pre.tabIndex = 0;
-    var code = el("code", null, tutorial.exampleCode || "# Try a small example here.");
     var checklist = el("section", "tutorial-checklist");
     var checklistList = el("ul");
     var takeaway = el("aside", "tutorial-takeaway");
     var pitfall = el("aside", "tutorial-pitfall");
     var learningItemId = getTutorialItemId(tutorial, index);
+    var lessonLabId = "lesson-" + domId(learningItemId);
+    var lessonDraft = classLabDrafts.get(
+      classLabDraftKey(String(chapter.id), lessonLabId)
+    );
+    var codeBox;
 
     section.id = "tutorial-section-" + index;
     section.dataset.learningItem = learningItemId;
     section.classList.toggle("is-understood", isLearningUnderstood(chapter, learningItemId));
     heading.append(number, title, renderLearningToggle(chapter, learningItemId));
-    var codeMeta = el("span", "tutorial-code__meta");
-    var copyButton = el("button", "tutorial-copy-button", "Copy example");
-    copyButton.type = "button";
-    copyButton.dataset.copySnippet = "true";
-    codeMeta.append(el("span", null, "Python 3"), copyButton);
-    codeHeader.append(el("span", null, "concept-example.py"), codeMeta);
-    pre.append(code);
-    codeBox.append(codeHeader, pre);
+    if (classPageView && typeof classPageView.renderRunnableLab === "function") {
+      codeBox = classPageView.renderRunnableLab({
+        id: lessonLabId,
+        filename: String(chapter.id) + "-concept-" + (index + 1) + ".py",
+        starterCode: tutorial.exampleCode || "# Try a small example here.",
+        stdin: Array.isArray(tutorial.sampleInput) ? tutorial.sampleInput : [],
+        expectedOutput: "",
+      }, {
+        chapterId: String(chapter.id),
+        taskId: "",
+        draft: lessonDraft,
+      });
+    } else {
+      codeBox = el("div", "tutorial-code");
+      var codeHeader = el("div", "tutorial-code__header");
+      var pre = el("pre");
+      var code = el("code", null, tutorial.exampleCode || "# Try a small example here.");
+      var codeMeta = el("span", "tutorial-code__meta");
+      var copyButton = el("button", "tutorial-copy-button", "Copy example");
+      pre.tabIndex = 0;
+      copyButton.type = "button";
+      copyButton.dataset.copySnippet = "true";
+      codeMeta.append(el("span", null, "Python 3"), copyButton);
+      codeHeader.append(el("span", null, "concept-example.py"), codeMeta);
+      pre.append(code);
+      codeBox.append(codeHeader, pre);
+    }
 
     checklist.append(el("h3", null, "Check your understanding"));
     (tutorial.checklist || []).forEach(function (item) {
@@ -1119,7 +1153,6 @@
     var feedback = el("p", "knowledge-check__feedback");
     var feedbackId = "checkpoint-feedback-" + domId(chapter.id);
     block.dataset.checkpoint = String(chapter.id);
-    block.dataset.checkpointExplanation = checkpoint.explanation || "Review the mental model and explain why the option fits.";
     block.append(el("span", "eyebrow", "Quick checkpoint"), el("h3", null, checkpoint.question || "Which statement best matches the model?"));
     var optionList = el("div", "knowledge-check__options");
     optionList.setAttribute("role", "group");
@@ -1128,7 +1161,6 @@
       var button = el("button", "knowledge-check__option", option);
       button.type = "button";
       button.dataset.checkpointOption = String(index);
-      button.dataset.answerIndex = String(Number(checkpoint.answerIndex));
       button.setAttribute("aria-pressed", "false");
       button.setAttribute("aria-describedby", feedbackId);
       optionList.append(button);
@@ -2677,6 +2709,9 @@
     }
     var hintButton = event.target.closest("button[data-reveal-hint]");
     var scrollButton = event.target.closest("button[data-scroll-target]");
+    var classLabRunButton = event.target.closest("button[data-class-lab-run]");
+    var classLabResetButton = event.target.closest("button[data-class-lab-reset]");
+    var classLabCopyButton = event.target.closest("button[data-class-lab-copy]");
     var runButton = event.target.closest("button[data-run-exercise]");
     var resetButton = event.target.closest("button[data-reset-code]");
     var copyCodeButton = event.target.closest("button[data-copy-code]");
@@ -2722,6 +2757,18 @@
         target.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
         focusClassSection(target, scrollButton.dataset.scrollTarget);
       }
+      return;
+    }
+    if (classLabRunButton) {
+      runClassLab(classLabRunButton);
+      return;
+    }
+    if (classLabResetButton) {
+      resetClassLab(classLabResetButton);
+      return;
+    }
+    if (classLabCopyButton) {
+      copyClassLabCode(classLabCopyButton);
       return;
     }
     if (runButton) {
@@ -2823,6 +2870,39 @@
     }
     queueStateSync();
     announce((nextMode === "vim" ? "Vim" : "Sublime") + " keyboard mode enabled. Monokai remains active.");
+  }
+
+  function handleMainInput(event) {
+    var classLabControl = event.target.closest(
+      "textarea[data-class-lab-code], textarea[data-class-lab-stdin]"
+    );
+    if (!classLabControl) {
+      return;
+    }
+    var workspace = classLabControl.closest("[data-class-lab][data-class-chapter]");
+    if (!workspace) {
+      return;
+    }
+    var code = workspace.querySelector("textarea[data-class-lab-code]");
+    var stdin = workspace.querySelector("textarea[data-class-lab-stdin]");
+    if (!code || !stdin) {
+      return;
+    }
+    scheduleClassLabDraft(
+      workspace.dataset.classChapter,
+      workspace.dataset.classLab,
+      code.value,
+      stdin.value
+    );
+  }
+
+  function handleMainSubmit(event) {
+    var roomForm = event.target.closest("form[data-class-room-form][data-class-chapter]");
+    if (!roomForm) {
+      return;
+    }
+    event.preventDefault();
+    checkClassRoomAnswer(roomForm);
   }
 
   function revealNextHint(exerciseId) {
@@ -3128,6 +3208,43 @@
     elements.main.querySelectorAll("[data-learning-toc]").forEach(function (tocButton) {
       tocButton.classList.toggle("is-understood", isLearningUnderstood(chapter, tocButton.dataset.learningToc));
     });
+    var roomTasks = getClassRoomTasks(classMaterials[chapterId]);
+    var roomDone = 0;
+    roomTasks.forEach(function (task) {
+      var completed = isLearningUnderstood(chapter, getClassRoomProgressId(task.id));
+      if (completed) {
+        roomDone += 1;
+      }
+      var taskCard = elements.main.querySelector(
+        "[data-class-task='" + cssEscape(task.id) + "'][data-class-chapter='" + cssEscape(chapterId) + "']"
+      );
+      if (!taskCard) {
+        return;
+      }
+      taskCard.classList.toggle("is-complete", completed);
+      var taskState = taskCard.querySelector("[data-class-task-status='" + cssEscape(task.id) + "']");
+      if (taskState) {
+        taskState.textContent = completed ? "Completed ✓" : "Ready";
+      }
+    });
+    var roomProgress = elements.main.querySelector(
+      "[data-class-room-progress='" + cssEscape(chapterId) + "']"
+    );
+    if (roomProgress) {
+      var roomCount = roomProgress.querySelector("strong");
+      var roomBar = roomProgress.querySelector("progress");
+      if (roomCount) {
+        roomCount.textContent = roomDone + " / " + roomTasks.length + " room tasks complete";
+      }
+      if (roomBar) {
+        roomBar.max = Math.max(roomTasks.length, 1);
+        roomBar.value = roomDone;
+        roomBar.setAttribute(
+          "aria-label",
+          roomDone + " of " + roomTasks.length + " guided room tasks complete"
+        );
+      }
+    }
     var count = elements.main.querySelector("[data-learning-progress-count='" + cssEscape(chapterId) + "']");
     var bar = elements.main.querySelector("[data-learning-progress-bar='" + cssEscape(chapterId) + "']");
     var status = elements.main.querySelector("[data-learning-progress-status='" + cssEscape(chapterId) + "']");
@@ -3173,8 +3290,15 @@
     if (!checkpoint) {
       return;
     }
+    var checkpointChapter = chapterById.get(String(checkpoint.dataset.checkpoint || ""));
+    var checkpointContent = checkpointChapter ? getChapterLearning(checkpointChapter) : null;
+    var checkpointDefinition = checkpointContent &&
+      checkpointContent.deepDive &&
+      checkpointContent.deepDive.checkpoint
+      ? checkpointContent.deepDive.checkpoint
+      : null;
     var selectedIndex = Number(button.dataset.checkpointOption);
-    var answerIndex = Number(button.dataset.answerIndex);
+    var answerIndex = Number(checkpointDefinition && checkpointDefinition.answerIndex);
     var correct = Number.isInteger(answerIndex) && selectedIndex === answerIndex;
     checkpoint.querySelectorAll("button[data-checkpoint-option]").forEach(function (option) {
       option.classList.remove("is-correct", "is-incorrect");
@@ -3187,10 +3311,365 @@
       feedback.classList.toggle("is-correct", correct);
       feedback.classList.toggle("is-incorrect", !correct);
       feedback.textContent = correct
-        ? "Correct. " + checkpoint.dataset.checkpointExplanation
+        ? "Correct. " + (
+          checkpointDefinition && checkpointDefinition.explanation
+            ? checkpointDefinition.explanation
+            : "You matched the mental model to the example."
+        )
         : "Not quite. Trace the mental-model steps once more, then choose again.";
     }
     announce(correct ? "Checkpoint correct." : "Checkpoint answer is not correct yet. Try again.");
+  }
+
+  function getClassRoomTasks(material) {
+    return material && Array.isArray(material.roomTasks)
+      ? material.roomTasks.filter(function (task) {
+        return task && typeof task === "object" && typeof task.id === "string";
+      })
+      : [];
+  }
+
+  function getClassRoomProgressId(taskId) {
+    return "room:" + String(taskId || "");
+  }
+
+  function findClassRoomTask(chapterId, taskId) {
+    var material = classMaterials[String(chapterId)] || null;
+    return getClassRoomTasks(material).find(function (task) {
+      return String(task.id) === String(taskId);
+    }) || null;
+  }
+
+  function normalizeClassAnswer(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .trim()
+      .replace(/\s+/gu, " ")
+      .toLocaleLowerCase("en");
+  }
+
+  function checkClassRoomAnswer(form) {
+    var chapterId = String(form.dataset.classChapter || "");
+    var taskId = String(form.dataset.classRoomForm || "");
+    var chapter = chapterById.get(chapterId);
+    var task = findClassRoomTask(chapterId, taskId);
+    var input = form.querySelector("input[data-class-answer]");
+    var feedback = form.querySelector("[data-class-feedback]");
+    if (!chapter || !task || task.kind === "code" || !input || !feedback) {
+      return;
+    }
+    var answer = normalizeClassAnswer(input.value);
+    var accepted = Array.isArray(task.acceptedAnswers)
+      ? task.acceptedAnswers.map(normalizeClassAnswer).filter(Boolean)
+      : [];
+    var correct = Boolean(answer) && accepted.indexOf(answer) >= 0;
+    feedback.classList.toggle("is-correct", correct);
+    feedback.classList.toggle("is-incorrect", !correct);
+    if (correct) {
+      input.removeAttribute("aria-invalid");
+      feedback.textContent = task.success || "Correct. Continue when you can explain why.";
+      completeLearningItem(chapter, getClassRoomProgressId(taskId));
+      audio.playSuccess();
+      announce("Correct. Guided task completed.");
+    } else {
+      input.setAttribute("aria-invalid", "true");
+      feedback.textContent = answer
+        ? "Not yet. " + (task.hint || "Read the explanation once more and try again.")
+        : "Type an answer before checking. Nothing has been marked complete.";
+      audio.playFailure();
+      announce(answer ? "That answer is not correct yet. Use the hint and try again." : "Type an answer first.");
+    }
+  }
+
+  function completeLearningItem(chapter, itemId) {
+    if (!chapter || !itemId) {
+      return false;
+    }
+    var chapterId = String(chapter.id);
+    var items = learningProgress.get(chapterId) || new Set();
+    if (items.has(itemId)) {
+      syncLearningProgressUI(chapter);
+      return false;
+    }
+    items.add(itemId);
+    learningProgress.set(chapterId, items);
+    persistLearningProgress();
+    syncLearningProgressUI(chapter);
+    var stats = getChapterLearningProgress(chapter);
+    if (stats.done === stats.total) {
+      audio.playAchievement();
+    }
+    return true;
+  }
+
+  function getClassLabDefinition(chapterId, labId) {
+    var material = classMaterials[String(chapterId)] || null;
+    if (!material) {
+      return null;
+    }
+    if (labId === "lecture-demo" && material.lectureDemo) {
+      return {
+        task: null,
+        starterCode: String(material.lectureDemo.code || ""),
+        stdin: Array.isArray(material.lectureDemo.stdin) ? material.lectureDemo.stdin.map(String) : [],
+        expectedOutput: String(material.lectureDemo.expectedOutput || "")
+      };
+    }
+    if (labId.startsWith("lesson-")) {
+      var chapter = chapterById.get(String(chapterId));
+      var content = chapter ? getChapterLearning(chapter) : null;
+      var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
+      var tutorial = tutorials.find(function (candidate, index) {
+        return "lesson-" + domId(getTutorialItemId(candidate, index)) === labId;
+      });
+      if (tutorial) {
+        return {
+          task: null,
+          starterCode: String(tutorial.exampleCode || "# Try a small example here."),
+          stdin: Array.isArray(tutorial.sampleInput) ? tutorial.sampleInput.map(String) : [],
+          expectedOutput: ""
+        };
+      }
+    }
+    var task = getClassRoomTasks(material).find(function (candidate) {
+      return domId(candidate.id) === String(labId);
+    });
+    if (!task || task.kind !== "code") {
+      return null;
+    }
+    return {
+      task: task,
+      starterCode: String(task.starterCode || ""),
+      stdin: Array.isArray(task.stdin) ? task.stdin.map(String) : [],
+      expectedOutput: String(task.expectedOutput || "")
+    };
+  }
+
+  function normalizeClassOutput(value) {
+    return String(value || "").replace(/\r\n?/g, "\n").replace(/\n+$/g, "");
+  }
+
+  function formatClassLabInput(inputLines, mode) {
+    var source = mode === "check" ? "Checked input" : "Run input";
+    if (!inputLines.length) {
+      return source + ": <no input>";
+    }
+    return source + ": " + inputLines.map(function (line) {
+      return JSON.stringify(String(line));
+    }).join(", ");
+  }
+
+  function formatClassLabTranscript(result) {
+    var stdout = String(result && result.stdout || "");
+    var stderr = String(result && result.stderr || "");
+    var traceback = String(result && result.traceback || "");
+    if (!traceback) {
+      return [stdout, stderr].filter(Boolean).join("");
+    }
+    return [
+      stdout ? "Output before the error:\n" + normalizeClassOutput(stdout) : "",
+      stderr ? "Error output:\n" + normalizeClassOutput(stderr) : "",
+      "Traceback:\n" + normalizeClassOutput(traceback)
+    ].filter(Boolean).join("\n\n");
+  }
+
+  function evaluateClassLabTechnique(code, task) {
+    var rules = task && Array.isArray(task.sourceRules) ? task.sourceRules : [];
+    if (!rules.length) {
+      return { passed: true, feedback: "" };
+    }
+    if (!solutionShape || typeof solutionShape.evaluate !== "function") {
+      return {
+        passed: false,
+        feedback: "The implementation checker could not load, so this task cannot be marked complete yet."
+      };
+    }
+    var review = solutionShape.evaluate(code, rules);
+    var firstFailure = review.results.find(function (result) {
+      return !result.passed;
+    });
+    return {
+      passed: review.passed,
+      feedback: firstFailure
+        ? firstFailure.feedback || firstFailure.label
+        : ""
+    };
+  }
+
+  async function runClassLab(button) {
+    var workspace = button.closest("[data-class-lab][data-class-chapter]");
+    if (!workspace) {
+      return;
+    }
+    var chapterId = String(workspace.dataset.classChapter || "");
+    var labId = String(workspace.dataset.classLab || "");
+    var definition = getClassLabDefinition(chapterId, labId);
+    var code = workspace.querySelector("textarea[data-class-lab-code]");
+    var stdin = workspace.querySelector("textarea[data-class-lab-stdin]");
+    var output = workspace.querySelector("[data-class-lab-output]");
+    var status = workspace.querySelector("[data-class-lab-status]");
+    var terminalContext = workspace.querySelector("[data-class-lab-terminal-context]");
+    if (!definition || !code || !stdin || !output || !status || !terminalContext) {
+      return;
+    }
+    var focusTarget = document.activeElement === code || document.activeElement === stdin
+      ? document.activeElement
+      : null;
+    var runMode = button.dataset.classLabRunMode === "check" ? "check" : "run";
+    var inputLines = runMode === "check"
+      ? definition.stdin.slice()
+      : stdin.value === ""
+        ? []
+        : stdin.value.replace(/\r\n?/g, "\n").split("\n");
+    var runButtons = workspace.querySelectorAll("button");
+    workspace.classList.remove("is-success", "is-error");
+    workspace.classList.add("is-running");
+    workspace.setAttribute("aria-busy", "true");
+    runButtons.forEach(function (control) { control.disabled = true; });
+    code.disabled = true;
+    stdin.disabled = true;
+    output.textContent = runMode === "check"
+      ? "Checking the original task fixture…"
+      : "Starting the isolated Python runner…";
+    terminalContext.textContent = formatClassLabInput(inputLines, runMode);
+    status.textContent = (
+      runMode === "check" ? "Checking the task." : "Running your current experiment."
+    ) + " The editor will unlock when Python finishes.";
+    audio.playSubmit();
+    scheduleClassLabDraft(chapterId, labId, code.value, stdin.value, true);
+
+    try {
+      var results = await pythonRunner.run(code.value, "script", [{
+        id: "class-" + chapterId + "-" + labId,
+        name: "Classroom run",
+        hidden: false,
+        input: inputLines,
+        echoInputPrompts: true,
+        expectedOutput: runMode === "check" ? definition.expectedOutput : ""
+      }]);
+      if (!workspace.isConnected) {
+        return;
+      }
+      var result = results && results[0] ? results[0] : null;
+      if (!result) {
+        throw new Error("Python returned no result.");
+      }
+      var transcript = formatClassLabTranscript(result);
+      var matchesExpected = runMode === "check" && !result.traceback &&
+        normalizeClassOutput(result.stdout) === normalizeClassOutput(definition.expectedOutput);
+      var technique = runMode === "check"
+        ? evaluateClassLabTechnique(code.value, definition.task)
+        : { passed: true, feedback: "" };
+      var completedRun = runMode === "check" && matchesExpected && technique.passed;
+      output.textContent = transcript || "(The program finished without printing anything.)";
+      workspace.classList.toggle("is-success", !result.traceback && (
+        runMode === "run" || completedRun
+      ));
+      workspace.classList.toggle("is-error", Boolean(result.traceback) || (
+        runMode === "check" && !completedRun
+      ));
+
+      if (result.traceback) {
+        status.textContent = "Python stopped with an error. Read the final traceback line, edit the code or input, and run again.";
+        audio.playFailure();
+        announce("The classroom program stopped with an error. The full traceback is in the terminal.");
+      } else if (runMode === "run") {
+        status.textContent = definition.task
+          ? "Run complete. This was an experiment, so it did not change task progress. Inspect the terminal, then use Check task when ready."
+          : "Run complete. Inspect the terminal, change the code or sample input, and run another prediction whenever you are ready.";
+        audio.playSuccess();
+        announce(
+          definition.task
+            ? "Classroom experiment finished. Use Check task when you are ready for completion feedback."
+            : "Classroom example finished. Inspect the terminal and keep experimenting."
+        );
+      } else if (matchesExpected && !technique.passed) {
+        status.textContent = "The output matches, but the taught Python idea is still missing. " + technique.feedback;
+        audio.playFailure();
+        announce("The output matches, but the required classroom technique is not present yet.");
+      } else if (completedRun) {
+        status.textContent = definition.task
+          ? definition.task.success
+          : "Check complete. The terminal matches the expected output.";
+        if (definition.task) {
+          var chapter = chapterById.get(chapterId);
+          completeLearningItem(chapter, getClassRoomProgressId(definition.task.id));
+        }
+        audio.playSuccess();
+        announce(definition.task ? "Code task completed." : "Classroom check passed.");
+      } else {
+        status.textContent = "The program ran, but its output does not match the target yet. Compare each character and try again.";
+        audio.playFailure();
+        announce("The classroom output does not match the target yet.");
+      }
+    } catch (error) {
+      if (!workspace.isConnected) {
+        return;
+      }
+      output.textContent = getErrorMessage(error);
+      status.textContent = "The Python runner could not finish. Your edits are saved; try again when the runner is available.";
+      workspace.classList.add("is-error");
+      audio.playFailure();
+      announce("The Python runner could not finish this classroom run.");
+    } finally {
+      if (workspace.isConnected) {
+        workspace.classList.remove("is-running");
+        workspace.removeAttribute("aria-busy");
+        runButtons.forEach(function (control) { control.disabled = false; });
+        code.disabled = false;
+        stdin.disabled = false;
+        if (focusTarget && focusTarget.isConnected) {
+          try {
+            focusTarget.focus({ preventScroll: true });
+          } catch (error) {
+            focusTarget.focus();
+          }
+        }
+      }
+    }
+  }
+
+  function resetClassLab(button) {
+    var workspace = button.closest("[data-class-lab][data-class-chapter]");
+    if (!workspace) {
+      return;
+    }
+    var chapterId = String(workspace.dataset.classChapter || "");
+    var labId = String(workspace.dataset.classLab || "");
+    var definition = getClassLabDefinition(chapterId, labId);
+    var code = workspace.querySelector("textarea[data-class-lab-code]");
+    var stdin = workspace.querySelector("textarea[data-class-lab-stdin]");
+    var output = workspace.querySelector("[data-class-lab-output]");
+    var status = workspace.querySelector("[data-class-lab-status]");
+    var terminalContext = workspace.querySelector("[data-class-lab-terminal-context]");
+    if (!definition || !code || !stdin || !output || !status || !terminalContext) {
+      return;
+    }
+    code.value = definition.starterCode;
+    stdin.value = definition.stdin.join("\n");
+    output.textContent = "Run the code to see its output here.";
+    terminalContext.textContent = "Input source appears after each run";
+    status.textContent = "Reset to the classroom starter. Press Shift + Enter to run.";
+    workspace.classList.remove("is-success", "is-error", "is-running");
+    discardClassLabDraft(chapterId, labId);
+    code.focus();
+    announce("Classroom code and sample input reset.");
+  }
+
+  async function copyClassLabCode(button) {
+    var workspace = button.closest("[data-class-lab]");
+    var code = workspace && workspace.querySelector("textarea[data-class-lab-code]");
+    if (!code) {
+      return;
+    }
+    try {
+      await writeClipboardText(code.value);
+      showControlFeedback(button, "Copied", "Copy code", 1400);
+      announce("Classroom code copied to the clipboard.");
+    } catch (error) {
+      code.focus();
+      announce("Copy was blocked. The classroom editor is focused; select the code and copy it manually.");
+    }
   }
 
   function writeClipboardText(value) {
@@ -4407,6 +4886,36 @@
           }
         });
       }
+      if (
+        remoteState.classLabDrafts &&
+        typeof remoteState.classLabDrafts === "object" &&
+        !Array.isArray(remoteState.classLabDrafts)
+      ) {
+        Object.keys(remoteState.classLabDrafts).slice(0, 160).forEach(function (key) {
+          var entry = remoteState.classLabDrafts[key];
+          if (
+            !classLabDrafts.has(key) &&
+            /^[a-z0-9-]{2,128}\/[a-z0-9-]{2,160}$/u.test(key) &&
+            entry &&
+            typeof entry === "object" &&
+            !Array.isArray(entry) &&
+            typeof entry.code === "string" &&
+            typeof entry.stdin === "string"
+          ) {
+            var remoteClassLabDraft = {
+              code: entry.code.slice(0, CLASS_LAB_CODE_LIMIT),
+              stdin: entry.stdin.slice(0, CLASS_LAB_INPUT_LIMIT)
+            };
+            if (
+              classLabDraftMapBytes(classLabDrafts) +
+              classLabDraftBytes(remoteClassLabDraft) <=
+              CLASS_LAB_DRAFT_BUDGET
+            ) {
+              classLabDrafts.set(key, remoteClassLabDraft);
+            }
+          }
+        });
+      }
       if (remoteState.learningProgress && typeof remoteState.learningProgress === "object" && !Array.isArray(remoteState.learningProgress)) {
         Object.keys(remoteState.learningProgress).forEach(function (chapterId) {
           var remoteItems = remoteState.learningProgress[chapterId];
@@ -4447,6 +4956,7 @@
       }
       persistPassed();
       flushDrafts();
+      flushClassLabDrafts();
       persistLearningProgress();
       persistAssessmentProgress();
     } finally {
@@ -4471,6 +4981,7 @@
 
   function serializeLocalState() {
     var serializedDrafts = {};
+    var serializedClassLabs = {};
     var serializedLearning = {};
     drafts.forEach(function (value, exerciseId) {
       serializedDrafts[exerciseId] = value;
@@ -4478,11 +4989,15 @@
     learningProgress.forEach(function (items, chapterId) {
       serializedLearning[chapterId] = Array.from(items).sort();
     });
+    classLabDrafts.forEach(function (entry, key) {
+      serializedClassLabs[key] = { code: entry.code, stdin: entry.stdin };
+    });
     return {
-      schemaVersion: 2,
-      contentVersion: "2026-07-problem-solving-v2",
+      schemaVersion: 3,
+      contentVersion: "2026-07-beginner-classrooms-v1",
       passedIds: Array.from(passed).sort(),
       drafts: serializedDrafts,
+      classLabDrafts: serializedClassLabs,
       learningProgress: serializedLearning,
       assessmentProgress: assessmentProgress,
       editorMode: editorMode
@@ -4935,6 +5450,18 @@
   }
 
   function handleDocumentKeydown(event) {
+    var classLabControl = event.target && event.target.closest
+      ? event.target.closest("textarea[data-class-lab-code], textarea[data-class-lab-stdin]")
+      : null;
+    if (classLabControl && event.shiftKey && event.key === "Enter") {
+      var classLab = classLabControl.closest("[data-class-lab]");
+      var classRunButton = classLab && classLab.querySelector("button[data-class-lab-run]");
+      if (classRunButton && !classRunButton.disabled) {
+        event.preventDefault();
+        runClassLab(classRunButton);
+      }
+      return;
+    }
     var ideTab = event.target && event.target.closest
       ? event.target.closest("button[data-ide-tab]")
       : null;
@@ -5210,6 +5737,10 @@
     var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
     var itemIds = tutorials.map(function (tutorial, index) {
       return getTutorialItemId(tutorial, index);
+    });
+    var material = classMaterials[String(chapter.id)] || null;
+    getClassRoomTasks(material).forEach(function (task) {
+      itemIds.push(getClassRoomProgressId(task.id));
     });
     if (
       conceptClinicView &&
@@ -5536,6 +6067,129 @@
     queueStateSync();
   }
 
+  function classLabDraftKey(chapterId, labId) {
+    return String(chapterId || "") + "/" + String(labId || "");
+  }
+
+  function readClassLabDrafts() {
+    var result = new Map();
+    var raw = workspaceRead(STORAGE_KEYS.classLabs);
+    if (!raw) {
+      return result;
+    }
+    try {
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return result;
+      }
+      Object.keys(parsed).slice(0, 160).forEach(function (key) {
+        var entry = parsed[key];
+        if (
+          !/^[a-z0-9-]{2,128}\/[a-z0-9-]{2,160}$/u.test(key) ||
+          !entry ||
+          typeof entry !== "object" ||
+          Array.isArray(entry) ||
+          typeof entry.code !== "string" ||
+          typeof entry.stdin !== "string"
+        ) {
+          return;
+        }
+        result.set(key, {
+          code: entry.code.slice(0, CLASS_LAB_CODE_LIMIT),
+          stdin: entry.stdin.slice(0, CLASS_LAB_INPUT_LIMIT)
+        });
+      });
+      trimClassLabDraftMap(result);
+    } catch (error) {
+      return new Map();
+    }
+    return result;
+  }
+
+  function getClassLabDraftsForChapter(chapterId) {
+    var prefix = String(chapterId) + "/";
+    var draftsForChapter = {};
+    classLabDrafts.forEach(function (entry, key) {
+      if (key.startsWith(prefix)) {
+        draftsForChapter[key.slice(prefix.length)] = {
+          code: entry.code,
+          stdin: entry.stdin
+        };
+      }
+    });
+    return draftsForChapter;
+  }
+
+  function classLabDraftBytes(entry) {
+    var value = String(entry && entry.code || "") + String(entry && entry.stdin || "");
+    if (typeof TextEncoder === "function") {
+      return new TextEncoder().encode(value).length;
+    }
+    try {
+      return unescape(encodeURIComponent(value)).length;
+    } catch (error) {
+      return value.length * 2;
+    }
+  }
+
+  function trimClassLabDraftMap(map) {
+    var total = classLabDraftMapBytes(map);
+    while (total > CLASS_LAB_DRAFT_BUDGET && map.size) {
+      var oldestKey = map.keys().next().value;
+      var oldest = map.get(oldestKey);
+      total -= classLabDraftBytes(oldest);
+      map.delete(oldestKey);
+    }
+  }
+
+  function classLabDraftMapBytes(map) {
+    var total = 0;
+    map.forEach(function (entry) {
+      total += classLabDraftBytes(entry);
+    });
+    return total;
+  }
+
+  function scheduleClassLabDraft(chapterId, labId, code, stdin, flushImmediately) {
+    window.clearTimeout(classLabPersistTimer);
+    var key = classLabDraftKey(chapterId, labId);
+    var definition = getClassLabDefinition(chapterId, labId);
+    var defaultCode = definition ? definition.starterCode : "";
+    var defaultInput = definition ? definition.stdin.join("\n") : "";
+    if (String(code) === defaultCode && String(stdin) === defaultInput) {
+      classLabDrafts.delete(key);
+    } else {
+      classLabDrafts.delete(key);
+      classLabDrafts.set(key, {
+        code: String(code).slice(0, CLASS_LAB_CODE_LIMIT),
+        stdin: String(stdin).slice(0, CLASS_LAB_INPUT_LIMIT)
+      });
+      trimClassLabDraftMap(classLabDrafts);
+    }
+    if (flushImmediately) {
+      flushClassLabDrafts();
+      return;
+    }
+    classLabPersistTimer = window.setTimeout(flushClassLabDrafts, 250);
+  }
+
+  function discardClassLabDraft(chapterId, labId) {
+    classLabDrafts.delete(classLabDraftKey(chapterId, labId));
+    flushClassLabDrafts();
+  }
+
+  function flushClassLabDrafts() {
+    window.clearTimeout(classLabPersistTimer);
+    classLabPersistTimer = null;
+    trimClassLabDraftMap(classLabDrafts);
+    var serialized = {};
+    classLabDrafts.forEach(function (entry, key) {
+      serialized[key] = { code: entry.code, stdin: entry.stdin };
+    });
+    workspaceWrite(STORAGE_KEYS.classLabs, JSON.stringify(serialized));
+    queueStateSync();
+  }
+
   function workspaceKey(key) {
     return storageKeyForScope(key, workspaceScope);
   }
@@ -5570,6 +6224,9 @@
     return {
       passed: new Set(passed),
       drafts: new Map(drafts),
+      classLabs: new Map(Array.from(classLabDrafts.entries()).map(function (entry) {
+        return [entry[0], { code: entry[1].code, stdin: entry[1].stdin }];
+      })),
       learning: learningSnapshot,
       assessments: cloneAssessmentState(assessmentProgress),
       editorMode: editorMode,
@@ -5583,6 +6240,7 @@
     return {
       passed: new Set(readPassedIds()),
       drafts: readDrafts(),
+      classLabs: readClassLabDrafts(),
       learning: readLearningProgress(),
       assessments: readAssessmentProgress(),
       editorMode: storedMode === "vim" ? "vim" : "sublime",
@@ -5596,6 +6254,10 @@
     // Anonymous code was edited most recently in the active browser session,
     // so it wins only during its one-time transfer into the account workspace.
     source.drafts.forEach(function (value, exerciseId) { target.drafts.set(exerciseId, value); });
+    source.classLabs.forEach(function (value, key) {
+      target.classLabs.set(key, { code: value.code, stdin: value.stdin });
+    });
+    trimClassLabDraftMap(target.classLabs);
     source.learning.forEach(function (items, chapterId) {
       var mergedItems = target.learning.get(chapterId) || new Set();
       items.forEach(function (itemId) { mergedItems.add(itemId); });
@@ -5617,6 +6279,8 @@
   function applyWorkspaceSnapshot(snapshot) {
     passed = snapshot.passed;
     drafts = snapshot.drafts;
+    classLabDrafts = snapshot.classLabs;
+    trimClassLabDraftMap(classLabDrafts);
     learningProgress = snapshot.learning;
     assessmentProgress = snapshot.assessments;
     editorMode = snapshot.editorMode;
@@ -5624,15 +6288,21 @@
 
   function persistWorkspaceSnapshot(snapshot) {
     var serializedDrafts = {};
+    var serializedClassLabs = {};
     var serializedLearning = {};
+    trimClassLabDraftMap(snapshot.classLabs);
     snapshot.drafts.forEach(function (value, exerciseId) {
       serializedDrafts[exerciseId] = value;
     });
     snapshot.learning.forEach(function (items, chapterId) {
       serializedLearning[chapterId] = Array.from(items).sort();
     });
+    snapshot.classLabs.forEach(function (entry, key) {
+      serializedClassLabs[key] = { code: entry.code, stdin: entry.stdin };
+    });
     workspaceWrite(STORAGE_KEYS.passed, JSON.stringify(Array.from(snapshot.passed).sort()));
     workspaceWrite(STORAGE_KEYS.drafts, JSON.stringify(serializedDrafts));
+    workspaceWrite(STORAGE_KEYS.classLabs, JSON.stringify(serializedClassLabs));
     workspaceWrite(STORAGE_KEYS.learning, JSON.stringify(serializedLearning));
     workspaceWrite(STORAGE_KEYS.assessments, JSON.stringify(snapshot.assessments));
     if (snapshot.hasEditorMode) {
@@ -5651,6 +6321,7 @@
     [
       STORAGE_KEYS.passed,
       STORAGE_KEYS.drafts,
+      STORAGE_KEYS.classLabs,
       STORAGE_KEYS.learning,
       STORAGE_KEYS.assessments,
       STORAGE_KEYS.editorMode,

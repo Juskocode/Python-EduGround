@@ -136,6 +136,39 @@ function canonicalMaterial() {
       teachingPoints: ["The condition is checked before each iteration."],
       questions: ["What changes if the comparison becomes <=?"],
     },
+    roomTasks: [
+      {
+        id: "py03-comparison-type",
+        title: "Name the comparison result",
+        summary: "Inspect one value before using it in a branch.",
+        explanation: [
+          "A comparison creates a value before a condition uses it.",
+          "Python names that two-value type bool.",
+        ],
+        kind: "answer",
+        prompt: "Which type stores True or False?",
+        acceptedAnswers: ["bool"],
+        placeholder: "Type a Python type",
+        hint: "The name starts with b.",
+        success: "Correct. A comparison produces a bool.",
+      },
+      {
+        id: "py03-first-branch",
+        title: "Run one branch",
+        summary: "Edit a tiny branch and inspect its terminal output.",
+        explanation: [
+          "The comparison is checked before either branch runs.",
+          "Indentation places each print call inside its branch.",
+        ],
+        kind: "code",
+        prompt: "Run the supplied boundary value.",
+        starterCode: "value = int(input())\nif value > 0:\n    print('positive')",
+        stdin: ["2"],
+        expectedOutput: "positive",
+        hint: "Trace the comparison first.",
+        success: "The selected branch printed its label.",
+      },
+    ],
     classActivities: [
       {
         title: "Branch trace",
@@ -186,6 +219,8 @@ test("canonical class material is normalized without losing instructional detail
   assert.equal(normalized.lessonPlan.length, 3);
   assert.equal(normalized.lessonPlan[1].purpose, "Track state across iterations.");
   assert.equal(normalized.lectureDemo.expectedOutput, "1\n2\n3");
+  assert.equal(normalized.roomTasks.length, 2);
+  assert.equal(normalized.roomTasks[1].stdin[0], "2");
   assert.equal(normalized.classActivities[0].evidence, "A path table with exactly one selected branch per input.");
   assert.equal(normalized.independentPractice.length, 2);
   assert.equal(normalized.homework.selfReview.length, 2);
@@ -196,6 +231,7 @@ test("the section plan is stable, scoped, ordered, and reflects optional supplie
   const plan = classPage.buildSectionPlan({}, {
     scope: "class-py03",
     hasLessons: true,
+    hasRoomTasks: true,
     hasDeepDive: true,
     hasRunbook: true,
     hasOfficialDocs: true,
@@ -207,6 +243,7 @@ test("the section plan is stable, scoped, ordered, and reflects optional supplie
       "overview",
       "lesson-plan",
       "lecture-demo",
+      "room-tasks",
       "lesson-notes",
       "class-activities",
       "independent-practice",
@@ -266,7 +303,9 @@ test("render builds a complete accessible class page from canonical material and
   const ids = nodes.map((node) => node.id).filter(Boolean);
   const tocButtons = nodes.filter((node) => node.dataset && node.dataset.scrollTarget);
   const currentChapterLinks = nodes.filter((node) => node.getAttribute("aria-current") === "page");
-  const copyButton = nodes.find((node) => node.dataset && node.dataset.copySnippet === "true");
+  const copyButton = nodes.find((node) => node.dataset && node.dataset.classLabCopy === "lecture-demo");
+  const codeEditors = nodes.filter((node) => node.dataset && node.dataset.classLabCode);
+  const roomTask = nodes.find((node) => node.dataset && node.dataset.classTask === "py03-comparison-type");
   const sectionFragmentLinks = nodes.filter((node) => (
     node.tagName === "A" && /^#class-py03-/u.test(node.href)
   ));
@@ -282,7 +321,10 @@ test("render builds a complete accessible class page from canonical material and
   assert.equal(sectionFragmentLinks.length, 0);
   assert.equal(currentChapterLinks.some((node) => node.dataset.chapterId === "py03"), true);
   assert.equal(copyButton.type, "button");
-  assert.equal(copyButton.dataset.copyRestingLabel, "Copy demo");
+  assert.equal(copyButton.textContent, "Copy code");
+  assert.equal(codeEditors.length, 2);
+  assert.ok(roomTask);
+  assert.ok(findByText(page, "H2", "Guided room tasks"));
   assert.ok(findByText(page, "STRONG", "Expected output"));
   assert.ok(findByText(page, "H2", "Class activities"));
   assert.ok(findByText(page, "H2", "Independent practice"));

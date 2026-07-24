@@ -94,6 +94,8 @@ test("completed, current, and upcoming stops update from saved learning progress
     if (window.LEARNING_CLINICS?.py01) {
       learningItems.push("concept-clinic");
     }
+    const roomTasks = window.CLASS_MATERIALS?.py01?.roomTasks || [];
+    learningItems.push(...roomTasks.map((task) => `room:${task.id}`));
     learningItems.push("runbook");
     localStorage.setItem(
       "fp-playground.passed.v2",

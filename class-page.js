@@ -47,6 +47,15 @@
       .filter(Boolean);
   }
 
+  function asInputLines(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .slice(0, 24)
+      .map((item) => String(item === undefined || item === null ? "" : item).slice(0, 1000));
+  }
+
   function asMinutes(value, fallback) {
     const minutes = Number(value);
     return Number.isFinite(minutes) && minutes > 0
@@ -118,9 +127,47 @@
       expectedOutput: typeof source.expectedOutput === "string"
         ? source.expectedOutput
         : "",
+      stdin: asInputLines(source.stdin || source.sampleInput),
       teachingPoints: asStringList(source.teachingPoints || source.observations),
       questions: asStringList(source.questions),
     };
+  }
+
+  function normalizeRoomTasks(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.reduce((tasks, item, index) => {
+      if (!item || typeof item !== "object") {
+        return tasks;
+      }
+      const id = slugify(item.id || `task-${index + 1}`);
+      const kind = item.kind === "code" ? "code" : "answer";
+      const explanation = asStringList(item.explanation);
+      tasks.push({
+        id,
+        title: asText(item.title, `Guided task ${index + 1}`),
+        summary: asText(
+          item.summary,
+          "Read the idea, make a prediction, and check your understanding.",
+        ),
+        explanation: explanation.length
+          ? explanation
+          : ["Use the example as evidence, then explain the rule in your own words."],
+        kind,
+        prompt: asText(item.prompt, "What should the learner do next?"),
+        placeholder: asText(item.placeholder, "Type your answer"),
+        starterCode: typeof item.starterCode === "string"
+          ? item.starterCode
+          : "# Edit this example, then run it.\n",
+        stdin: asInputLines(item.stdin),
+        expectedOutput: typeof item.expectedOutput === "string" ? item.expectedOutput : "",
+        requirements: asStringList(item.requirements),
+        hint: asText(item.hint, "Return to the explanation and trace one line at a time."),
+        success: asText(item.success, "Correct. You can now explain this step."),
+      });
+      return tasks;
+    }, []);
   }
 
   function normalizeActivities(value) {
@@ -237,6 +284,7 @@
         lessonCount,
       ),
       lectureDemo: normalizeLectureDemo(source.lectureDemo, chapterTitle),
+      roomTasks: normalizeRoomTasks(source.roomTasks),
       classActivities: normalizeActivities(source.classActivities || source.activities),
       independentPractice: normalizeIndependentPractice(
         source.independentPractice && !Array.isArray(source.independentPractice)
@@ -265,6 +313,9 @@
       { key: "lesson-plan", label: "Lesson plan" },
       { key: "lecture-demo", label: "Lecture demonstration" },
     ];
+    if (state.hasRoomTasks) {
+      sections.push({ key: "room-tasks", label: "Guided room tasks" });
+    }
     if (state.hasLessons) {
       sections.push({ key: "lesson-notes", label: "Lesson notes" });
     }
@@ -318,9 +369,14 @@
       : null;
     const scope = `class-${slugify(chapter.id || chapter.number || chapter.title)}`;
     const material = normalizeMaterial(settings.material, chapter, lessonNodes.length);
+    const roomTaskEntries = material.roomTasks.map((task, index) => ({
+      id: `${scope}-room-${slugify(task.id)}`,
+      label: `Task ${index + 1} · ${task.title}`,
+    }));
     const sections = buildSectionPlan(material, {
       scope,
       hasLessons: Boolean(lessonNodes.length),
+      hasRoomTasks: Boolean(material.roomTasks.length),
       hasDeepDive: Boolean(deepDiveNode),
       hasRunbook: Boolean(runbookNode),
       hasOfficialDocs: Boolean(officialDocsNode),
@@ -330,9 +386,15 @@
       id: `${scope}-lesson-${index + 1}`,
       label: getLessonLabel(node, settings.material, index),
     }));
-    const tocEntries = sections.map((section) => section.key === "lesson-notes"
-      ? { ...section, children: lessonEntries }
-      : section);
+    const tocEntries = sections.map((section) => {
+      if (section.key === "lesson-notes") {
+        return { ...section, children: lessonEntries };
+      }
+      if (section.key === "room-tasks") {
+        return { ...section, children: roomTaskEntries };
+      }
+      return section;
+    });
 
     const page = createElement("div", "page-shell class-page");
     const mobileNavigation = createElement("div", "class-page__mobile-navigation");
@@ -368,8 +430,30 @@
       renderArticleHeader(scope, chapter, material, settings.progressNode, settings.classAction),
       renderClassSetup(sectionByKey.get("overview"), material),
       renderLessonPlan(sectionByKey.get("lesson-plan"), material),
-      renderLectureDemo(sectionByKey.get("lecture-demo"), material.lectureDemo),
+      renderLectureDemo(sectionByKey.get("lecture-demo"), material.lectureDemo, {
+        chapterId: String(chapter.id || ""),
+        draft: settings.labDrafts && settings.labDrafts["lecture-demo"],
+      }),
     );
+
+    if (material.roomTasks.length) {
+      article.append(renderRoomTasks(
+        sectionByKey.get("room-tasks"),
+        material.roomTasks,
+        roomTaskEntries,
+        {
+          chapterId: String(chapter.id || ""),
+          completedIds: new Set(
+            Array.isArray(settings.completedRoomTaskIds)
+              ? settings.completedRoomTaskIds.map(String)
+              : [],
+          ),
+          labDrafts: settings.labDrafts && typeof settings.labDrafts === "object"
+            ? settings.labDrafts
+            : {},
+        },
+      ));
+    }
 
     if (lessonNodes.length) {
       article.append(
@@ -680,35 +764,32 @@
     return block;
   }
 
-  function renderLectureDemo(section, demo) {
+  function renderLectureDemo(section, demo, options) {
+    const settings = options && typeof options === "object" ? options : {};
     const block = renderSectionHeader(
       section,
       "Instructor-led",
       "Lecture demonstration",
-      "Keep the code small enough to trace completely. The goal is explanation, not speed.",
+      "Predict first, then edit and run the example. Sample input is kept separate from the Python editor so you can see exactly what input() receives.",
     );
     const demoHeader = createElement("div", "class-page__demo-introduction");
-    const codeBox = createElement("div", "tutorial-code class-page__code");
-    const codeHeader = createElement("div", "tutorial-code__header");
-    const codeMeta = createElement("span", "tutorial-code__meta");
-    const copyButton = createElement("button", "tutorial-copy-button", "Copy demo");
-    const pre = createElement("pre");
-    pre.tabIndex = 0;
     const teachingGrid = createElement("div", "class-page__teaching-grid");
 
     demoHeader.append(createElement("h3", null, demo.title), createElement("p", null, demo.setup));
-    copyButton.type = "button";
-    copyButton.dataset.copySnippet = "true";
-    copyButton.dataset.copyRestingLabel = "Copy demo";
-    codeMeta.append(createElement("span", null, "Python 3"), copyButton);
-    codeHeader.append(createElement("span", null, demo.filename), codeMeta);
-    pre.append(createElement("code", null, demo.code));
-    codeBox.append(codeHeader, pre);
-    block.append(demoHeader, codeBox);
-
-    if (demo.expectedOutput) {
-      block.append(renderExpectedOutput(demo.expectedOutput));
-    }
+    block.append(
+      demoHeader,
+      renderRunnableLab({
+        id: "lecture-demo",
+        filename: demo.filename,
+        starterCode: demo.code,
+        stdin: demo.stdin,
+        expectedOutput: demo.expectedOutput,
+      }, {
+        chapterId: settings.chapterId,
+        draft: settings.draft,
+        taskId: "",
+      }),
+    );
     if (demo.teachingPoints.length) {
       teachingGrid.append(renderNumberedNotes(
         "Teaching points",
@@ -727,6 +808,284 @@
       block.append(teachingGrid);
     }
     return block;
+  }
+
+  function renderRunnableLab(lab, options) {
+    const settings = options && typeof options === "object" ? options : {};
+    const draft = settings.draft && typeof settings.draft === "object"
+      ? settings.draft
+      : {};
+    const labId = slugify(lab.id || "class-lab");
+    const chapterId = String(settings.chapterId || "");
+    const codeValue = typeof draft.code === "string" ? draft.code : lab.starterCode;
+    const inputValue = typeof draft.stdin === "string"
+      ? draft.stdin
+      : asInputLines(lab.stdin).join("\n");
+    const scope = `class-lab-${slugify(chapterId)}-${labId}`;
+    const workspace = createElement("section", "class-room-lab");
+    const toolbar = createElement("header", "class-room-lab__toolbar");
+    const actions = createElement("div", "class-room-lab__actions");
+    const copyButton = createElement("button", "button button--quiet", "Copy code");
+    const resetButton = createElement("button", "button button--quiet", "Reset");
+    const runButton = createElement("button", "button button--primary", "Run code");
+    const checkButton = settings.taskId
+      ? createElement("button", "button button--primary", "Check task")
+      : null;
+    const panes = createElement("div", "class-room-lab__panes");
+    const editorPanel = createElement("div", "class-room-lab__editor-panel");
+    const editorLabel = createElement("label", "class-room-lab__label", "Python editor");
+    const editor = createElement("textarea", "class-room-lab__editor");
+    const inputPanel = createElement("div", "class-room-lab__input-panel");
+    const inputLabel = createElement(
+      "label",
+      "class-room-lab__label",
+      "Program input · one line for each input() call",
+    );
+    const input = createElement("textarea", "class-room-lab__stdin");
+    const terminal = createElement("section", "class-room-lab__terminal");
+    const terminalHeader = createElement("header");
+    const terminalContext = createElement(
+      "span",
+      "class-room-lab__terminal-context",
+      "Input source appears after each run",
+    );
+    const terminalOutput = createElement("pre", null, "Run the code to see its output here.");
+    const status = createElement(
+      "p",
+      "class-room-lab__status",
+      "Ready. Press Shift + Enter from either editor to run.",
+    );
+
+    workspace.dataset.classLab = labId;
+    workspace.dataset.classChapter = chapterId;
+    workspace.dataset.classTaskId = String(settings.taskId || "");
+    workspace.dataset.expectedOutput = typeof lab.expectedOutput === "string"
+      ? lab.expectedOutput
+      : "";
+    workspace.setAttribute("aria-labelledby", `${scope}-title`);
+
+    toolbar.append(
+      createElement("strong", null, lab.filename || `${labId}.py`),
+      createElement("span", "class-room-lab__runtime", "Python 3 · isolated runner"),
+    );
+    copyButton.type = "button";
+    copyButton.dataset.classLabCopy = labId;
+    resetButton.type = "button";
+    resetButton.dataset.classLabReset = labId;
+    runButton.type = "button";
+    runButton.dataset.classLabRun = labId;
+    runButton.dataset.classLabRunMode = "run";
+    runButton.setAttribute("aria-keyshortcuts", "Shift+Enter");
+    actions.append(copyButton, resetButton, runButton);
+    if (checkButton) {
+      checkButton.type = "button";
+      checkButton.dataset.classLabRun = labId;
+      checkButton.dataset.classLabRunMode = "check";
+      actions.append(checkButton);
+    }
+    toolbar.append(actions);
+    toolbar.querySelector("strong").id = `${scope}-title`;
+
+    editor.id = `${scope}-code`;
+    editor.value = codeValue;
+    editor.rows = Math.max(7, Math.min(18, String(codeValue).split("\n").length + 2));
+    editor.maxLength = 12000;
+    editor.spellcheck = false;
+    editor.wrap = "off";
+    editor.dataset.classLabCode = labId;
+    editor.dataset.classChapter = chapterId;
+    editor.setAttribute("autocomplete", "off");
+    editor.setAttribute("autocapitalize", "off");
+    editor.setAttribute("aria-describedby", `${scope}-status`);
+    editorLabel.htmlFor = editor.id;
+    editorPanel.append(editorLabel, editor);
+
+    input.id = `${scope}-stdin`;
+    input.value = inputValue;
+    input.rows = Math.max(3, Math.min(7, String(inputValue || "").split("\n").length + 1));
+    input.maxLength = 2000;
+    input.spellcheck = false;
+    input.dataset.classLabStdin = labId;
+    input.dataset.classChapter = chapterId;
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("aria-describedby", `${scope}-input-help`);
+    inputLabel.htmlFor = input.id;
+    inputPanel.append(
+      inputLabel,
+      createElement(
+        "p",
+        "class-room-lab__input-help",
+        settings.taskId
+          ? "Run uses these editable lines. Check task uses the original task input restored by Reset."
+          : "These lines act like text typed into the terminal after the program pauses at input().",
+      ),
+      input,
+    );
+    inputPanel.querySelector("p").id = `${scope}-input-help`;
+
+    panes.append(editorPanel, inputPanel);
+    terminalHeader.append(
+      createElement("strong", null, "Terminal"),
+      terminalContext,
+    );
+    terminalContext.dataset.classLabTerminalContext = labId;
+    terminalOutput.dataset.classLabOutput = labId;
+    terminalOutput.tabIndex = 0;
+    status.id = `${scope}-status`;
+    status.dataset.classLabStatus = labId;
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    terminal.append(terminalHeader, terminalOutput, status);
+    workspace.append(toolbar, panes, terminal);
+
+    if (lab.expectedOutput) {
+      workspace.append(renderExpectedOutput(lab.expectedOutput));
+    }
+    return workspace;
+  }
+
+  function renderRoomTasks(section, tasks, entries, options) {
+    const settings = options && typeof options === "object" ? options : {};
+    const completed = settings.completedIds instanceof Set
+      ? settings.completedIds
+      : new Set();
+    const block = renderSectionHeader(
+      section,
+      "Interactive classroom",
+      "Guided room tasks",
+      "Work in order: read one small idea, answer or run it, inspect the feedback, then continue. Nothing here reveals an exercise solution.",
+    );
+    const progress = createElement("div", "class-room-progress");
+    const completeCount = tasks.reduce(
+      (count, task) => count + (completed.has(task.id) ? 1 : 0),
+      0,
+    );
+    const progressBar = createElement("progress");
+    const list = createElement("ol", "class-room-tasks");
+
+    progress.dataset.classRoomProgress = settings.chapterId;
+    progress.append(
+      createElement("strong", null, `${completeCount} / ${tasks.length} room tasks complete`),
+      progressBar,
+    );
+    progressBar.max = Math.max(tasks.length, 1);
+    progressBar.value = completeCount;
+    progressBar.setAttribute(
+      "aria-label",
+      `${completeCount} of ${tasks.length} guided room tasks complete`,
+    );
+
+    tasks.forEach((task, index) => {
+      const entry = entries[index];
+      const done = completed.has(task.id);
+      const item = createElement("li", `class-room-task${done ? " is-complete" : ""}`);
+      const article = createElement("article");
+      const header = createElement("header", "class-room-task__header");
+      const copy = createElement("div");
+      const state = createElement(
+        "span",
+        "class-room-task__state",
+        done ? "Completed ✓" : "Ready",
+      );
+      const explanation = createElement("div", "class-room-task__theory");
+
+      item.id = entry.id;
+      item.dataset.classTask = task.id;
+      item.dataset.classChapter = settings.chapterId;
+      copy.append(
+        createElement("span", "eyebrow", `Task ${index + 1} of ${tasks.length}`),
+        createElement("h3", null, task.title),
+        createElement("p", null, task.summary),
+      );
+      state.dataset.classTaskStatus = task.id;
+      header.append(copy, state);
+      task.explanation.forEach((paragraph) => explanation.append(createElement("p", null, paragraph)));
+      article.append(header, explanation);
+
+      if (task.kind === "code") {
+        const challenge = createElement("section", "class-room-task__challenge");
+        challenge.append(
+          createElement("h4", null, "Try it in Python"),
+          createElement("p", null, task.prompt),
+        );
+        if (task.requirements.length) {
+          const contract = createElement("aside", "class-room-task__contract");
+          const contractList = createElement("ul");
+          task.requirements.forEach((requirement) => {
+            contractList.append(createElement("li", null, requirement));
+          });
+          contract.append(
+            createElement("strong", null, "To complete this task"),
+            contractList,
+          );
+          challenge.append(contract);
+        }
+        challenge.append(
+          renderRunnableLab({
+            id: task.id,
+            filename: `${task.id}.py`,
+            starterCode: task.starterCode,
+            stdin: task.stdin,
+            expectedOutput: task.expectedOutput,
+          }, {
+            chapterId: settings.chapterId,
+            taskId: task.id,
+            draft: settings.labDrafts[task.id],
+          }),
+        );
+        article.append(challenge);
+      } else {
+        article.append(renderRoomAnswer(task, settings.chapterId, done));
+      }
+
+      const hint = createElement("details", "class-room-task__hint");
+      hint.append(
+        createElement("summary", null, "Need a hint?"),
+        createElement("p", null, task.hint),
+      );
+      article.append(hint);
+      item.append(article);
+      list.append(item);
+    });
+
+    block.append(progress, list);
+    return block;
+  }
+
+  function renderRoomAnswer(task, chapterId, done) {
+    const form = createElement("form", "class-room-answer");
+    const label = createElement("label", null, task.prompt);
+    const row = createElement("div", "class-room-answer__row");
+    const input = createElement("input");
+    const button = createElement("button", "button button--primary", done ? "Check again" : "Check answer");
+    const feedback = createElement(
+      "p",
+      `class-room-answer__feedback${done ? " is-correct" : ""}`,
+      done ? task.success : "Your feedback will appear here.",
+    );
+    const inputId = `class-room-answer-${slugify(chapterId)}-${slugify(task.id)}`;
+
+    form.dataset.classRoomForm = task.id;
+    form.dataset.classChapter = chapterId;
+    input.id = inputId;
+    input.name = "answer";
+    input.type = "text";
+    input.placeholder = task.placeholder;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.dataset.classAnswer = task.id;
+    input.dataset.classChapter = chapterId;
+    input.setAttribute("aria-describedby", `${inputId}-feedback`);
+    label.htmlFor = inputId;
+    button.type = "submit";
+    button.dataset.classRoomCheck = task.id;
+    feedback.id = `${inputId}-feedback`;
+    feedback.dataset.classFeedback = task.id;
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    row.append(input, button);
+    form.append(label, row, feedback);
+    return form;
   }
 
   function renderExpectedOutput(output) {
@@ -958,6 +1317,7 @@
     buildSectionPlan,
     normalizeMaterial,
     render,
+    renderRunnableLab,
     slugify,
   });
 })();
