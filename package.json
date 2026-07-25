@@ -22,6 +22,7 @@
     "db:backup": "sh scripts/database/backup-postgres.sh",
     "db:restore": "sh scripts/database/restore-postgres.sh",
     "validate:structure": "node scripts/validation/validate-structure.js",
+    "validate:generated": "node scripts/validation/validate-generated-artifacts.js",
     "validate:types": "tsc -p tsconfig.server.json --noEmit",
     "validate:syntax": "npm run build:server && node scripts/validation/validate-syntax.js",
     "validate:content": "node scripts/validation/validate-test-data.js && node scripts/validation/validate-starter-data.js && node scripts/validation/validate-learning-content.js && node scripts/validation/validate-assessment-data.js",
@@ -37,7 +38,7 @@
     "build:solutions": "node scripts/build/build-solution-bundle.js",
     "build:starters": "node scripts/build/build-starter-bundle.js",
     "validate:links": "node scripts/validation/check-learning-links.js",
-    "validate": "npm run validate:structure && npm run validate:types && npm run validate:syntax && npm run validate:content && npm run validate:unit && npm run validate:security && npm run validate:ai-infra"
+    "validate": "npm run validate:structure && npm run validate:generated && npm run validate:types && npm run validate:syntax && npm run validate:content && npm run validate:unit && npm run validate:security && npm run validate:ai-infra"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",

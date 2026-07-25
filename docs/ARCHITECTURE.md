@@ -12,8 +12,10 @@ its audience and responsibility before the file is opened.
 - `tests/` mirrors the system's client, server, integration, and browser
   boundaries.
 
-The structure validator fails when a root-level implementation file, a non-vendor
-`.mjs` file, or a private solution appears in a public path.
+The structure validator enforces the explicit top-level map, test-layer suffixes,
+the two generated curriculum outputs, and the public/private boundary. It also
+fails when a non-vendor `.mjs` file or a private solution appears in a public
+path.
 
 ## Top-level map
 
@@ -21,12 +23,16 @@ The structure validator fails when a root-level implementation file, a non-vendo
 .
 ├── public/                     # Only HTTP-served directory
 │   ├── index.html              # Stable browser shell and script order
-│   ├── app/                    # Cross-feature browser orchestration
+│   ├── app/                    # Cross-feature browser composition
+│   │   ├── bootstrap/          # Earliest theme/startup behavior
+│   │   ├── feedback/           # Cross-feature audio feedback
+│   │   └── routing/            # Hash parsing and announcements
 │   ├── assets/                 # Images, diagrams, and vendored Ace
 │   ├── content/                # Solution-free authored/generated learning data
 │   │   ├── exercise-tests/     # Browser learning checks
 │   │   └── generated/          # Solution-free generated starters
 │   ├── features/               # Vertical UI features
+│   │   └── exercise/           # Exercise grading and route-only layout
 │   ├── styles/                 # Shared design system
 │   └── workers/                # Browser Python execution worker
 ├── src/
@@ -38,7 +44,7 @@ The structure validator fails when a root-level implementation file, a non-vendo
 │       ├── rag/                # Chapter-only retrieval and Ollama adapter
 │       ├── security/           # Authentication and runtime policy
 │       ├── main.js             # Process entrypoint
-│       └── paths.js            # Canonical absolute repository paths
+│       └── paths.ts            # Canonical absolute repository paths
 ├── curriculum/
 │   ├── solutions/              # Private Python reference implementations
 │   └── generated/              # Private generated solution bundle
@@ -91,11 +97,25 @@ These files must never be placed in `public/`:
 
 `public/app/` is for behavior used across several screens:
 
-- `course-app.js` owns routing, application state, persistence integration,
-  editor/runner coordination, and shared rendering;
-- `audio-feedback.js` owns synthesized action cues;
-- `theme-bootstrap.js` applies the saved theme before the full app renders;
-- `solution-shape.js` evaluates educational source-shape contracts.
+- `routing/course-router.js` owns hash parsing and learner-facing route
+  announcements;
+- `course-app.js` is the composition root for application state, persistence
+  integration, editor/runner coordination, and shared rendering;
+- `feedback/audio-feedback.js` owns synthesized action cues;
+- `bootstrap/theme-bootstrap.js` applies the saved theme before the full app
+  renders.
+
+Exercise-only behavior belongs in `public/features/exercise/`.
+`solution-shape.js` evaluates educational source-shape contracts and
+`workbench-mode.css` owns the compact route shell. Keeping them out of
+`public/app/` and `public/styles/` prevents an exercise concern from becoming a
+cross-feature dependency.
+
+`public/workers/python-runner-client.js` owns the main-thread worker lifecycle,
+startup deadline, per-run deadline, and request correlation.
+`public/workers/python-runner-worker.js` remains the isolated browser-Python
+execution endpoint. Keeping the client beside the worker makes that boundary
+explicit while leaving the app shell responsible only for composing it.
 
 `public/features/<feature>/` is for a cohesive screen or interaction. Its
 JavaScript and feature-specific CSS stay together. Current examples include
@@ -120,6 +140,11 @@ The browser application intentionally remains a small ordered classic-script
 system: `public/index.html` loads browser `.js` files in a documented order and
 those files publish frozen namespaces on `window`.
 
+The router and Python-runner client load before `course-app.js`; the composition
+root consumes their frozen namespaces rather than carrying private copies. New
+cross-screen runtime services should follow the same factory boundary and receive
+browser primitives through options when they need deterministic unit tests.
+
 Consequently:
 
 - use strict `.ts` for new server contracts and keep `.js` import specifiers for
@@ -142,12 +167,13 @@ helpers and never reach into test or documentation directories.
 | Area | Owns |
 | --- | --- |
 | `api/` | URL routing, request bounds, same-origin API responses |
+| `api/routes/` | Narrow typed route handlers, beginning with health/readiness |
 | `curriculum/` | Stable exercise-to-file mapping and private saved-file mirror |
 | `http/` | Static file resolution, MIME types, security headers, JSON responses |
 | `persistence/` | Database configuration, migration loading, state and run records |
 | `rag/` | Solution-free chapter corpus, retrieval, prompt policy, inference capacity |
 | `security/` | Passwords, cookies, tab capability, origin/CSP/proxy policy |
-| `paths.js` | Resolved public, migration, and repository roots |
+| `paths.ts` | Resolved public, migration, and repository roots |
 
 The API runs learner Python nowhere on the server. Python remains inside the
 dedicated browser worker. The server accepts bounded learner state and run evidence
@@ -181,10 +207,13 @@ After changing a reference solution, run:
 ```bash
 npm run build:solutions
 npm run build:starters
+npm run validate:generated
 npm run validate:content
 ```
 
-Review both generated diffs. A public starter must not reveal the implementation.
+Review both generated diffs. The generated-artifact gate reproduces both bundles
+in memory and fails on drift without rewriting the worktree. A public starter
+must not reveal the implementation.
 
 ## Persistence and compatibility contracts
 

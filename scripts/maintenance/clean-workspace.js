@@ -4,15 +4,37 @@ import path from "node:path";
 import { REPOSITORY_ROOT } from "../lib/paths.js";
 
 const generatedDirectories = [
-  "artifacts/playwright",
+  "artifacts",
+  "coverage",
+  "htmlcov",
   "dist",
   "playwright-report",
   "test-results",
 ];
 const disposableNames = new Set([
+  ".coverage",
   ".DS_Store",
+  ".mypy_cache",
+  ".nyc_output",
+  ".pytest_cache",
+  ".ruff_cache",
   "__pycache__",
 ]);
+const disposableSuffixes = [
+  ".log",
+  ".pyc",
+  ".swp",
+  ".swo",
+  ".tsbuildinfo",
+];
+
+function isDisposableFile(name) {
+  return (
+    disposableSuffixes.some((suffix) => name.endsWith(suffix)) ||
+    /^(?:npm|pnpm|yarn)-(?:debug|error)\.log(?:\..*)?$/u.test(name) ||
+    name.endsWith("~")
+  );
+}
 
 async function removeDisposableEntries(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -21,7 +43,7 @@ async function removeDisposableEntries(directory) {
       continue;
     }
     const target = path.join(directory, entry.name);
-    if (disposableNames.has(entry.name) || entry.name.endsWith(".pyc")) {
+    if (disposableNames.has(entry.name) || isDisposableFile(entry.name)) {
       await rm(target, { force: true, recursive: true });
       continue;
     }
@@ -39,4 +61,6 @@ for (const relativePath of generatedDirectories) {
 }
 
 await removeDisposableEntries(REPOSITORY_ROOT);
-console.log("Removed browser reports and disposable operating-system or Python cache files.");
+console.log(
+  "Removed build/test output, logs, swap files, and disposable language caches.",
+);
