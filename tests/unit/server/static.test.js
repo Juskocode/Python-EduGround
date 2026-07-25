@@ -39,6 +39,8 @@ test("required playground assets remain public from their organized URLs", async
     "/features/clinic/learning-clinic.css",
     "/features/classroom/class-page.js",
     "/features/classroom/class-page.css",
+    "/features/pygame/pygame-labs.js",
+    "/features/pygame/pygame-labs.css",
     "/features/rounding/rounding-model.js",
     "/features/rounding/rounding-lab.js",
     "/features/rounding/rounding-lab.css",
@@ -55,6 +57,7 @@ test("required playground assets remain public from their organized URLs", async
     "/content/generated/starter-code.js",
     "/content/exercise-tests/tests-py01-03.js",
     "/content/exercise-tests/tests-py12.js",
+    "/content/exercise-tests/tests-py13.js",
     "/workers/python-runner-worker.js",
     "/assets/vendor/ace/ace.js",
     "/assets/illustrations/problem-solving/decomposition-roadmap.svg",
@@ -76,6 +79,7 @@ test("the toolbox data loads before the application reads it", async () => {
   const clinicViewPosition = index.indexOf('src="/features/clinic/concept-clinic.js"');
   const classMaterialsPosition = index.indexOf('src="/content/class-materials.js"');
   const classPagePosition = index.indexOf('src="/features/classroom/class-page.js"');
+  const pygameLabsPosition = index.indexOf('src="/features/pygame/pygame-labs.js"');
   const roundingModelPosition = index.indexOf('src="/features/rounding/rounding-model.js"');
   const roundingLabPosition = index.indexOf('src="/features/rounding/rounding-lab.js"');
   const dashboardModelPosition = index.indexOf('src="/features/dashboard/dashboard-model.js"');
@@ -98,7 +102,8 @@ test("the toolbox data loads before the application reads it", async () => {
   assert.ok(clinicViewPosition > clinicsPosition, "the concept-clinic view should load after its data");
   assert.ok(classMaterialsPosition > clinicViewPosition, "class materials should load after the core learning components");
   assert.ok(classPagePosition > classMaterialsPosition, "the class-page view should load after its materials");
-  assert.ok(roundingModelPosition > classPagePosition, "the rounding model should load after the class-page components");
+  assert.ok(pygameLabsPosition > classPagePosition, "the Pygame labs should load after the class-page components");
+  assert.ok(roundingModelPosition > pygameLabsPosition, "the rounding model should load after the Pygame labs");
   assert.ok(roundingLabPosition > roundingModelPosition, "the rounding lab should load after its arithmetic model");
   assert.ok(stageRecapsPosition > roundingLabPosition, "stage recap content should load after course data");
   assert.ok(dashboardModelPosition > roundingLabPosition, "the dashboard model should load after course data");
@@ -121,6 +126,7 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
   const clinicUiPosition = index.indexOf('href="/features/clinic/learning-clinic.css"');
   const roundingLabPosition = index.indexOf('href="/features/rounding/rounding-lab.css"');
   const classPagePosition = index.indexOf('href="/features/classroom/class-page.css"');
+  const pygameLabsPosition = index.indexOf('href="/features/pygame/pygame-labs.css"');
   const assessmentUiPosition = index.indexOf('href="/features/assessment/assessment-ui.css"');
   const geospaceUiPosition = index.indexOf('href="/styles/geospace-ui.css"');
   const progressSnakePosition = index.indexOf(
@@ -134,7 +140,8 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
   assert.ok(clinicUiPosition > dashboardUiPosition, "concept-clinic styles should load after the shared dashboard layer");
   assert.ok(roundingLabPosition > clinicUiPosition, "rounding lab styles should load after the learning clinic");
   assert.ok(classPagePosition > roundingLabPosition, "class-page styles should be able to refine embedded learning components");
-  assert.ok(assessmentUiPosition > classPagePosition, "assessment UI should remain the final feature stylesheet");
+  assert.ok(pygameLabsPosition > classPagePosition, "Pygame lab styles should refine the classroom shell");
+  assert.ok(assessmentUiPosition > pygameLabsPosition, "assessment UI should remain the final feature stylesheet");
   assert.ok(geospaceUiPosition > assessmentUiPosition, "the shared geospace layer should refine every feature stylesheet");
   assert.ok(progressSnakePosition > geospaceUiPosition, "progress Snake styles should refine the shared geospace layer");
   assert.ok(landingSnakePosition > geospaceUiPosition, "the playable landing game should refine the shared geospace layer");

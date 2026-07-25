@@ -2050,6 +2050,92 @@ pre {
   pointer-events: none;
 }
 
+.chapter-hero__art.chapter-art--pygame {
+  background-color: #071528;
+  background-image:
+    radial-gradient(circle at 18% 20%, rgba(118, 238, 188, 0.9) 0 2px, transparent 3px),
+    radial-gradient(circle at 72% 17%, rgba(255, 211, 105, 0.86) 0 2px, transparent 3px),
+    radial-gradient(circle at 84% 46%, rgba(99, 173, 255, 0.82) 0 1px, transparent 2px),
+    linear-gradient(rgba(90, 170, 230, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(90, 170, 230, 0.07) 1px, transparent 1px),
+    linear-gradient(150deg, #071528, #102849 66%, #09172a);
+  background-position: 0 0;
+  background-size: auto, auto, auto, 32px 32px, 32px 32px, 100% 100%;
+}
+
+.chapter-art__game-scene {
+  position: absolute;
+  inset: 12% 10% 15%;
+}
+
+.chapter-art__snake {
+  position: absolute;
+  top: 16%;
+  left: 9%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  filter: drop-shadow(0 8px 14px rgba(55, 220, 151, 0.22));
+}
+
+.chapter-art__snake i {
+  display: block;
+  width: clamp(15px, 2.8vw, 26px);
+  aspect-ratio: 1;
+  border: 2px solid rgba(202, 255, 231, 0.48);
+  border-radius: 7px;
+  background: #43d99b;
+  box-shadow: inset 0 -5px rgba(5, 86, 65, 0.22);
+}
+
+.chapter-art__snake i:nth-child(2) { transform: translateY(18px); }
+.chapter-art__snake i:nth-child(3) { transform: translateY(36px); }
+.chapter-art__snake i:nth-child(4) { transform: translate(18px, 36px); }
+.chapter-art__snake i:nth-child(5) {
+  background: #ffd369;
+  transform: translate(18px, 36px) scale(0.72);
+}
+
+.chapter-art__platformer {
+  position: absolute;
+  right: 2%;
+  bottom: 4%;
+  left: 8%;
+  display: grid;
+  height: 44%;
+  align-content: end;
+}
+
+.chapter-art__platformer > i:not(.chapter-art__player) {
+  height: 14px;
+  border: 1px solid rgba(131, 198, 255, 0.58);
+  border-radius: 5px;
+  background: #245d91;
+  box-shadow: 0 7px rgba(3, 13, 28, 0.28);
+}
+
+.chapter-art__platformer > i:nth-child(2) {
+  width: 42%;
+  margin-left: 54%;
+  transform: translateY(-58px);
+}
+
+.chapter-art__platformer > i:nth-child(3) {
+  width: 100%;
+}
+
+.chapter-art__player {
+  position: absolute;
+  right: 23%;
+  bottom: 71px;
+  width: 24px;
+  height: 31px;
+  border: 2px solid rgba(255, 255, 255, 0.58);
+  border-radius: 7px 7px 4px 4px;
+  background: #ffcf61;
+  box-shadow: 0 10px 18px rgba(255, 199, 73, 0.22);
+}
+
 .mental-model,
 .guided-practice,
 .deep-reference-grid,

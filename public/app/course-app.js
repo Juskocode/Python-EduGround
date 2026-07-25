@@ -49,6 +49,9 @@
   var conceptClinicView = window.CONCEPT_CLINIC || null;
   var classMaterials = window.CLASS_MATERIALS || {};
   var classPageView = window.CLASS_PAGE || null;
+  var pygameLabsController = window.PYGAME_LABS
+    ? window.PYGAME_LABS.create({ announce: announce })
+    : null;
   var roundingModel = window.ROUNDING_MODEL || null;
   var roundingLabController = window.ROUNDING_LAB && roundingModel
     ? window.ROUNDING_LAB.create({ model: roundingModel, announce: announce })
@@ -703,19 +706,10 @@
     var choiceSection = el("section", "chapter-choices");
     var choiceHeading = el("header", "section-heading");
     choiceHeading.append(
-      el("h2", null, "What would you like to do?"),
-      el("p", null, "Study the ideas first or jump into the exercises. Progress saves locally, with optional account sync.")
+      el("h2", null, "Follow the chapter path"),
+      el("p", null, "Learn the model, experiment with it, then build and verify. Progress saves locally, with optional account sync.")
     );
     var choiceGrid = el("div", "choice-grid");
-    var exercisesChoice = renderChoiceCard({
-      href: "#chapter/" + encodeURIComponent(String(chapter.id)) + "/exercises",
-      icon: ">_",
-      eyebrow: progress.done ? "Continue practising" : "Start practising",
-      title: "Exercises",
-      copy: "Solve " + progress.total + " challenges in the full Python editor, with visible examples and hidden tests.",
-      meta: progress.done + " passed · " + progress.stars + " stars earned",
-      action: "Browse exercises"
-    });
     var chapterLearning = getChapterLearning(chapter);
     var tutorialCount = chapterLearning && Array.isArray(chapterLearning.tutorial)
       ? chapterLearning.tutorial.length
@@ -726,21 +720,32 @@
       : "";
     var runbookChoice = renderChoiceCard({
       href: "#chapter/" + encodeURIComponent(String(chapter.id)) + "/tutorials",
-      icon: "{ }",
-      eyebrow: "Study before you practise",
-      title: "Class materials",
-      copy: "Follow a real lesson: preparation, class plan, written notes, live demo, activities, recap, homework, and official references.",
+      icon: "01",
+      eyebrow: guideProgress.done ? "Step 1 · Continue learning" : "Step 1 · Learn and experiment",
+      title: String(chapter.id) === "py13" ? "Interactive game studio" : "Interactive class",
+      copy: String(chapter.id) === "py13"
+        ? "Trace the game loop, control the Snake preview, tune platformer physics, and connect every experiment to a Pygame concept."
+        : "Follow the class, edit and run examples, complete guided tasks, and use the chapter coach when an idea needs another explanation.",
       meta: guideProgress.done + " / " + guideProgress.total + " class sections understood · " + tutorialCount + " lessons" + classMinutes,
-      action: "Open class"
+      action: guideProgress.done ? "Continue class" : "Start class"
     });
-    choiceGrid.append(exercisesChoice, runbookChoice);
+    var exercisesChoice = renderChoiceCard({
+      href: "#chapter/" + encodeURIComponent(String(chapter.id)) + "/exercises",
+      icon: "02",
+      eyebrow: progress.done ? "Step 2 · Continue building" : "Step 2 · Build and verify",
+      title: String(chapter.id) === "py13" ? "Game-logic challenges" : "Exercises",
+      copy: "Solve " + progress.total + " challenges in the full Python editor, with visible examples, hidden tests, and technique feedback.",
+      meta: progress.done + " passed · " + progress.stars + " stars earned",
+      action: "Browse exercises"
+    });
+    choiceGrid.append(runbookChoice, exercisesChoice);
     var assessmentBlock = getAssessmentEndingAtChapter(chapter);
     if (assessmentBlock) {
       var blockState = getAssessmentBlockStats(assessmentBlock);
       choiceGrid.append(renderChoiceCard({
         href: "#assessment/" + encodeURIComponent(assessmentBlock.id),
-        icon: "◷",
-        eyebrow: "Stage checkpoint",
+        icon: "03",
+        eyebrow: "Step 3 · Stage checkpoint",
         title: "Timed assessment",
         copy: "Take a 15-question theory exam and a five-task practical covering this chapter stage.",
         meta: blockState.passedModes + " / 2 rooms passed · 60/100 required",
@@ -755,14 +760,31 @@
     if (nextExercise) {
       var continueStrip = el("aside", "continue-strip");
       var continueCopy = el("div");
+      var shouldLearnFirst = guideProgress.total > 0 && guideProgress.done === 0 && progress.done === 0;
       continueCopy.append(
-        el("span", "continue-strip__label", progress.done ? "Next exercise" : "Recommended first step"),
-        el("strong", null, nextExercise.title),
-        el("span", null, nextExercise.prompt)
+        el(
+          "span",
+          "continue-strip__label",
+          shouldLearnFirst ? "Recommended first step" : progress.done ? "Next exercise" : "Ready to build"
+        ),
+        el("strong", null, shouldLearnFirst ? "Open the interactive class" : nextExercise.title),
+        el(
+          "span",
+          null,
+          shouldLearnFirst
+            ? "Build the mental model and run the guided experiments before opening the graded workspace."
+            : nextExercise.prompt
+        )
       );
       continueStrip.append(
         continueCopy,
-        anchor("#exercise/" + encodeURIComponent(String(nextExercise.id)), "button button--primary", "Open editor")
+        anchor(
+          shouldLearnFirst
+            ? "#chapter/" + encodeURIComponent(String(chapter.id)) + "/tutorials"
+            : "#exercise/" + encodeURIComponent(String(nextExercise.id)),
+          "button button--primary",
+          shouldLearnFirst ? "Start learning" : "Open editor"
+        )
       );
       wrapper.append(hero, choiceSection, continueStrip);
     } else {
@@ -882,6 +904,13 @@
     var runbookNode = renderDeepRunbook(chapter, runbook, content, false, "h3");
     var documentation = content && Array.isArray(content.documentation) ? content.documentation : [];
     var officialDocsNode = renderPythonDocumentation(chapter, documentation);
+    var interactiveLabsNode = (
+      chapterId === "py13" &&
+      pygameLabsController &&
+      typeof pygameLabsController.render === "function"
+    )
+      ? pygameLabsController.render(chapter)
+      : null;
     var chapterIndex = chapters.findIndex(function (candidate) {
       return String(candidate.id) === chapterId;
     });
@@ -906,6 +935,7 @@
       }),
       labDrafts: getClassLabDraftsForChapter(chapterId),
       lessonNodes: lessonNodes,
+      interactiveLabsNode: interactiveLabsNode,
       deepDiveNode: deepDiveNode,
       runbookNode: runbookNode,
       officialDocsNode: officialDocsNode,
@@ -1561,7 +1591,7 @@
 
   function renderPythonDocumentation(chapter, documentation) {
     var resources = documentation.reduce(function (items, resource) {
-      var safeUrl = resource && getOfficialPythonUrl(resource.url);
+      var safeUrl = resource && getOfficialDocumentationUrl(resource.url);
       if (!resource || !resource.label || !safeUrl) {
         return items;
       }
@@ -1578,8 +1608,8 @@
 
     var block = el("section", "runbook-documentation");
     var headingId = "runbook-documentation-" + domId(chapter.id);
-    var heading = el("h3", null, "Continue with the official Python docs");
-    var intro = el("p", "runbook-documentation__intro", "These references deepen the chapter without revealing an exercise solution.");
+    var heading = el("h3", null, "Continue with the official documentation");
+    var intro = el("p", "runbook-documentation__intro", "These authoritative references deepen the chapter without revealing an exercise solution.");
     var grid = el("div", "runbook-documentation__grid");
     heading.id = headingId;
     block.setAttribute("aria-labelledby", headingId);
@@ -1591,7 +1621,7 @@
       var action = el("span", "runbook-documentation__action", "Open official docs ↗");
       link.target = "_blank";
       link.rel = "noopener noreferrer";
-      link.setAttribute("aria-label", resource.label + " — open the official Python documentation in a new tab");
+      link.setAttribute("aria-label", resource.label + " — open the official documentation in a new tab");
       action.setAttribute("aria-hidden", "true");
       link.append(title, description, action);
       grid.append(link);
@@ -1601,13 +1631,18 @@
     return block;
   }
 
-  function getOfficialPythonUrl(value) {
+  function getOfficialDocumentationUrl(value) {
     if (typeof value !== "string") {
       return null;
     }
     try {
       var url = new URL(value);
-      var isOfficialDocs = url.origin === "https://docs.python.org" && url.pathname.startsWith("/3/");
+      var isOfficialPythonDocs =
+        url.origin === "https://docs.python.org" && url.pathname.startsWith("/3/");
+      var isOfficialPygameDocs =
+        (url.origin === "https://www.pygame.org" && url.pathname.startsWith("/docs/")) ||
+        (url.origin === "https://pyga.me" && url.pathname.startsWith("/docs/"));
+      var isOfficialDocs = isOfficialPythonDocs || isOfficialPygameDocs;
       if (!isOfficialDocs || url.username || url.password) {
         return null;
       }
@@ -6232,8 +6267,9 @@
   }
 
   function renderChapterArt(chapter, className) {
-    var number = Math.max(1, Math.min(12, Number(chapter.number) || 1));
-    var index = number - 1;
+    var number = Math.max(1, Number(chapter.number) || 1);
+    var spriteNumber = Math.min(12, number);
+    var index = spriteNumber - 1;
     var column = index % 4;
     var row = Math.floor(index / 4);
     var art = el("div", className);
@@ -6241,7 +6277,21 @@
     if (String(chapter.id) === "py12") {
       art.classList.add("chapter-art--problem-solving");
     }
-    art.style.backgroundPosition = "0 0, " + (column * 100 / 3) + "% " + (row * 100 / 2) + "%";
+    if (String(chapter.id) === "py13") {
+      var gameScene = el("span", "chapter-art__game-scene");
+      var snake = el("span", "chapter-art__snake");
+      var platformer = el("span", "chapter-art__platformer");
+      for (var segment = 0; segment < 5; segment += 1) {
+        snake.append(el("i"));
+      }
+      platformer.append(el("i", "chapter-art__player"), el("i"), el("i"));
+      gameScene.setAttribute("aria-hidden", "true");
+      gameScene.append(snake, platformer);
+      art.classList.add("chapter-art--pygame");
+      art.append(gameScene);
+    } else {
+      art.style.backgroundPosition = "0 0, " + (column * 100 / 3) + "% " + (row * 100 / 2) + "%";
+    }
     art.setAttribute("role", "img");
     art.setAttribute("aria-label", "Illustration for " + chapter.title);
     art.append(label);

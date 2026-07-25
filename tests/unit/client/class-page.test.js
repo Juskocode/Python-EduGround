@@ -235,6 +235,7 @@ test("the section plan is stable, scoped, ordered, and reflects optional supplie
     scope: "class-py03",
     hasLessons: true,
     hasRoomTasks: true,
+    hasInteractiveLabs: true,
     hasDeepDive: true,
     hasRunbook: true,
     hasOfficialDocs: true,
@@ -248,6 +249,7 @@ test("the section plan is stable, scoped, ordered, and reflects optional supplie
       "lecture-demo",
       "room-tasks",
       "lesson-notes",
+      "interactive-labs",
       "tutor",
       "class-activities",
       "independent-practice",
@@ -277,6 +279,7 @@ test("render builds a complete accessible class page from canonical material and
   const deepDive = document.createElement("section");
   const runbook = document.createElement("section");
   const officialDocs = document.createElement("section");
+  const interactiveLabs = document.createElement("section");
 
   const page = classPage.render({
     chapter: {
@@ -294,6 +297,7 @@ test("render builds a complete accessible class page from canonical material and
     progressNode: progress,
     classAction,
     lessonNodes: [lessonOne, lessonTwo],
+    interactiveLabsNode: interactiveLabs,
     deepDiveNode: deepDive,
     runbookNode: runbook,
     officialDocsNode: officialDocs,
@@ -319,6 +323,7 @@ test("render builds a complete accessible class page from canonical material and
   assert.equal(findByText(page, "H1", "Decisions and Loops").id, "class-py03-title");
   assert.equal(new Set(ids).size, ids.length);
   assert.equal(ids.includes("class-py03-lesson-1"), true);
+  assert.equal(ids.includes("class-py03-interactive-labs"), true);
   assert.equal(ids.includes("class-py03-official-docs"), true);
   assert.equal(tocButtons.length >= 14, true);
   assert.equal(tocButtons.every((button) => button.type === "button"), true);
@@ -337,6 +342,7 @@ test("render builds a complete accessible class page from canonical material and
   assert.ok(findByText(page, "H2", "Homework"));
   assert.equal(nodes.includes(progress), true);
   assert.equal(nodes.includes(classAction), true);
+  assert.equal(nodes.includes(interactiveLabs), true);
   assert.equal(nodes.includes(deepDive), true);
   assert.equal(nodes.includes(runbook), true);
   assert.equal(nodes.includes(officialDocs), true);

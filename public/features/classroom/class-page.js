@@ -319,6 +319,9 @@
     if (state.hasLessons) {
       sections.push({ key: "lesson-notes", label: "Lesson notes" });
     }
+    if (state.hasInteractiveLabs) {
+      sections.push({ key: "interactive-labs", label: "Interactive game labs" });
+    }
     sections.push(
       { key: "tutor", label: "Ask the chapter tutor" },
       { key: "class-activities", label: "Class activities" },
@@ -335,7 +338,7 @@
       { key: "homework", label: "Homework" },
     );
     if (state.hasOfficialDocs) {
-      sections.push({ key: "official-docs", label: "Official Python reading" });
+      sections.push({ key: "official-docs", label: "Official references" });
     }
     sections.push({ key: "exercises", label: "Exercise handoff" });
     return sections.map((section) => ({
@@ -368,6 +371,11 @@
     const officialDocsNode = isNode(settings.officialDocsNode || settings.officialDocs)
       ? settings.officialDocsNode || settings.officialDocs
       : null;
+    const interactiveLabsNode = isNode(
+      settings.interactiveLabsNode || settings.interactiveLabs,
+    )
+      ? settings.interactiveLabsNode || settings.interactiveLabs
+      : null;
     const scope = `class-${slugify(chapter.id || chapter.number || chapter.title)}`;
     const material = normalizeMaterial(settings.material, chapter, lessonNodes.length);
     const roomTaskEntries = material.roomTasks.map((task, index) => ({
@@ -378,6 +386,7 @@
       scope,
       hasLessons: Boolean(lessonNodes.length),
       hasRoomTasks: Boolean(material.roomTasks.length),
+      hasInteractiveLabs: Boolean(interactiveLabsNode),
       hasDeepDive: Boolean(deepDiveNode),
       hasRunbook: Boolean(runbookNode),
       hasOfficialDocs: Boolean(officialDocsNode),
@@ -462,6 +471,16 @@
       );
     }
 
+    if (interactiveLabsNode) {
+      article.append(renderSuppliedSection(
+        sectionByKey.get("interactive-labs"),
+        "Interactive game systems studio",
+        "Predict one frame, change a parameter, and inspect the result. These models teach the Pygame reasoning loop without exposing an exercise solution.",
+        interactiveLabsNode,
+        "class-page__supplied-content class-page__supplied-content--interactive-labs",
+      ));
+    }
+
     article.append(
       renderChapterTutor(sectionByKey.get("tutor"), chapter, material),
       renderClassActivities(sectionByKey.get("class-activities"), material.classActivities),
@@ -498,8 +517,8 @@
     if (officialDocsNode) {
       article.append(renderSuppliedSection(
         sectionByKey.get("official-docs"),
-        "Official Python reading",
-        "Use the language reference after class to deepen the same ideas with authoritative examples.",
+        "Official references",
+        "Use the authoritative language and library references after class to deepen the same ideas.",
         officialDocsNode,
         "class-page__supplied-content class-page__supplied-content--documentation",
       ));
