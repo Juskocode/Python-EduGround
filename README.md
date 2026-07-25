@@ -44,7 +44,7 @@ Python EduGround turns the 12 exercise chapters in this repository into a local-
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
 | Runner | Pyodide in a dedicated browser worker; account APIs additionally require a tab-only capability never sent to that worker |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
-| Motivation | A dedicated welcome page, chapter progress, four stage recaps, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, crisp action-specific coding cues, and a geometric space-navigation motion system |
+| Motivation | A focused welcome page with an optional Python Snake arcade, completion-driven green/blue/yellow snake fleets, chapter progress, four stage recaps, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, crisp action-specific coding cues, and a geometric space-navigation motion system |
 | Persistence | Local browser storage by default; optional PostgreSQL sync with HttpOnly cookie sessions, bounded per-exercise run history, and a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
@@ -78,7 +78,12 @@ rendering a solution or the matching rule in the page.
 
 The bare site URL now opens a focused welcome page before the chapter dashboard.
 It explains the understand → experiment → prove learning loop, previews all four
-stages, and uses saved progress to offer a useful continue action. The dashboard
+stages, and uses saved progress to offer a useful continue action. Its compact
+Python Snake preview opens an optional dialog only when selected; the deterministic
+arcade caps its score at 1,000, includes three collision-avoidance splits, slow
+asteroid drift, rare falling stars, and shield, boost, and stasis power-ups. The
+stable pooled SVG renderer updates existing nodes instead of rebuilding the board
+on every tick, preventing animation flicker. The dashboard
 presents the curriculum as four animated module paths. Each path connects three
 chapter stops to a bookmarkable stage recap and its timed checkpoint, deriving
 preview, learning, ready, and complete states from existing saved progress.
@@ -97,6 +102,13 @@ badge earns a one-shot arrival burst. The effects pause while off-screen or whil
 the tab is hidden, use only transform and opacity for animation, and disappear or
 become static under reduced-motion, forced-colours, small-screen, and
 high-contrast preferences.
+
+Saved mastery also grows a decorative fleet across the welcome page, roadmap,
+stage recaps, and completed chapter headers: green snakes represent mastered
+chapters, blue snakes represent completed stages, and yellow snakes represent
+passed timed rooms. These snakes are visual progress rewards only; they never
+enter the playable board's collision state and remain pointer-inert and hidden
+from assistive technology.
 
 Concepts that benefit from direct manipulation can also include a focused lab. Chapter 2 provides an accessible number-line explorer for comparing `round`, `math.floor`, `math.ceil`, `int`, and `math.trunc` across positive values, negative values, exact integers, and ties-to-even.
 
@@ -380,7 +392,8 @@ conflict journeys remain explicit roadmap items.
 | `dashboard-model.js` | Pure resume-target, stage-status, and milestone derivation for the home learning path |
 | `dashboard-view.js` / `dashboard-ui.css` | Focused stage-based home renderer and responsive presentation |
 | `landing-view.js` / `landing-ui.css` | Course welcome page, learning-loop preview, and progress-aware entry action |
-| `landing-snake.js` / `landing-snake.css` | Deterministic, keyboard/touch-accessible Python Snake arcade with fair asteroid layouts and local best-score persistence |
+| `landing-snake.js` / `landing-snake.css` | Deterministic, keyboard/touch-accessible Python Snake arcade with a stable renderer, slow asteroid drift, power-ups, three splits, a 1,000-point cap, and local best-score persistence |
+| `progress-snake-view.js` / `progress-snake.css` | Pointer-inert green, blue, and yellow snake rewards derived from mastered chapters, completed stages, and passed timed rooms |
 | `stage-recaps.js` | Solution-free synthesis content for the four stable three-chapter stages |
 | `stage-recap-view.js` / `stage-recap-ui.css` | Stage recap pages and the accessible animated final-course award |
 | `class-materials.js` | Twelve deeply frozen 90-minute class syllabi plus the Chapters 1–3 beginner-room explanations, answer tasks, code tasks, canonical inputs, and technique rules |
