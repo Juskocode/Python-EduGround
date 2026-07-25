@@ -585,6 +585,10 @@
     var wrapper = el("div", "page-shell chapter-page");
     var progress = getChapterProgress(chapter);
     var guideProgress = getChapterLearningProgress(chapter);
+    var nextExercise = getExercises(chapter).find(function (exercise) {
+      return !passed.has(String(exercise.id));
+    }) || getExercises(chapter)[0];
+    var shouldLearnFirst = guideProgress.total > 0 && guideProgress.done === 0 && progress.done === 0;
     var hero = el("section", "chapter-hero");
     var art = renderChapterArt(chapter, "chapter-hero__art");
     var content = el("div", "chapter-hero__content");
@@ -600,14 +604,33 @@
     ]));
 
     progressText.append(
-      el("strong", null, progress.percent + "% complete"),
+      el("strong", null, progress.percent + "% of exercises complete"),
       el("span", null, progress.done + " of " + progress.total + " exercises · " + progress.stars + " of " + progress.maxStars + " stars")
     );
     progressPanel.append(
       progressText,
-      progressElement(progress.done, progress.total, chapter.title + " progress")
+      progressElement(progress.done, progress.total, chapter.title + " exercise progress")
     );
-    content.append(eyebrow, title, summary, renderTags(chapter.topics), progressPanel);
+    content.append(eyebrow, title, summary);
+    if (nextExercise) {
+      var quickStart = el("aside", "chapter-hero__quickstart");
+      quickStart.append(
+        el(
+          "span",
+          "chapter-hero__quickstart-label",
+          shouldLearnFirst ? "Recommended first step" : "Continue your route"
+        ),
+        anchor(
+          shouldLearnFirst
+            ? "#chapter/" + encodeURIComponent(String(chapter.id)) + "/tutorials"
+            : "#exercise/" + encodeURIComponent(String(nextExercise.id)),
+          "button button--primary",
+          shouldLearnFirst ? "Start learning" : progress.done ? "Continue exercise" : "Open first exercise"
+        )
+      );
+      content.append(quickStart);
+    }
+    content.append(renderTags(chapter.topics), progressPanel);
     hero.append(art, content);
     if (
       progressSnakeView &&
@@ -652,7 +675,7 @@
       copy: String(chapter.id) === "py13"
         ? "Trace the game loop, control the Snake preview, tune platformer physics, and connect every experiment to a Pygame concept."
         : "Follow the class, edit and run examples, complete guided tasks, and use the chapter coach when an idea needs another explanation.",
-      meta: guideProgress.done + " / " + guideProgress.total + " class sections understood · " + tutorialCount + " lessons" + classMinutes,
+      meta: guideProgress.done + " / " + guideProgress.total + " learning checkpoints · " + tutorialCount + " lessons" + classMinutes,
       action: guideProgress.done ? "Continue class" : "Start class"
     });
     var exercisesChoice = renderChoiceCard({
@@ -680,42 +703,7 @@
     }
     choiceSection.append(choiceHeading, choiceGrid);
 
-    var nextExercise = getExercises(chapter).find(function (exercise) {
-      return !passed.has(String(exercise.id));
-    }) || getExercises(chapter)[0];
-    if (nextExercise) {
-      var continueStrip = el("aside", "continue-strip");
-      var continueCopy = el("div");
-      var shouldLearnFirst = guideProgress.total > 0 && guideProgress.done === 0 && progress.done === 0;
-      continueCopy.append(
-        el(
-          "span",
-          "continue-strip__label",
-          shouldLearnFirst ? "Recommended first step" : progress.done ? "Next exercise" : "Ready to build"
-        ),
-        el("strong", null, shouldLearnFirst ? "Open the interactive class" : nextExercise.title),
-        el(
-          "span",
-          null,
-          shouldLearnFirst
-            ? "Build the mental model and run the guided experiments before opening the graded workspace."
-            : nextExercise.prompt
-        )
-      );
-      continueStrip.append(
-        continueCopy,
-        anchor(
-          shouldLearnFirst
-            ? "#chapter/" + encodeURIComponent(String(chapter.id)) + "/tutorials"
-            : "#exercise/" + encodeURIComponent(String(nextExercise.id)),
-          "button button--primary",
-          shouldLearnFirst ? "Start learning" : "Open editor"
-        )
-      );
-      wrapper.append(hero, choiceSection, continueStrip);
-    } else {
-      wrapper.append(hero, choiceSection);
-    }
+    wrapper.append(hero, choiceSection);
     return wrapper;
   }
 
@@ -848,8 +836,8 @@
       return Object.assign({}, candidate, {
         href: "#chapter/" + encodeURIComponent(String(candidate.id)) + "/tutorials",
         statusLabel: stats.done === stats.total
-          ? "Class complete"
-          : stats.done + " / " + stats.total + " sections"
+          ? "Route complete"
+          : stats.done + " / " + stats.total + " checkpoints"
       });
     });
     return classPageView.render({
@@ -1013,19 +1001,19 @@
     var top = el("div", "tutorial-progress__top");
     var copy = el("div");
     var count = el("strong", "tutorial-progress__count", stats.done + " / " + stats.total);
-    var bar = progressElement(stats.done, stats.total, chapter.title + " class progress");
+    var bar = progressElement(stats.done, stats.total, chapter.title + " learning checkpoint progress");
     var status = el(
       "p",
       "tutorial-progress__status",
       stats.done === stats.total
-        ? "Class complete — revisit any lesson whenever you need it."
-        : "Mark each lesson after you can explain it in your own words."
+        ? "Learning route complete — revisit any checkpoint whenever you need it."
+        : "Complete each checkpoint after you can explain it in your own words."
     );
     panel.dataset.learningProgressPanel = String(chapter.id);
     count.dataset.learningProgressCount = String(chapter.id);
     bar.dataset.learningProgressBar = String(chapter.id);
     status.dataset.learningProgressStatus = String(chapter.id);
-    copy.append(el("span", null, "Class progress"), el("strong", null, stats.percent + "% understood"));
+    copy.append(el("span", null, "Learning checkpoints"), el("strong", null, stats.percent + "% complete"));
     top.append(copy, count);
     panel.append(top, bar, status);
     return panel;
@@ -2897,6 +2885,7 @@
     var snakeLaunchButton = event.target.closest("button[data-snake-launch]");
     var snakeCloseButton = event.target.closest("button[data-snake-close]");
     var hintButton = event.target.closest("button[data-reveal-hint]");
+    var routeButton = event.target.closest("button[data-route-target]");
     var scrollButton = event.target.closest("button[data-scroll-target]");
     var classLabRunButton = event.target.closest("button[data-class-lab-run]");
     var classLabResetButton = event.target.closest("button[data-class-lab-reset]");
@@ -2946,6 +2935,10 @@
     }
     if (hintButton) {
       revealNextHint(hintButton.dataset.revealHint);
+      return;
+    }
+    if (routeButton) {
+      window.location.hash = routeButton.dataset.routeTarget;
       return;
     }
     if (scrollButton) {
@@ -3384,9 +3377,9 @@
     var stats = getChapterLearningProgress(chapter);
     if (!wasUnderstood && stats.done === stats.total) {
       audio.playAchievement();
-      announce(chapter.title + " class complete. You can revisit any lesson at any time.");
+      announce(chapter.title + " learning route complete. You can revisit any checkpoint at any time.");
     } else {
-      announce(wasUnderstood ? "Lesson marked for review." : "Lesson marked understood. " + stats.done + " of " + stats.total + " class sections complete.");
+      announce(wasUnderstood ? "Checkpoint marked for review." : "Checkpoint complete. " + stats.done + " of " + stats.total + " learning checkpoints complete.");
     }
   }
 
@@ -3406,12 +3399,16 @@
       tocButton.classList.toggle("is-understood", isLearningUnderstood(chapter, tocButton.dataset.learningToc));
     });
     var roomTasks = getClassRoomTasks(classMaterials[chapterId]);
-    var roomDone = 0;
-    roomTasks.forEach(function (task) {
-      var completed = isLearningUnderstood(chapter, getClassRoomProgressId(task.id));
-      if (completed) {
-        roomDone += 1;
-      }
+    var roomTaskStates = roomTasks.map(function (task) {
+      return isLearningUnderstood(chapter, getClassRoomProgressId(task.id));
+    });
+    var roomDone = roomTaskStates.filter(Boolean).length;
+    var nextRoomTaskIndex = roomTaskStates.findIndex(function (completed) {
+      return !completed;
+    });
+    roomTasks.forEach(function (task, taskIndex) {
+      var completed = roomTaskStates[taskIndex];
+      var isNext = !completed && taskIndex === nextRoomTaskIndex;
       var taskCard = elements.main.querySelector(
         "[data-class-task='" + cssEscape(task.id) + "'][data-class-chapter='" + cssEscape(chapterId) + "']"
       );
@@ -3419,9 +3416,10 @@
         return;
       }
       taskCard.classList.toggle("is-complete", completed);
+      taskCard.classList.toggle("is-next", isNext);
       var taskState = taskCard.querySelector("[data-class-task-status='" + cssEscape(task.id) + "']");
       if (taskState) {
-        taskState.textContent = completed ? "Completed ✓" : "Ready";
+        taskState.textContent = completed ? "Completed ✓" : isNext ? "Up next" : "Ready";
       }
     });
     var roomProgress = elements.main.querySelector(
@@ -3433,6 +3431,12 @@
       if (roomCount) {
         roomCount.textContent = roomDone + " / " + roomTasks.length + " room tasks complete";
       }
+      var roomSummary = roomProgress.querySelector(".class-room-progress__copy small");
+      if (roomSummary) {
+        roomSummary.textContent = nextRoomTaskIndex >= 0
+          ? "Task " + (nextRoomTaskIndex + 1) + " is the recommended next checkpoint."
+          : "Every checkpoint is complete; revisit any task whenever needed.";
+      }
       if (roomBar) {
         roomBar.max = Math.max(roomTasks.length, 1);
         roomBar.value = roomDone;
@@ -3440,6 +3444,75 @@
           "aria-label",
           roomDone + " of " + roomTasks.length + " guided room tasks complete"
         );
+      }
+      var roomContinue = roomProgress.querySelector(
+        "[data-class-room-continue='" + cssEscape(chapterId) + "']"
+      );
+      if (roomContinue && roomTasks.length) {
+        var roomTargetIndex = nextRoomTaskIndex >= 0 ? nextRoomTaskIndex : 0;
+        var roomTarget = elements.main.querySelector(
+          "[data-class-task='" + cssEscape(roomTasks[roomTargetIndex].id) +
+          "'][data-class-chapter='" + cssEscape(chapterId) + "']"
+        );
+        if (roomTarget) {
+          roomContinue.dataset.scrollTarget = roomTarget.id;
+          roomContinue.setAttribute("aria-controls", roomTarget.id);
+        }
+        roomContinue.textContent = nextRoomTaskIndex >= 0
+          ? "Continue with task " + (nextRoomTaskIndex + 1)
+          : "Review room tasks";
+      }
+    }
+    var startProgress = elements.main.querySelector(
+      "[data-class-start-progress='" + cssEscape(chapterId) + "']"
+    );
+    if (startProgress) {
+      var startCount = startProgress.querySelector("strong");
+      var startBar = startProgress.querySelector("progress");
+      if (startCount) {
+        startCount.textContent = roomTasks.length
+          ? roomDone + " / " + roomTasks.length
+          : "Ready";
+      }
+      if (startBar) {
+        startBar.max = Math.max(roomTasks.length, 1);
+        startBar.value = roomDone;
+        startBar.setAttribute(
+          "aria-label",
+          roomTasks.length
+            ? roomDone + " of " + roomTasks.length + " guided tasks complete"
+            : "Class route ready to begin"
+        );
+      }
+    }
+    var startAction = elements.main.querySelector(
+      "[data-class-start-action='" + cssEscape(chapterId) + "']"
+    );
+    if (startAction) {
+      if (!roomTasks.length || roomDone === 0) {
+        startAction.textContent = "Open the first example";
+        delete startAction.dataset.routeTarget;
+        startAction.dataset.scrollTarget = startAction.dataset.classStartLectureTarget;
+        startAction.setAttribute(
+          "aria-controls",
+          startAction.dataset.classStartLectureTarget
+        );
+      } else if (nextRoomTaskIndex >= 0) {
+        var nextTaskCard = elements.main.querySelector(
+          "[data-class-task='" + cssEscape(roomTasks[nextRoomTaskIndex].id) +
+          "'][data-class-chapter='" + cssEscape(chapterId) + "']"
+        );
+        startAction.textContent = "Continue with task " + (nextRoomTaskIndex + 1);
+        delete startAction.dataset.routeTarget;
+        if (nextTaskCard) {
+          startAction.dataset.scrollTarget = nextTaskCard.id;
+          startAction.setAttribute("aria-controls", nextTaskCard.id);
+        }
+      } else {
+        startAction.textContent = "Open chapter exercises";
+        delete startAction.dataset.scrollTarget;
+        startAction.removeAttribute("aria-controls");
+        startAction.dataset.routeTarget = startAction.dataset.classStartExerciseHref;
       }
     }
     var count = elements.main.querySelector("[data-learning-progress-count='" + cssEscape(chapterId) + "']");
@@ -3452,18 +3525,18 @@
     if (bar) {
       bar.max = Math.max(stats.total, 1);
       bar.value = stats.done;
-      bar.setAttribute("aria-label", chapter.title + " class: " + stats.done + " of " + stats.total + " sections understood");
+      bar.setAttribute("aria-label", chapter.title + ": " + stats.done + " of " + stats.total + " learning checkpoints complete");
     }
     if (status) {
       status.textContent = stats.done === stats.total
-        ? "Class complete — revisit any lesson whenever you need it."
-        : "Mark each lesson after you can explain it in your own words.";
+        ? "Learning route complete — revisit any checkpoint whenever you need it."
+        : "Complete each checkpoint after you can explain it in your own words.";
     }
     if (panel) {
       panel.classList.toggle("is-complete", stats.done === stats.total);
       var percent = panel.querySelector(".tutorial-progress__top > div > strong");
       if (percent) {
-        percent.textContent = stats.percent + "% understood";
+        percent.textContent = stats.percent + "% complete";
       }
     }
   }

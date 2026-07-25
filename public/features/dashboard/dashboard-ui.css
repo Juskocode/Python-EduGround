@@ -1458,11 +1458,31 @@
   }
 
   .home-resume__body {
+    order: 1;
     padding: 19px 16px;
   }
 
   .home-resume__art {
+    order: 2;
     min-height: 120px;
+  }
+
+  .home-resume__actions {
+    display: grid;
+    order: 1;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .home-resume__actions .button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .home-resume__metrics,
+  .home-resume__progress,
+  .home-resume__steps {
+    order: 2;
   }
 
   .home-resume__steps ol {

@@ -23,6 +23,57 @@ async function openRoadmap(page) {
   await expect(page.locator("#home-roadmap-title")).toBeVisible();
 }
 
+test("a clean mobile dashboard keeps the first learning action above the fold", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/#home");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  const primaryAction = page.locator(
+    ".home-resume__actions .button--primary"
+  );
+  await expect(primaryAction).toBeVisible();
+  await expect(primaryAction).toHaveText("Start learning");
+  await expect(primaryAction).toHaveAttribute(
+    "href",
+    "#chapter/py01/tutorials"
+  );
+
+  const geometry = await page.evaluate(() => {
+    const action = document.querySelector(
+      ".home-resume__actions .button--primary"
+    );
+    const body = document.querySelector(".home-resume__body");
+    const art = document.querySelector(".home-resume__art");
+    const actionBox = action.getBoundingClientRect();
+    const bodyBox = body.getBoundingClientRect();
+    const artBox = art.getBoundingClientRect();
+    return {
+      actionTop: actionBox.top,
+      actionBottom: actionBox.bottom,
+      actionHeight: actionBox.height,
+      bodyTop: bodyBox.top,
+      artTop: artBox.top,
+      pageScrollWidth: document.documentElement.scrollWidth,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
+    };
+  });
+
+  expect(geometry.actionTop).toBeGreaterThanOrEqual(0);
+  expect(geometry.actionBottom).toBeLessThanOrEqual(
+    geometry.viewportHeight
+  );
+  expect(geometry.actionHeight).toBeGreaterThanOrEqual(44);
+  expect(geometry.bodyTop).toBeLessThan(geometry.artTop);
+  expect(geometry.pageScrollWidth).toBeLessThanOrEqual(
+    geometry.viewportWidth + 1
+  );
+});
+
 test("the curriculum presents four assessed routes and a final game studio", async ({
   page,
 }) => {

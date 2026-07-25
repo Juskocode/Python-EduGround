@@ -63,6 +63,66 @@
       : fallback;
   }
 
+  function normalizeStartHere(value, chapterTitle) {
+    const source = value && typeof value === "object" ? value : {};
+    const providedSteps = Array.isArray(source.steps)
+      ? source.steps.reduce((steps, item, index) => {
+        if (typeof item === "string" && item.trim()) {
+          steps.push({
+            label: `Step ${index + 1}`,
+            detail: item.trim(),
+          });
+          return steps;
+        }
+        if (!item || typeof item !== "object") {
+          return steps;
+        }
+        const detail = asText(item.detail || item.description || item.text);
+        if (!detail) {
+          return steps;
+        }
+        steps.push({
+          label: asText(item.label || item.title, `Step ${index + 1}`),
+          detail,
+        });
+        return steps;
+      }, [])
+      : [];
+    const fallbackSteps = [
+      {
+        label: "Preview",
+        detail: "Read the class goal and predict what the first short program will do.",
+      },
+      {
+        label: "Run",
+        detail: "Change one small value in the demonstration, then run it and inspect the terminal.",
+      },
+      {
+        label: "Prove",
+        detail: "Complete the guided room tasks in order and use feedback to repair the model.",
+      },
+      {
+        label: "Transfer",
+        detail: "Open the exercises only after you can explain the rule without copying the example.",
+      },
+    ];
+
+    return {
+      title: asText(source.title, `Start ${chapterTitle} with one small loop`),
+      description: asText(
+        source.description || source.summary,
+        "You do not need to read the whole page first. Follow this route and use the remaining sections as reference.",
+      ),
+      reassurance: asText(
+        source.reassurance,
+        "Nothing here assumes speed or prior experience. Experiments are saved locally, and Reset always restores the starter.",
+      ),
+      steps: fallbackSteps.map((fallbackStep, index) => (
+        providedSteps[index] || fallbackStep
+      )),
+    };
+  }
+
   function normalizeLessonPlan(value, estimatedMinutes, lessonCount) {
     const rows = Array.isArray(value) ? value.reduce((items, row, index) => {
       if (!row || typeof row !== "object") {
@@ -277,6 +337,7 @@
             "Predict and trace a fresh Python example before running it.",
             "Transfer the model to an exercise without seeing its solution.",
           ],
+      startHere: normalizeStartHere(source.startHere, chapterTitle),
       objectives,
       lessonPlan: normalizeLessonPlan(
         source.lessonPlan || source.schedule,
@@ -309,8 +370,7 @@
   function buildSectionPlan(material, flags) {
     const state = flags && typeof flags === "object" ? flags : {};
     const sections = [
-      { key: "overview", label: "Class setup" },
-      { key: "lesson-plan", label: "Lesson plan" },
+      { key: "start-here", label: "Start here" },
       { key: "lecture-demo", label: "Lecture demonstration" },
     ];
     if (state.hasRoomTasks) {
@@ -319,6 +379,10 @@
     if (state.hasLessons) {
       sections.push({ key: "lesson-notes", label: "Lesson notes" });
     }
+    sections.push(
+      { key: "overview", label: "Class setup" },
+      { key: "lesson-plan", label: "Instructor plan" },
+    );
     if (state.hasInteractiveLabs) {
       sections.push({ key: "interactive-labs", label: "Interactive game labs" });
     }
@@ -382,6 +446,11 @@
       id: `${scope}-room-${slugify(task.id)}`,
       label: `Task ${index + 1} · ${task.title}`,
     }));
+    const completedRoomTaskIds = new Set(
+      Array.isArray(settings.completedRoomTaskIds)
+        ? settings.completedRoomTaskIds.map(String)
+        : [],
+    );
     const sections = buildSectionPlan(material, {
       scope,
       hasLessons: Boolean(lessonNodes.length),
@@ -438,8 +507,21 @@
 
     article.append(
       renderArticleHeader(scope, chapter, material, settings.progressNode, settings.classAction),
-      renderClassSetup(sectionByKey.get("overview"), material),
-      renderLessonPlan(sectionByKey.get("lesson-plan"), material),
+      renderStartHere(sectionByKey.get("start-here"), material, {
+        chapterId: String(chapter.id || ""),
+        completedRoomTaskIds,
+        lectureTarget: sectionByKey.get("lecture-demo").id,
+        lessonPlanTarget: sectionByKey.get("lesson-plan").id,
+        roomTarget: sectionByKey.get("room-tasks")
+          ? sectionByKey.get("room-tasks").id
+          : "",
+        exerciseTarget: sectionByKey.get("exercises").id,
+        exerciseHref: asText(
+          settings.exerciseHref,
+          `#chapter/${encodeURIComponent(String(chapter.id || ""))}/exercises`,
+        ),
+        roomTaskEntries,
+      }),
       renderLectureDemo(sectionByKey.get("lecture-demo"), material.lectureDemo, {
         chapterId: String(chapter.id || ""),
         draft: settings.labDrafts && settings.labDrafts["lecture-demo"],
@@ -453,11 +535,7 @@
         roomTaskEntries,
         {
           chapterId: String(chapter.id || ""),
-          completedIds: new Set(
-            Array.isArray(settings.completedRoomTaskIds)
-              ? settings.completedRoomTaskIds.map(String)
-              : [],
-          ),
+          completedIds: completedRoomTaskIds,
           labDrafts: settings.labDrafts && typeof settings.labDrafts === "object"
             ? settings.labDrafts
             : {},
@@ -470,6 +548,11 @@
         renderLessonNotes(sectionByKey.get("lesson-notes"), lessonNodes, lessonEntries),
       );
     }
+
+    article.append(
+      renderClassSetup(sectionByKey.get("overview"), material),
+      renderLessonPlan(sectionByKey.get("lesson-plan"), material),
+    );
 
     if (interactiveLabsNode) {
       article.append(renderSuppliedSection(
@@ -652,9 +735,12 @@
     const homeLink = createElement("a", null, "Course");
     const chapterLink = createElement("a", null, asText(chapter.title, material.title));
     const title = createElement("h1", null, material.title);
-    const summary = createElement("ul", "class-page__summary");
+    const summaryList = createElement("ul", "class-page__summary");
     const meta = createElement("dl", "class-page__meta");
     const status = createElement("aside", "class-page__status");
+    const details = createElement("details", "class-page__class-details");
+    const detailsSummary = createElement("summary");
+    const detailsBody = createElement("div", "class-page__class-details-body");
 
     breadcrumbs.setAttribute("aria-label", "Breadcrumb");
     homeLink.href = "#home";
@@ -666,7 +752,7 @@
     breadcrumbs.append(breadcrumbList);
 
     title.id = `${scope}-title`;
-    material.pageSummary.forEach((item) => summary.append(createElement("li", null, item)));
+    material.pageSummary.forEach((item) => summaryList.append(createElement("li", null, item)));
 
     [
       ["Class", String(chapter.number || "—").padStart(2, "0")],
@@ -679,7 +765,7 @@
       meta.append(item);
     });
 
-    status.setAttribute("aria-label", "Class progress and actions");
+    status.setAttribute("aria-label", "Learning checkpoint progress and actions");
     if (isNode(progressNode)) {
       status.append(progressNode);
     }
@@ -691,10 +777,25 @@
         createElement(
           "p",
           null,
-          "Progress is recorded as you complete the lesson checks and chapter exercises.",
+          "Progress is recorded as you complete learning checkpoints and chapter exercises.",
         ),
       );
     }
+
+    detailsSummary.append(
+      createElement("strong", null, "Class details"),
+      createElement(
+        "span",
+        null,
+        `What you will learn · ${material.estimatedMinutes} min · ${material.format}`,
+      ),
+    );
+    detailsBody.append(
+      createElement("h2", "class-page__summary-title", "In this class"),
+      summaryList,
+      meta,
+    );
+    details.append(detailsSummary, detailsBody);
 
     header.append(
       breadcrumbs,
@@ -705,10 +806,8 @@
       ),
       title,
       createElement("p", "class-page__lede", material.subtitle),
-      createElement("h2", "class-page__summary-title", "In this class"),
-      summary,
-      meta,
       status,
+      details,
     );
     return header;
   }
@@ -728,6 +827,122 @@
     header.querySelector("h2").id = `${section.id}-title`;
     wrapper.append(header);
     return wrapper;
+  }
+
+  function renderStartHere(section, material, options) {
+    const settings = options && typeof options === "object" ? options : {};
+    const completed = settings.completedRoomTaskIds instanceof Set
+      ? settings.completedRoomTaskIds
+      : new Set();
+    const entries = Array.isArray(settings.roomTaskEntries)
+      ? settings.roomTaskEntries
+      : [];
+    const nextTaskIndex = material.roomTasks.findIndex((task) => !completed.has(task.id));
+    const completeCount = material.roomTasks.reduce(
+      (count, task) => count + (completed.has(task.id) ? 1 : 0),
+      0,
+    );
+    const block = renderSectionHeader(
+      section,
+      "Recommended first route",
+      material.startHere.title,
+      material.startHere.description,
+    );
+    const panel = createElement("div", "class-page__start-panel");
+    const steps = createElement("ol", "class-page__start-steps");
+    const footer = createElement("div", "class-page__start-footer");
+    const reassurance = createElement("p", "class-page__start-reassurance");
+    const actions = createElement("div", "class-page__start-actions");
+    const primary = createElement("button", "button button--primary");
+    const secondary = createElement(
+      "button",
+      "button button--quiet",
+      material.roomTasks.length ? "Preview guided tasks" : "View the lesson plan",
+    );
+    const progress = createElement("div", "class-page__start-progress");
+    const progressCopy = createElement("div");
+    const progressBar = createElement("progress");
+
+    block.classList.add("class-page__start");
+    block.dataset.classStart = settings.chapterId;
+
+    material.startHere.steps.forEach((step, index) => {
+      const item = createElement("li");
+      const copy = createElement("div");
+      copy.append(
+        createElement("strong", null, step.label),
+        createElement("p", null, step.detail),
+      );
+      item.append(
+        createElement(
+          "span",
+          "class-page__start-number",
+          String(index + 1).padStart(2, "0"),
+        ),
+        copy,
+      );
+      steps.append(item);
+    });
+
+    reassurance.append(
+      createElement("strong", null, "New learner note"),
+      createElement("span", null, material.startHere.reassurance),
+    );
+
+    primary.type = "button";
+    primary.dataset.classStartAction = settings.chapterId;
+    primary.dataset.classStartLectureTarget = settings.lectureTarget;
+    primary.dataset.classStartExerciseTarget = settings.exerciseTarget;
+    primary.dataset.classStartExerciseHref = settings.exerciseHref;
+    if (completeCount === 0 || !material.roomTasks.length) {
+      primary.textContent = "Open the first example";
+      primary.dataset.scrollTarget = settings.lectureTarget;
+      primary.setAttribute("aria-controls", settings.lectureTarget);
+    } else if (nextTaskIndex >= 0 && entries[nextTaskIndex]) {
+      primary.textContent = `Continue with task ${nextTaskIndex + 1}`;
+      primary.dataset.scrollTarget = entries[nextTaskIndex].id;
+      primary.setAttribute("aria-controls", entries[nextTaskIndex].id);
+    } else {
+      primary.textContent = "Open chapter exercises";
+      primary.dataset.routeTarget = settings.exerciseHref;
+    }
+
+    secondary.type = "button";
+    secondary.dataset.scrollTarget = material.roomTasks.length
+      ? settings.roomTarget
+      : settings.lessonPlanTarget;
+    secondary.setAttribute("aria-controls", secondary.dataset.scrollTarget);
+    actions.append(primary, secondary);
+
+    progress.dataset.classStartProgress = settings.chapterId;
+    progressCopy.append(
+      createElement(
+        "span",
+        null,
+        material.roomTasks.length ? "Guided practice" : "Class route",
+      ),
+      createElement(
+        "strong",
+        null,
+        material.roomTasks.length
+          ? `${completeCount} / ${material.roomTasks.length}`
+          : "Ready",
+      ),
+    );
+    progressBar.max = Math.max(material.roomTasks.length, 1);
+    progressBar.value = completeCount;
+    progressBar.setAttribute(
+      "aria-label",
+      material.roomTasks.length
+        ? `${completeCount} of ${material.roomTasks.length} guided tasks complete`
+        : "Class route ready to begin",
+    );
+    progress.append(progressCopy, progressBar);
+
+    footer.append(actions, progress, reassurance);
+    panel.append(footer, steps);
+    block.append(panel);
+    return block;
   }
 
   function renderClassSetup(section, material) {
@@ -981,14 +1196,34 @@
       (count, task) => count + (completed.has(task.id) ? 1 : 0),
       0,
     );
+    const nextTaskIndex = tasks.findIndex((task) => !completed.has(task.id));
     const progressBar = createElement("progress");
+    const progressCopy = createElement("div", "class-room-progress__copy");
+    const continueButton = createElement(
+      "button",
+      "button button--quiet class-room-progress__continue",
+      nextTaskIndex >= 0 ? `Continue with task ${nextTaskIndex + 1}` : "Review room tasks",
+    );
     const list = createElement("ol", "class-room-tasks");
 
     progress.dataset.classRoomProgress = settings.chapterId;
-    progress.append(
+    progressCopy.append(
       createElement("strong", null, `${completeCount} / ${tasks.length} room tasks complete`),
-      progressBar,
+      createElement(
+        "small",
+        null,
+        nextTaskIndex >= 0
+          ? `Task ${nextTaskIndex + 1} is the recommended next checkpoint.`
+          : "Every checkpoint is complete; revisit any task whenever needed.",
+      ),
     );
+    continueButton.type = "button";
+    continueButton.dataset.classRoomContinue = settings.chapterId;
+    continueButton.dataset.scrollTarget = entries[
+      nextTaskIndex >= 0 ? nextTaskIndex : 0
+    ].id;
+    continueButton.setAttribute("aria-controls", continueButton.dataset.scrollTarget);
+    progress.append(progressCopy, progressBar, continueButton);
     progressBar.max = Math.max(tasks.length, 1);
     progressBar.value = completeCount;
     progressBar.setAttribute(
@@ -999,14 +1234,18 @@
     tasks.forEach((task, index) => {
       const entry = entries[index];
       const done = completed.has(task.id);
-      const item = createElement("li", `class-room-task${done ? " is-complete" : ""}`);
+      const isNext = !done && index === nextTaskIndex;
+      const item = createElement(
+        "li",
+        `class-room-task${done ? " is-complete" : isNext ? " is-next" : ""}`,
+      );
       const article = createElement("article");
       const header = createElement("header", "class-room-task__header");
       const copy = createElement("div");
       const state = createElement(
         "span",
         "class-room-task__state",
-        done ? "Completed ✓" : "Ready",
+        done ? "Completed ✓" : isNext ? "Up next" : "Ready",
       );
       const explanation = createElement("div", "class-room-task__theory");
 

@@ -126,6 +126,15 @@ function canonicalMaterial() {
       "State a loop invariant.",
       "Diagnose an off-by-one error.",
     ],
+    startHere: {
+      title: "Start with one trace",
+      description: "Run one example before reading the reference sections.",
+      reassurance: "Reset always restores the classroom starter.",
+      steps: [
+        { label: "Predict", detail: "Write the first expected branch." },
+        { label: "Run", detail: "Execute the example and compare the result." },
+      ],
+    },
     lessonPlan: [
       { label: "Branch model", minutes: 20, purpose: "Trace mutually exclusive paths." },
       { label: "Loop model", minutes: 30, purpose: "Track state across iterations." },
@@ -220,6 +229,13 @@ test("canonical class material is normalized without losing instructional detail
   assert.equal(normalized.estimatedMinutes, 90);
   assert.equal(normalized.audience, "Beginning Python learners");
   assert.equal(normalized.lessonPlan.length, 3);
+  assert.equal(normalized.startHere.title, "Start with one trace");
+  assert.equal(normalized.startHere.steps.length, 4);
+  assert.equal(normalized.startHere.steps[1].label, "Run");
+  assert.equal(
+    normalized.startHere.reassurance,
+    "Reset always restores the classroom starter.",
+  );
   assert.equal(normalized.lessonPlan[1].purpose, "Track state across iterations.");
   assert.equal(normalized.lectureDemo.expectedOutput, "1\n2\n3");
   assert.equal(normalized.roomTasks.length, 2);
@@ -244,11 +260,12 @@ test("the section plan is stable, scoped, ordered, and reflects optional supplie
   assert.deepEqual(
     Array.from(plan, (section) => section.key),
     [
-      "overview",
-      "lesson-plan",
+      "start-here",
       "lecture-demo",
       "room-tasks",
       "lesson-notes",
+      "overview",
+      "lesson-plan",
       "interactive-labs",
       "tutor",
       "class-activities",
@@ -314,6 +331,17 @@ test("render builds a complete accessible class page from canonical material and
   const copyButton = nodes.find((node) => node.dataset && node.dataset.classLabCopy === "lecture-demo");
   const codeEditors = nodes.filter((node) => node.dataset && node.dataset.classLabCode);
   const roomTask = nodes.find((node) => node.dataset && node.dataset.classTask === "py03-comparison-type");
+  const nextRoomTask = nodes.find((node) => (
+    node.dataset &&
+    node.dataset.classTask === "py03-comparison-type" &&
+    node.className.includes("is-next")
+  ));
+  const startAction = nodes.find((node) => (
+    node.dataset && node.dataset.classStartAction === "py03"
+  ));
+  const roomContinue = nodes.find((node) => (
+    node.dataset && node.dataset.classRoomContinue === "py03"
+  ));
   const sectionFragmentLinks = nodes.filter((node) => (
     node.tagName === "A" && /^#class-py03-/u.test(node.href)
   ));
@@ -323,6 +351,7 @@ test("render builds a complete accessible class page from canonical material and
   assert.equal(findByText(page, "H1", "Decisions and Loops").id, "class-py03-title");
   assert.equal(new Set(ids).size, ids.length);
   assert.equal(ids.includes("class-py03-lesson-1"), true);
+  assert.equal(ids.includes("class-py03-start-here"), true);
   assert.equal(ids.includes("class-py03-interactive-labs"), true);
   assert.equal(ids.includes("class-py03-official-docs"), true);
   assert.equal(tocButtons.length >= 14, true);
@@ -333,6 +362,17 @@ test("render builds a complete accessible class page from canonical material and
   assert.equal(copyButton.textContent, "Copy code");
   assert.equal(codeEditors.length, 2);
   assert.ok(roomTask);
+  assert.ok(nextRoomTask);
+  assert.equal(startAction.textContent, "Open the first example");
+  assert.equal(startAction.dataset.scrollTarget, "class-py03-lecture-demo");
+  assert.equal(startAction.getAttribute("aria-controls"), "class-py03-lecture-demo");
+  assert.equal(roomContinue.textContent, "Continue with task 1");
+  assert.equal(roomContinue.dataset.scrollTarget, "class-py03-room-py03-comparison-type");
+  assert.equal(
+    roomContinue.getAttribute("aria-controls"),
+    "class-py03-room-py03-comparison-type",
+  );
+  assert.ok(findByText(page, "H2", "Start with one trace"));
   assert.ok(findByText(page, "H2", "Guided room tasks"));
   assert.ok(findByText(page, "STRONG", "Expected output"));
   assert.ok(findByText(page, "H2", "Ask the chapter tutor"));
@@ -359,6 +399,7 @@ test("render supplies useful class defaults when optional instructional arrays a
   const nodes = walk(page);
 
   assert.ok(findByText(page, "H2", "Lesson plan"));
+  assert.ok(findByText(page, "H2", "Start First Programs with one small loop"));
   assert.ok(findByText(page, "H2", "In this class"));
   assert.ok(findByText(page, "H2", "Lecture demonstration"));
   assert.ok(findByText(page, "H2", "Ask the chapter tutor"));
@@ -370,7 +411,7 @@ test("render supplies useful class defaults when optional instructional arrays a
     new Set(nodes
       .filter((node) => node.dataset && node.dataset.scrollTarget)
       .map((node) => node.dataset.scrollTarget)).size,
-    9,
+    10,
   );
   assert.equal(
     nodes.some((node) => node.tagName === "A" && node.href === "#chapter/py01/exercises"),

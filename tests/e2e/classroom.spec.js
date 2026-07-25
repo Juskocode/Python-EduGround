@@ -40,6 +40,8 @@ async function installMockPythonWorker(page) {
           ? "printed first\n"
           : payload.code.includes("shortcut-output")
           ? "shortcut-output\n"
+          : payload.code.includes('print("Community garden delivery")')
+          ? "Community garden delivery\nBags: 4\nTotal kg: 6.0\n"
           : `${String(testCase.expectedOutput || "")}\n`;
         const traceback = payload.code.includes("print-before-error")
           ? "Traceback (most recent call last):\nValueError: classroom failure"
@@ -130,24 +132,50 @@ test("the first class reads as a beginner room and keeps answer keys out of its 
 }) => {
   await openClassRoom(page);
 
+  const audience = page.getByText(
+    "Complete beginners who may be using a code editor, terminal, and programming language for the very first time.",
+    { exact: true },
+  );
+  const classDetails = page.locator(".class-page__class-details");
+  await expect(audience).toBeHidden();
+  await classDetails.locator("summary").click();
+  await expect(audience).toBeVisible();
   await expect(
     page.getByText(
-      "Complete beginners who may be using a code editor, terminal, and programming language for the very first time.",
-      { exact: true },
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      "The editor is where you write Python instructions, Run asks Python to follow them, and the terminal shows what the program prints or why it stopped.",
+      "A program is a saved sequence of instructions: the editor changes its source file, the Python interpreter follows it after Run, and the terminal shows printed text or an error report.",
       { exact: true },
     ),
   ).toBeVisible();
 
+  const start = page.locator('[data-class-start="py01"]');
+  await expect(
+    start.getByRole("heading", {
+      name: "Start here — no computer experience assumed",
+      level: 2,
+    }),
+  ).toBeVisible();
+  await expect(start.locator(".class-page__start-steps > li")).toHaveCount(4);
+  await expect(
+    start.locator('[data-class-start-progress="py01"] strong'),
+  ).toHaveText("0 / 8");
+  await expect(
+    start.locator('[data-class-start-action="py01"]'),
+  ).toHaveText("Open the first example");
+  await expect(
+    start.locator('[data-class-start-action="py01"]'),
+  ).toHaveAttribute("data-scroll-target", "class-py01-lecture-demo");
+  await expect(
+    start.locator('[data-class-start-action="py01"]'),
+  ).toHaveAttribute("aria-controls", "class-py01-lecture-demo");
+
   const room = page.locator("#class-py01-room-tasks");
   const tasks = room.locator("[data-class-task]");
-  await expect(tasks).toHaveCount(5);
+  await expect(tasks).toHaveCount(8);
   for (const taskId of [
     "py01-computer-basics",
+    "py01-program-file-terminal",
+    "py01-print-exact-line",
+    "py01-variable-assignment",
     INPUT_TYPE_TASK,
     "py01-int-conversion",
     "py01-float-conversion",
@@ -199,6 +227,139 @@ test("the first class reads as a beginner room and keeps answer keys out of its 
   expect(roomMarkup).not.toContain("data-answer-index");
 });
 
+test("the beginner route highlights and restores the next unfinished mission", async ({
+  page,
+}) => {
+  await openClassRoom(page);
+
+  const firstTask = roomTask(page, "py01-computer-basics");
+  const secondTask = roomTask(page, "py01-program-file-terminal");
+  const startAction = page.locator('[data-class-start-action="py01"]');
+  const roomContinue = page.locator('[data-class-room-continue="py01"]');
+
+  await expect(firstTask).toHaveClass(/is-next/u);
+  await expect(
+    firstTask.locator('[data-class-task-status="py01-computer-basics"]'),
+  ).toHaveText("Up next");
+  await expect(secondTask).not.toHaveClass(/is-next/u);
+  await expect(roomContinue).toHaveText("Continue with task 1");
+
+  await firstTask.locator("input[data-class-answer]").fill("code editor");
+  await firstTask.locator("input[data-class-answer]").press("Enter");
+
+  await expect(firstTask).toHaveClass(/is-complete/u);
+  await expect(firstTask).not.toHaveClass(/is-next/u);
+  await expect(secondTask).toHaveClass(/is-next/u);
+  await expect(
+    secondTask.locator(
+      '[data-class-task-status="py01-program-file-terminal"]',
+    ),
+  ).toHaveText("Up next");
+  await expect(startAction).toHaveText("Continue with task 2");
+  await expect(startAction).toHaveAttribute(
+    "data-scroll-target",
+    "class-py01-room-py01-program-file-terminal",
+  );
+  await expect(startAction).toHaveAttribute(
+    "aria-controls",
+    "class-py01-room-py01-program-file-terminal",
+  );
+  await expect(roomContinue).toHaveText("Continue with task 2");
+  await expect(
+    page.locator('[data-class-start-progress="py01"] strong'),
+  ).toHaveText("1 / 8");
+
+  await startAction.click();
+  await expect(
+    secondTask.getByRole("heading", {
+      name: "Mission 1 · Name the saved program container",
+      level: 3,
+    }),
+  ).toBeFocused();
+
+  await page.reload();
+  await expect(roomTask(page, "py01-computer-basics")).toHaveClass(
+    /is-complete/u,
+  );
+  await expect(roomTask(page, "py01-program-file-terminal")).toHaveClass(
+    /is-next/u,
+  );
+  await expect(page.locator('[data-class-start-action="py01"]')).toHaveText(
+    "Continue with task 2",
+  );
+});
+
+test("a completed beginner room opens the chapter exercise list directly", async ({
+  page,
+}) => {
+  await openClassRoom(page);
+  await page.evaluate((storageKey) => {
+    const completed = window.CLASS_MATERIALS.py01.roomTasks.map(
+      (task) => `room:${task.id}`,
+    );
+    localStorage.setItem(storageKey, JSON.stringify({ py01: completed }));
+  }, LEARNING_STORAGE);
+  await page.reload();
+
+  const action = page.locator('[data-class-start-action="py01"]');
+  await expect(action).toHaveText("Open chapter exercises");
+  await expect(action).toHaveAttribute(
+    "data-route-target",
+    "#chapter/py01/exercises",
+  );
+  await expect(action).not.toHaveAttribute("data-scroll-target");
+  await expect(action).not.toHaveAttribute("aria-controls");
+
+  await action.click();
+  await expect(page).toHaveURL(/#chapter\/py01\/exercises$/u);
+  await expect(
+    page.getByRole("heading", {
+      name: "First Programs exercises",
+      level: 1,
+    }),
+  ).toBeVisible();
+});
+
+test("the beginner start route remains readable without horizontal overflow on mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openClassRoom(page);
+
+  const start = page.locator('[data-class-start="py01"]');
+  const steps = start.locator(".class-page__start-steps > li");
+  await expect(steps).toHaveCount(4);
+  const positions = await steps.evaluateAll((items) =>
+    items.slice(0, 2).map((item) => ({
+      left: Math.round(item.getBoundingClientRect().left),
+      width: Math.round(item.getBoundingClientRect().width),
+    }))
+  );
+  expect(positions[0].left).toBe(positions[1].left);
+  expect(positions[0].width).toBe(positions[1].width);
+  const buttonHeights = await start.locator(
+    ".class-page__start-actions .button",
+  ).evaluateAll((buttons) =>
+    buttons.map((button) => Math.round(button.getBoundingClientRect().height))
+  );
+  expect(buttonHeights.every((height) => height >= 44)).toBe(true);
+  const primaryAction = start.locator('[data-class-start-action="py01"]');
+  const primaryActionBox = await primaryAction.boundingBox();
+  expect(primaryActionBox).not.toBeNull();
+  expect(
+    Math.round((primaryActionBox?.y || 0) + (primaryActionBox?.height || 0)),
+  ).toBeLessThanOrEqual(844);
+  expect(
+    await page.locator(".class-page__class-details").evaluate(
+      (details) => details.open,
+    ),
+  ).toBe(false);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 test("wrong feedback does not complete a task, while a trimmed correct answer persists", async ({
   page,
 }) => {
@@ -209,7 +370,7 @@ test("wrong feedback does not complete a task, while a trimmed correct answer pe
   const feedback = page.locator(`[data-class-feedback="${INPUT_TYPE_TASK}"]`);
   const progress = page.locator('[data-class-room-progress="py01"]');
 
-  await expect(progress.locator("strong")).toHaveText("0 / 5 room tasks complete");
+  await expect(progress.locator("strong")).toHaveText("0 / 8 room tasks complete");
   await input.fill("int");
   await page.locator(`button[data-class-room-check="${INPUT_TYPE_TASK}"]`).click();
 
@@ -220,7 +381,7 @@ test("wrong feedback does not complete a task, while a trimmed correct answer pe
   await expect(
     task.locator(`[data-class-task-status="${INPUT_TYPE_TASK}"]`),
   ).toHaveText("Ready");
-  await expect(progress.locator("strong")).toHaveText("0 / 5 room tasks complete");
+  await expect(progress.locator("strong")).toHaveText("0 / 8 room tasks complete");
   expect(
     await page.evaluate(
       ({ key, item }) => {
@@ -241,7 +402,7 @@ test("wrong feedback does not complete a task, while a trimmed correct answer pe
   await expect(
     task.locator(`[data-class-task-status="${INPUT_TYPE_TASK}"]`),
   ).toHaveText("Completed ✓");
-  await expect(progress.locator("strong")).toHaveText("1 / 5 room tasks complete");
+  await expect(progress.locator("strong")).toHaveText("1 / 8 room tasks complete");
   await expect
     .poll(() =>
       page.evaluate(
@@ -263,7 +424,7 @@ test("wrong feedback does not complete a task, while a trimmed correct answer pe
   ).toHaveText("Completed ✓");
   await expect(
     page.locator('[data-class-room-progress="py01"] strong'),
-  ).toHaveText("1 / 5 room tasks complete");
+  ).toHaveText("1 / 8 room tasks complete");
   await expect(
     page.locator(`[data-class-feedback="${INPUT_TYPE_TASK}"]`),
   ).toContainText("typed characters remain a textual value");
@@ -352,6 +513,39 @@ test("Shift+Enter dispatches the classroom program and displays terminal stdout"
   expect(messages[0].tests[0].echoInputPrompts).toBe(true);
 });
 
+test("the recommended first example runs with its authored input and leaves progress honest", async ({
+  page,
+}) => {
+  await openClassRoom(page);
+
+  const startAction = page.locator('[data-class-start-action="py01"]');
+  await startAction.click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Lecture demonstration",
+      level: 2,
+    }),
+  ).toBeFocused();
+
+  const lab = classLab(page, LECTURE_LAB);
+  await expect(lab.locator("textarea[data-class-lab-stdin]")).toHaveValue(
+    "4\n1.5",
+  );
+  await lab.getByRole("button", { name: "Run code", exact: true }).click();
+  await expect(lab.locator("[data-class-lab-output]")).toHaveText(
+    "Community garden delivery\nBags: 4\nTotal kg: 6.0",
+  );
+  await expect(
+    page.locator('[data-class-start-progress="py01"] strong'),
+  ).toHaveText("0 / 8");
+
+  const messages = await page.evaluate(() => window.__classRoomWorkerMessages);
+  expect(messages).toHaveLength(1);
+  expect(messages[0].tests[0].input).toEqual(["4", "1.5"]);
+  expect(messages[0].code).toContain("raw_bag_count = input()");
+  expect(messages[0].code).toContain("kg_per_bag = float(raw_kg_per_bag)");
+});
+
 test("lesson-note examples use the same editable runner and retain sample input", async ({
   page,
 }) => {
@@ -359,7 +553,7 @@ test("lesson-note examples use the same editable runner and retain sample input"
 
   const lessonLab = classLab(
     page,
-    "lesson-tutorial-understand-the-input-boundary",
+    "lesson-tutorial-watch-input-wait-return-text-and-resume",
   );
   const editor = lessonLab.locator("textarea[data-class-lab-code]");
   const stdin = lessonLab.locator("textarea[data-class-lab-stdin]");

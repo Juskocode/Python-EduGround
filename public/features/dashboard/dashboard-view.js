@@ -217,11 +217,11 @@
       )
     );
     guide.append(
-      el("span", null, "Learning guide"),
+      el("span", null, "Learning checkpoints"),
       progress(
         chapter.guide.done,
         chapter.guide.total,
-        chapter.title + ": " + chapter.guide.done + " of " + chapter.guide.total + " guide sections understood"
+        chapter.title + ": " + chapter.guide.done + " of " + chapter.guide.total + " learning checkpoints complete"
       )
     );
     block.append(exercise, guide);

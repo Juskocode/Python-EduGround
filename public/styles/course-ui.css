@@ -1183,6 +1183,32 @@ pre {
   font-size: 1rem;
 }
 
+.chapter-hero__quickstart {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 12px 11px 14px;
+  margin-top: 18px;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-radius: 13px;
+  background: var(--primary-softer);
+}
+
+.chapter-hero__quickstart-label {
+  color: var(--primary-strong);
+  font-size: 0.67rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.chapter-hero__quickstart .button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
 .chapter-hero__progress {
   margin-top: 24px;
   padding-top: 20px;
@@ -5058,6 +5084,10 @@ pre {
     flex-direction: column;
   }
 
+  .chapter-hero__art {
+    min-height: 140px;
+  }
+
   .continue-strip .button,
   .tutorial-cta .button {
     width: 100%;
@@ -5340,11 +5370,25 @@ pre {
   }
 
   .chapter-hero__art {
-    min-height: 225px;
+    min-height: 130px;
   }
 
   .chapter-hero__content {
-    padding: 25px 21px;
+    padding: 21px;
+  }
+
+  .chapter-hero__progress {
+    margin-top: 17px;
+    padding-top: 15px;
+  }
+
+  .chapter-hero__quickstart {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .chapter-hero__quickstart .button {
+    width: 100%;
   }
 
   .chapter-hero__progress-text {

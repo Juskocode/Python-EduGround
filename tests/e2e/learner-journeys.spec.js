@@ -18,6 +18,45 @@ test.afterEach(async () => {
   expect(unexpectedBrowserErrors).toEqual([]);
 });
 
+test("a clean mobile chapter presents its recommended class action before the choices", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#chapter/py01");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  const action = page.locator(".chapter-hero__quickstart .button--primary");
+  await expect(action).toHaveText("Start learning");
+  await expect(action).toHaveAttribute("href", "#chapter/py01/tutorials");
+
+  const geometry = await page.evaluate(() => {
+    const actionNode = document.querySelector(
+      ".chapter-hero__quickstart .button--primary",
+    );
+    const recommendation = document.querySelector(
+      ".chapter-hero__quickstart",
+    );
+    const choices = document.querySelector(".chapter-choices");
+    const actionBox = actionNode.getBoundingClientRect();
+    return {
+      actionBottom: Math.round(actionBox.bottom),
+      actionHeight: Math.round(actionBox.height),
+      recommendationTop: Math.round(
+        recommendation.getBoundingClientRect().top,
+      ),
+      choicesTop: Math.round(choices.getBoundingClientRect().top),
+      viewportHeight: window.innerHeight,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+
+  expect(geometry.actionBottom).toBeLessThanOrEqual(geometry.viewportHeight);
+  expect(geometry.actionHeight).toBeGreaterThanOrEqual(44);
+  expect(geometry.recommendationTop).toBeLessThan(geometry.choicesTop);
+  expect(geometry.overflow).toBeLessThanOrEqual(1);
+});
+
 test("a learner can navigate from the roadmap into class materials", async ({ page }) => {
   await page.goto("/#home");
   await expect(
