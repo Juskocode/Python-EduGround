@@ -101,6 +101,13 @@ const passingCodeByTaskId = {
     "    mode = \"running\"",
     "print(mode, remaining_ms)",
   ].join("\n"),
+  "py13-world-to-screen": [
+    "screen_height = 240",
+    "sprite_height = 24",
+    "height_above_floor = 60",
+    "screen_y = screen_height - sprite_height - height_above_floor",
+    "print(screen_y)",
+  ].join("\n"),
 };
 
 function nonEmpty(value) {
@@ -272,6 +279,39 @@ test("chapter one room-task IDs cover the complete beginner input and conversion
       taskIds.has(concept),
       true,
       `py01: expected a stable py01-${concept} room task`,
+    );
+  }
+});
+
+test("Pygame room missions form a prediction, evidence, transfer, and access pathway", () => {
+  const pygameTaskIds = Array.from(roomTasksFor("py13"), (task) => String(task.id));
+  const orderedMilestones = [
+    "py13-transition-input",
+    "py13-predict-paused-frame",
+    "py13-delta-time-distance",
+    "py13-deterministic-spawn",
+    "py13-power-up-timer",
+    "py13-render-committed-state",
+    "py13-world-to-screen",
+    "py13-redundant-feedback",
+  ];
+
+  assert.deepEqual(pygameTaskIds, orderedMilestones);
+
+  const pygameText = JSON.stringify(materials.py13).toLocaleLowerCase("en");
+  for (const concept of [
+    "predict",
+    "committed state",
+    "replay",
+    "pygame adapter",
+    "redundant feedback",
+    "reduced motion",
+    "keyboard",
+  ]) {
+    assert.match(
+      pygameText,
+      new RegExp(concept.replace(/\s+/gu, "\\s+"), "u"),
+      `py13: expected the mission pathway to teach ${concept}`,
     );
   }
 });

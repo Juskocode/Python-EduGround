@@ -937,6 +937,11 @@
           correction: "A dedicated seeded generator or stable candidate list makes spawn decisions replayable when the initial state, seed, input order, and update timing are recorded.",
           probe: "Which extra evidence must a bug report preserve besides the final occupied cells?",
         },
+        {
+          belief: "More screen shake, colour, and sound automatically make a game clearer and more exciting.",
+          correction: "Game feel should reinforce a committed event without becoming the only way to perceive it. Persistent text or shape evidence, adjustable sound, reduced motion, and keyboard reachability make feedback both clearer and more resilient.",
+          probe: "If sound is muted and decorative motion is disabled, which cue still proves that a checkpoint or power-up was committed?",
+        },
       ],
       transferPrompts: [
         "Trace one Snake frame from held direction through new head, food decision, tail decision, self-collision, score update, and drawing order.",
@@ -944,6 +949,8 @@
         "Specify a pause-state transition that consumes quit events while preventing physics, timers, and score from advancing.",
         "Describe a boost-collected event whose rule state remains independent from the sound, glow, and particle feedback it triggers.",
         "Record the smallest replay packet needed to reproduce one invalid power-up spawn without sharing a screenshot.",
+        "Debrief one browser lab with a prediction, first mismatching phase, explanatory invariant, and a responsibility map for its local Pygame adapter.",
+        "Build a feedback matrix for one checkpoint that remains understandable with muted sound, unavailable colour, reduced motion, zoom, and keyboard-only control.",
       ],
     },
   };
