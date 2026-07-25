@@ -69,6 +69,44 @@ test("static learning remains available while cloud saving reports unavailable",
   assert.equal(readiness.status, 503);
   assert.equal((await readiness.json()).database.configured, false);
 
+  const tutorStatus = await fetch(`${url}/api/tutor/status`);
+  assert.equal(tutorStatus.status, 200);
+  assert.deepEqual(await tutorStatus.json(), {
+    status: "disabled",
+    enabled: false,
+    model: "llama3.1:8b",
+  });
+
+  const tutorWithoutOrigin = await fetch(`${url}/api/tutor/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chapterId: "py01", message: "What does input do?" }),
+  });
+  assert.equal(tutorWithoutOrigin.status, 403);
+  assert.equal((await tutorWithoutOrigin.json()).error.code, "ORIGIN_REQUIRED");
+
+  const disabledTutor = await fetch(`${url}/api/tutor/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "http://allowed.example",
+    },
+    body: JSON.stringify({ chapterId: "py01", message: "What does input do?" }),
+  });
+  assert.equal(disabledTutor.status, 503);
+  assert.equal((await disabledTutor.json()).error.code, "TUTOR_DISABLED");
+
+  const malformedTutorRequest = await fetch(`${url}/api/tutor/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "http://allowed.example",
+    },
+    body: "{",
+  });
+  assert.equal(malformedTutorRequest.status, 400);
+  assert.equal((await malformedTutorRequest.json()).error.code, "INVALID_JSON");
+
   const register = await fetch(`${url}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

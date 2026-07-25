@@ -3,7 +3,9 @@
 import { realpath } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createApiHandler } from "./api/handler.js";
+import { createTutorRouteHandler } from "./api/tutor-route.js";
 import { createDatabase } from "./persistence/database.js";
+import { createChapterTutorService } from "./rag/factory.js";
 import {
   configureHttpServer,
   securityHeaders,
@@ -114,6 +116,7 @@ try {
 
 let database;
 let submissionFiles;
+let tutorService;
 let handleApi;
 try {
   database = createDatabase(process.env, console);
@@ -126,9 +129,16 @@ try {
     forbiddenDirectories: [PRIVATE_SOLUTIONS_ROOT, PUBLIC_ROOT],
     logger: console,
   });
+  tutorService = createChapterTutorService({
+    environment: process.env,
+  });
   handleApi = createApiHandler({
     database,
     submissionFiles,
+    tutorHandler: createTutorRouteHandler({
+      service: tutorService,
+      environment: process.env,
+    }),
     environment: process.env,
     logger: console,
   });
@@ -211,6 +221,12 @@ server.listen(configuration.port, configuration.host, () => {
     submissionFiles.configured
       ? "Submission files: per-user chapter mirror configured"
       : "Submission files: disabled (PostgreSQL remains authoritative)"
+  );
+  const tutorStatus = tutorService.status();
+  console.log(
+    tutorStatus.enabled
+      ? `Classroom tutor: configured (${tutorStatus.model})`
+      : "Classroom tutor: disabled (set RAG_ENABLED=true to enable)"
   );
   console.log("Press Ctrl+C to stop.");
 });

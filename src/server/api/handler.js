@@ -334,6 +334,7 @@ function normalizeRunResult(value, index) {
 export function createApiHandler({
   database,
   submissionFiles,
+  tutorHandler = null,
   environment = process.env,
   logger = console,
 }) {
@@ -393,6 +394,10 @@ export function createApiHandler({
         assertSameOrigin(request, environment, {
           required: Boolean(readSessionCookie(request)),
         });
+      }
+
+      if (tutorHandler && await tutorHandler(request, response, requestUrl)) {
+        return true;
       }
 
       if (pathname === "/api/auth/register") {
