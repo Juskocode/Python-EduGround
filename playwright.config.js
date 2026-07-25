@@ -36,7 +36,7 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: `node src/server/main.js --host 127.0.0.1 --port ${port}`,
+        command: `node dist/server/main.js --host 127.0.0.1 --port ${port}`,
         url: `${baseURL}/healthz`,
         reuseExistingServer: false,
         timeout: 15_000,

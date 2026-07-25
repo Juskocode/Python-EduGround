@@ -7,11 +7,11 @@ import {
   DEFAULT_MIGRATIONS_DIRECTORY,
   listMigrationNames,
   loadMigrationManifest,
-} from "../../../src/server/persistence/migration-manifest.js";
+} from "../../../dist/server/persistence/migration-manifest.js";
 import {
   assertSafeMigrationRole,
   runMigrations,
-} from "../../../src/server/persistence/migrate.js";
+} from "../../../dist/server/persistence/migrate.js";
 
 test("the default migration manifest is discovered from the repository", async () => {
   assert.deepEqual(await listMigrationNames(), [

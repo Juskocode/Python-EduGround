@@ -195,7 +195,7 @@ NODE
 
 "${compose[@]}" exec --no-TTY app node --input-type=module -e '
   import pg from "pg";
-  import { databaseConnectionOptions } from "./src/server/persistence/database-config.js";
+  import { databaseConnectionOptions } from "./dist/server/persistence/database-config.js";
 
   const client = new pg.Client(
     databaseConnectionOptions(process.env, {

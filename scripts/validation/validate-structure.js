@@ -12,6 +12,7 @@ import {
 const failures = [];
 const ignoredWalkDirectories = new Set([
   "backups",
+  "dist",
   "node_modules",
   "playwright-report",
   "secrets",
@@ -38,6 +39,13 @@ const requiredDirectories = [
   "tests/unit/client",
   "tests/unit/server",
 ];
+const requiredTypeScriptFiles = [
+  "src/server/curriculum/exercise-manifest.ts",
+  "src/server/http/responses.ts",
+  "src/server/http/static-files.ts",
+  "src/server/paths.ts",
+  "tsconfig.server.json",
+];
 
 async function exists(pathname) {
   try {
@@ -62,6 +70,11 @@ for (const directory of requiredDirectories) {
     failures.push(`Required architecture directory is missing: ${directory}`);
   }
 }
+for (const sourceFile of requiredTypeScriptFiles) {
+  if (!(await exists(resolve(REPOSITORY_ROOT, sourceFile)))) {
+    failures.push(`Required TypeScript contract is missing: ${sourceFile}`);
+  }
+}
 for (const directory of obsoleteDirectories) {
   if (await exists(resolve(REPOSITORY_ROOT, directory))) {
     failures.push(`Obsolete top-level directory still exists: ${directory}`);
@@ -72,7 +85,7 @@ const rootEntries = await readdir(REPOSITORY_ROOT, { withFileTypes: true });
 for (const entry of rootEntries) {
   if (!entry.isFile()) continue;
   const extension = extname(entry.name);
-  if ([".css", ".mjs"].includes(extension)) {
+  if ([".css", ".mjs", ".ts"].includes(extension)) {
     failures.push(`Loose runtime file is not allowed at repository root: ${entry.name}`);
   }
   if (extension === ".js" && entry.name !== "playwright.config.js") {

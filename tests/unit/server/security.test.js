@@ -7,7 +7,7 @@ import {
   isValidEmail,
   normalizeEmail,
   verifyPassword,
-} from "../../../src/server/security/credentials.js";
+} from "../../../dist/server/security/credentials.js";
 
 test("password records use scrypt and reject the wrong password", async () => {
   const record = await hashPassword("correct horse battery staple");

@@ -26,8 +26,10 @@ make focused commits whose message explains one coherent change.
 - Automated checks: `tests/<level>/`
 - Product, operator, or security guidance: `docs/`
 
-Do not add implementation files at repository root. Use `.js` for project-owned
-JavaScript; Node code is ESM because `package.json` declares `"type": "module"`.
+Do not add implementation files at repository root. New server contracts should
+use strict `.ts`; existing server `.js` modules are compiled through the same
+NodeNext lane while they migrate incrementally. Browser code remains ordered
+classic `.js` until a feature has an explicit TypeScript output design.
 
 ## Protect the learning boundary
 
@@ -58,6 +60,9 @@ All changes:
 npm run validate
 git diff --check
 ```
+
+`npm run validate` type-checks and compiles the server before testing the emitted
+`dist/server` artifact.
 
 Browser UI or interaction changes:
 

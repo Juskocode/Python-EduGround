@@ -3,6 +3,7 @@
 !Dockerfile
 !package.json
 !package-lock.json
+!tsconfig.server.json
 
 !public/
 !public/**

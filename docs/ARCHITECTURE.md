@@ -56,6 +56,7 @@ The structure validator fails when a root-level implementation file, a non-vendo
 │   └── unit/
 │       ├── client/             # Browser models, data, and render contracts
 │       └── server/             # HTTP, persistence, and security units
+├── dist/                        # Git-ignored compiled server output
 ├── docs/                       # Product, operator, and maintainer guides
 ├── artifacts/                  # Git-ignored generated test evidence
 ├── Dockerfile
@@ -72,7 +73,7 @@ documentation. Product implementation does not belong at root.
 
 ### Public boundary
 
-`src/server/http/static-files.js` resolves browser requests strictly below
+`src/server/http/static-files.ts` resolves browser requests strictly below
 `public/`. It rejects traversal, symlink escapes, non-files, and private repository
 paths. The production image copies the same `public/` tree, so local and container
 serving have one boundary.
@@ -106,24 +107,35 @@ without rendering a page.
 `public/styles/` contains styles that cross feature boundaries. A selector used
 only by one feature belongs beside that feature instead.
 
-### JavaScript convention
+### TypeScript and JavaScript convention
 
-The package uses `"type": "module"`, so Node server, script, and test files are
-standard ESM `.js` files. The browser application intentionally remains a small
-ordered classic-script system: `public/index.html` loads browser `.js` files in a
-documented order and those files publish frozen namespaces on `window`.
+The server has an incremental strict TypeScript lane. `tsconfig.server.json`
+compiles NodeNext `.ts` modules and the remaining ESM `.js` modules from
+`src/server/` into the same `dist/server/` tree. Tests and production execute this
+compiled artifact, not the source directory. This makes migration reviewable while
+keeping one runtime contract.
+
+The browser application intentionally remains a small ordered classic-script
+system: `public/index.html` loads browser `.js` files in a documented order and
+those files publish frozen namespaces on `window`.
 
 Consequently:
 
-- use `.js`, not `.mjs`, for project-owned JavaScript;
-- use `import`/`export` in Node code;
+- use strict `.ts` for new server contracts and keep `.js` import specifiers for
+  NodeNext emission;
+- use `.js`, not `.mjs`, for project-owned browser, script, and test JavaScript;
+- use `import`/`export` in Node source;
 - preserve the script order in `public/index.html` for classic browser code;
 - do not add a bundler merely to place a file in the correct directory;
 - place third-party code only below `public/assets/vendor/`, with its license.
 
+Run `npm run build:server` to emit the server and `npm run validate:types` for a
+strict no-emit check. Never commit `dist/`.
+
 ## Server application
 
-`src/server/main.js` composes the process. Domain modules point inward to small
+`src/server/main.js` composes the process and is emitted as
+`dist/server/main.js`. Domain modules point inward to small
 helpers and never reach into test or documentation directories.
 
 | Area | Owns |
@@ -251,7 +263,7 @@ git diff --check
 The gate includes:
 
 1. structure boundaries and prohibited flat files;
-2. syntax across organized source trees;
+2. strict server type-checking plus syntax across emitted and browser JavaScript;
 3. curriculum, starter, assessment, and documentation contracts;
 4. client and server unit tests;
 5. security, public-file, workflow, and container policy checks.

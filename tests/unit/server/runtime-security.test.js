@@ -17,7 +17,7 @@ import {
   requestClientIp,
   securityHeaders,
   validateRuntimeEnvironment,
-} from "../../../src/server/security/runtime-policy.js";
+} from "../../../dist/server/security/runtime-policy.js";
 
 const TOKEN = "a".repeat(48);
 

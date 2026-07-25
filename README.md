@@ -140,9 +140,9 @@ npm run serve
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000). A different host or port can be selected when needed:
 
 ```bash
-node src/server/main.js --port 4173
-PORT=4173 node src/server/main.js
-node src/server/main.js --help
+npm run serve -- --port 4173
+PORT=4173 npm run serve
+npm run serve -- --help
 ```
 
 HTTP serving is required for the module-based Python worker. Ace is checked into the repository. The first Python run downloads a pinned Pyodide runtime from jsDelivr, with a separately pinned UNPKG fallback, so the initial run needs an internet connection.
@@ -179,12 +179,12 @@ export PGUSER='eduground_owner'
 export PGPASSWORD_FILE='/run/secrets/eduground-owner-password'
 export DATABASE_SSL='require'
 export DATABASE_SSL_CA_FILE='/run/secrets/provider-root-ca.pem'
-npm run migrate
+npm run migrate:build
 
 export PGUSER='eduground_app'
 export PGPASSWORD_FILE='/run/secrets/eduground-runtime-password'
 export APP_ORIGIN='https://learn.example.com'
-npm run serve
+npm start
 ```
 
 Database-backed saving is opt-in from the profile menu. Unsigned learners remain
@@ -324,7 +324,8 @@ npm run clean
 ```
 
 `npm run validate` performs the deterministic offline checks for application and
-backend syntax/tests, the security policy, all 12 chapter definitions, all 102
+backend TypeScript, emitted JavaScript, unit tests, the security policy, all 12
+chapter definitions, all 102
 exercise definitions, all 316 exercise tests, every solution-free starter, every
 lesson section and runbook phase, all concept clinics, the rounding lab, toolbox
 cards, and the complete classroom/assessment schema. It also verifies cookie/origin
@@ -392,7 +393,7 @@ conflict journeys remain explicit roadmap items.
 | `public/styles/` | Shared responsive visual system and exercise-workbench chrome |
 | `public/workers/` | Dedicated browser-Python worker and execution boundary |
 | `public/assets/` | Vendored Ace runtime, original illustrations, sprites, and other static media |
-| `src/server/` | Node entrypoint plus explicit API, curriculum, HTTP, persistence, and security modules |
+| `src/server/` | NodeNext server source; strict TypeScript is introduced here incrementally |
 | `src/server/api/` | Same-origin account, state, file, run-history, and health routes |
 | `src/server/curriculum/` | Stable exercise manifest and private submission-file mirror |
 | `src/server/http/` | Static-file and HTTP response helpers |
@@ -408,6 +409,7 @@ conflict journeys remain explicit roadmap items.
 | `tests/unit/` | Fast client and server unit tests |
 | `tests/integration/` | PostgreSQL-backed persistence and account integration tests |
 | `tests/e2e/` | Chromium learner journeys, responsive behavior, and accessibility checks |
+| `dist/server/` | Git-ignored JavaScript emitted from `src/server/` and executed by tests and production |
 | `.github/workflows/` | CI, PostgreSQL integration, CodeQL, supply-chain, container, documentation, and release workflows |
 | `artifacts/` | Git-ignored browser results and generated validation evidence |
 | `docs/ARCHITECTURE.md` | Detailed boundaries, runtime flow, change map, and extension rules |
@@ -416,6 +418,11 @@ conflict journeys remain explicit roadmap items.
 | `docs/PERSISTENCE.md` | Account sync, data model, storage bounds, migrations, and deletion behavior |
 | `docs/DEPLOYMENT.md` | First deploy, proxy, upgrade, backup/restore drill, image promotion, and rollback runbook |
 | `docs/SECURE_SDLC.md` | Trust boundaries, local/CI gates, release policy, incident response, and residual risks |
+
+The browser deliberately remains a small ordered classic-script application, so
+adding TypeScript to the server does not introduce a frontend bundler or change
+learner asset URLs. `npm run build:server` compiles NodeNext source into
+`dist/server/`; `npm run validate:types` performs the strict no-emit check.
 
 ## Content, privacy, and assessment transparency
 

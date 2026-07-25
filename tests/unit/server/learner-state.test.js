@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mergeLearnerState } from "../../../src/server/persistence/learner-state.js";
+import { mergeLearnerState } from "../../../dist/server/persistence/learner-state.js";
 
 test("learner state preserves future fields and unions monotonic progress", () => {
   const current = {

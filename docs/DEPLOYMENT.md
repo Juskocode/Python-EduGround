@@ -172,7 +172,9 @@ export PGPASSWORD_FILE='/run/secrets/eduground-owner-password'
 export DATABASE_SSL='require'
 export DATABASE_SSL_CA_FILE='/run/secrets/provider-root-ca.pem'
 
-npm ci --ignore-scripts --omit=dev --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
+npm run build:server
+npm prune --omit=dev --ignore-scripts --no-audit
 npm run migrate
 ```
 
@@ -187,7 +189,7 @@ export SUBMISSIONS_DIR='/var/lib/python-eduground/submissions'
 export HOST='127.0.0.1'
 export PORT='8000'
 
-npm run serve
+npm start
 ```
 
 Have the database administrator create `eduground_app` as `NOSUPERUSER`,

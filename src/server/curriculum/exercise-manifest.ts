@@ -1,3 +1,17 @@
+interface ChapterDefinition {
+  readonly id: string;
+  readonly submissionDirectory: string;
+  readonly exercises: readonly string[];
+}
+
+export interface ExerciseFile {
+  readonly exerciseId: string;
+  readonly chapterId: string;
+  readonly submissionDirectory: string;
+  readonly filename: string;
+  readonly relativePath: string;
+}
+
 const CHAPTERS = [
   {
     id: "py01",
@@ -169,10 +183,10 @@ const CHAPTERS = [
       "py12-edit-distance",
     ],
   },
-];
+] as const satisfies readonly ChapterDefinition[];
 
-function createManifest() {
-  const manifest = new Map();
+function createManifest(): ReadonlyMap<string, ExerciseFile> {
+  const manifest = new Map<string, ExerciseFile>();
   for (const chapter of CHAPTERS) {
     chapter.exercises.forEach((exerciseId, index) => {
       if (manifest.has(exerciseId)) throw new Error(`Duplicate exercise id: ${exerciseId}`);
@@ -196,10 +210,10 @@ const EXERCISE_MANIFEST = createManifest();
 
 export const EXERCISE_COUNT = EXERCISE_MANIFEST.size;
 
-export function getExerciseFile(exerciseId) {
+export function getExerciseFile(exerciseId: string): ExerciseFile | null {
   return EXERCISE_MANIFEST.get(exerciseId) || null;
 }
 
-export function listExerciseFiles() {
+export function listExerciseFiles(): ExerciseFile[] {
   return [...EXERCISE_MANIFEST.values()];
 }

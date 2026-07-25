@@ -62,11 +62,22 @@ check(
 );
 check(/\nUSER node\n/u.test(dockerfile), "The production image must run as the node user.");
 check(
-  /CMD \["node", "src\/server\/main\.js"/u.test(dockerfile),
+  /CMD \["node", "dist\/server\/main\.js"/u.test(dockerfile),
   "The production image must launch Node directly for correct signal handling."
+);
+check(
+  /AS server-build/u.test(dockerfile) &&
+    /COPY package\.json package-lock\.json tsconfig\.server\.json \.\//u.test(dockerfile) &&
+    /RUN npm run build:server/u.test(dockerfile) &&
+    /COPY --from=server-build --chown=node:node \/app\/dist \.\/dist/u.test(dockerfile),
+  "The production image must compile TypeScript once and copy only the emitted server."
 );
 check(!/COPY\s+(?:--chown=\S+\s+)?\.\s+\./u.test(dockerfile), "Dockerfile must not copy the entire repository.");
 check(dockerignore.trimStart().startsWith("*"), ".dockerignore must remain an allowlist.");
+check(
+  dockerignore.includes("!tsconfig.server.json"),
+  "The Docker build context must include the TypeScript server configuration."
+);
 check(
   /COPY\s+--chown=node:node\s+public\s+\.\/public/u.test(dockerfile) &&
     !dockerfile.includes("curriculum/solutions"),
@@ -141,6 +152,10 @@ check(
 check(
   /compose-integration:[\s\S]*npm run validate:compose/u.test(ciWorkflow),
   "CI must exercise the complete hardened Compose topology."
+);
+check(
+  /Type-check server TypeScript[\s\S]*npm run validate:types/u.test(ciWorkflow),
+  "CI must expose strict TypeScript validation as a named step."
 );
 check(
   /browser-e2e:[\s\S]*playwright install --with-deps chromium[\s\S]*npm run validate:browser/u.test(

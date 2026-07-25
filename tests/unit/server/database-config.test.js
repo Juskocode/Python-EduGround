@@ -9,7 +9,7 @@ import {
   databasePoolOptions,
   databaseTlsOptions,
   parseBoundedDatabaseInteger,
-} from "../../../src/server/persistence/database-config.js";
+} from "../../../dist/server/persistence/database-config.js";
 
 test("database configuration remains optional when no connection settings exist", () => {
   assert.equal(databaseConnectionOptions({}), null);

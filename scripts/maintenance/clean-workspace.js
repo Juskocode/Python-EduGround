@@ -5,6 +5,7 @@ import { REPOSITORY_ROOT } from "../lib/paths.js";
 
 const generatedDirectories = [
   "artifacts/playwright",
+  "dist",
   "playwright-report",
   "test-results",
 ];

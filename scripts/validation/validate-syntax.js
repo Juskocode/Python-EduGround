@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { PUBLIC_ROOT, REPOSITORY_ROOT, TEST_ROOT } from "../lib/paths.js";
 
 const scanRoots = [
+  join(REPOSITORY_ROOT, "dist"),
   PUBLIC_ROOT,
   join(REPOSITORY_ROOT, "src"),
   join(REPOSITORY_ROOT, "scripts"),

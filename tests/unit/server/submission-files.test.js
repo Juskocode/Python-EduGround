@@ -9,11 +9,11 @@ import {
   EXERCISE_COUNT,
   getExerciseFile,
   listExerciseFiles,
-} from "../../../src/server/curriculum/exercise-manifest.js";
+} from "../../../dist/server/curriculum/exercise-manifest.js";
 import {
   createSubmissionFileStore,
   resolveSubmissionsDirectory,
-} from "../../../src/server/curriculum/submission-files.js";
+} from "../../../dist/server/curriculum/submission-files.js";
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const USER_ID = "71bf65d1-0875-41a0-91fa-ad943adf7fe8";

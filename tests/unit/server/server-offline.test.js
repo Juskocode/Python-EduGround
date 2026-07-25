@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 async function startServer(extraEnvironment = {}) {
-  const child = spawn(process.execPath, ["src/server/main.js", "--port", "0"], {
+  const child = spawn(process.execPath, ["dist/server/main.js", "--port", "0"], {
     cwd: REPOSITORY_ROOT,
     env: {
       ...process.env,

@@ -1,6 +1,32 @@
 import { createReadStream } from "node:fs";
+import type { Stats } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, relative, resolve, sep } from "node:path";
+
+export interface ResolvedStaticFile {
+  readonly error?: never;
+  readonly message?: never;
+  readonly filePath: string;
+  readonly fileStats: Stats;
+}
+
+export interface StaticFileError {
+  readonly error: number;
+  readonly message: string;
+  readonly filePath?: never;
+  readonly fileStats?: never;
+}
+
+export type StaticFileResolution = ResolvedStaticFile | StaticFileError;
+
+type SendText = (
+  response: ServerResponse,
+  status: number,
+  message: string,
+  method?: string
+) => void;
+
 const MIME_TYPES = new Map([
   [".css", "text/css; charset=utf-8"],
   [".gif", "image/gif"],
@@ -19,19 +45,23 @@ const MIME_TYPES = new Map([
   [".webp", "image/webp"],
 ]);
 
-function isInsideRoot(root, candidate) {
+function isInsideRoot(root: string, candidate: string): boolean {
   const pathFromRoot = relative(root, candidate);
   return pathFromRoot === "" || (!pathFromRoot.startsWith(`..${sep}`) && pathFromRoot !== "..");
 }
 
-function isPublicPath(pathname) {
+function isPublicPath(pathname: string): boolean {
   if (pathname === "/") return true;
   const segments = pathname.split("/").filter(Boolean);
   return !segments.some((segment) => segment.startsWith("."));
 }
 
-export async function resolveRequestedFile(publicRoot, realPublicRoot, requestUrl) {
-  let pathname;
+export async function resolveRequestedFile(
+  publicRoot: string,
+  realPublicRoot: string,
+  requestUrl: string
+): Promise<StaticFileResolution> {
+  let pathname: string;
   try {
     pathname = decodeURIComponent(new URL(requestUrl, "http://localhost").pathname);
   } catch {
@@ -56,14 +86,20 @@ export async function resolveRequestedFile(publicRoot, realPublicRoot, requestUr
     }
     return { filePath: realFilePath, fileStats };
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+    const errorCode = (error as NodeJS.ErrnoException)?.code;
+    if (errorCode === "ENOENT" || errorCode === "ENOTDIR") {
       return { error: 404, message: "Not found." };
     }
     throw error;
   }
 }
 
-export function streamStaticFile(request, response, result, sendText) {
+export function streamStaticFile(
+  request: IncomingMessage,
+  response: ServerResponse,
+  result: ResolvedStaticFile,
+  sendText: SendText
+): void {
   const contentType = MIME_TYPES.get(extname(result.filePath).toLowerCase()) || "application/octet-stream";
   response.writeHead(200, {
     "Content-Type": contentType,

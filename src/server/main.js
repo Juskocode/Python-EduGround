@@ -23,7 +23,7 @@ import {
 const REAL_PUBLIC_ROOT = await realpath(PUBLIC_ROOT);
 
 function usage() {
-  return `Usage: node src/server/main.js [options]
+  return `Usage: npm run serve -- [options]
 
 Options:
   -p, --port <number>  Listening port (default: PORT or 8000)
@@ -31,9 +31,9 @@ Options:
   -h, --help           Show this help
 
 Examples:
-  node src/server/main.js
-  node src/server/main.js --port 4173
-  PORT=4173 node src/server/main.js`;
+  npm run serve
+  npm run serve -- --port 4173
+  PORT=4173 npm run serve`;
 }
 
 function readOptionValue(argumentsList, index, optionName) {

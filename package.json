@@ -11,33 +11,39 @@
   },
   "scripts": {
     "test": "npm run validate",
+    "build": "npm run build:server",
+    "build:server": "tsc -p tsconfig.server.json",
     "clean": "node scripts/maintenance/clean-workspace.js",
-    "start": "node src/server/main.js",
-    "serve": "node src/server/main.js",
+    "start": "node dist/server/main.js",
+    "serve": "npm run build:server && node dist/server/main.js",
     "migrate": "node scripts/database/migrate.js",
+    "migrate:build": "npm run build:server && npm run migrate",
     "secrets:init": "sh scripts/database/init-secrets.sh",
     "db:backup": "sh scripts/database/backup-postgres.sh",
     "db:restore": "sh scripts/database/restore-postgres.sh",
     "validate:structure": "node scripts/validation/validate-structure.js",
-    "validate:syntax": "node scripts/validation/validate-syntax.js",
+    "validate:types": "tsc -p tsconfig.server.json --noEmit",
+    "validate:syntax": "npm run build:server && node scripts/validation/validate-syntax.js",
     "validate:content": "node scripts/validation/validate-test-data.js && node scripts/validation/validate-starter-data.js && node scripts/validation/validate-learning-content.js && node scripts/validation/validate-assessment-data.js",
-    "validate:unit": "node --test tests/unit/client/*.test.js tests/unit/server/*.test.js",
+    "validate:unit": "npm run build:server && node --test tests/unit/client/*.test.js tests/unit/server/*.test.js",
     "validate:backend": "npm run validate:unit",
-    "validate:integration": "node scripts/validation/validate-database-integration.js",
+    "validate:integration": "npm run build:server && node scripts/validation/validate-database-integration.js",
     "validate:compose": "bash scripts/validation/validate-compose-integration.sh",
-    "validate:browser": "playwright test",
+    "validate:browser": "npm run build:server && playwright test",
     "validate:security": "node scripts/validation/validate-security.js",
     "validate:release": "npm run validate && npm run validate:integration && npm audit --audit-level=high --ignore-scripts",
     "vendor:ace": "node scripts/build/vendor-ace.js",
     "build:solutions": "node scripts/build/build-solution-bundle.js",
     "build:starters": "node scripts/build/build-starter-bundle.js",
     "validate:links": "node scripts/validation/check-learning-links.js",
-    "validate": "npm run validate:structure && npm run validate:syntax && npm run validate:content && npm run validate:unit && npm run validate:security"
+    "validate": "npm run validate:structure && npm run validate:types && npm run validate:syntax && npm run validate:content && npm run validate:unit && npm run validate:security"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
     "@playwright/test": "1.61.1",
-    "ace-builds": "1.44.0"
+    "@types/node": "22.20.1",
+    "ace-builds": "1.44.0",
+    "typescript": "7.0.2"
   },
   "dependencies": {
     "pg": "^8.22.0"
