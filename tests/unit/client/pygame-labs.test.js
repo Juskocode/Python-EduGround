@@ -29,8 +29,14 @@ test("the Pygame lab API exposes frozen deterministic models", () => {
   assert.equal(typeof labs.stepSnake, "function");
   assert.equal(typeof labs.stepPlatformer, "function");
   assert.equal(typeof labs.stepSystems, "function");
+  assert.equal(typeof labs.createProgressTracker, "function");
+  assert.equal(typeof labs.deriveFrameTrace, "function");
   assert.equal(Object.isFrozen(labs), true);
-  assert.equal(typeof labs.create().renderFrameTracer, "function");
+  const controller = labs.create();
+  assert.equal(typeof controller.renderFrameTracer, "function");
+  assert.equal(typeof controller.activate, "function");
+  assert.equal(typeof controller.deactivate, "function");
+  assert.equal(typeof controller.destroy, "function");
 
   const snake = labs.createSnakeState();
   const platformer = labs.createPlatformerState();
@@ -40,6 +46,47 @@ test("the Pygame lab API exposes frozen deterministic models", () => {
   assert.equal(Object.isFrozen(platformer), true);
   assert.equal(snake.snake.length, 3);
   assert.equal(platformer.grounded, true);
+});
+
+test("frame trace controls derive scenario-specific snapshots", () => {
+  const snakeRight = labs.deriveFrameTrace(
+    { id: "snake-food" },
+    { direction: "right", elapsedMs: 50, jump: "off", wrap: "on" },
+  );
+  const snakeUp = labs.deriveFrameTrace(
+    { id: "snake-food" },
+    { direction: "up", elapsedMs: 50, jump: "off", wrap: "on" },
+  );
+
+  assert.equal(Object.isFrozen(snakeRight), true);
+  assert.match(snakeRight.candidate, /food contact=True/u);
+  assert.match(snakeRight.committed, /length=4/u);
+  assert.match(snakeUp.candidate, /food contact=False/u);
+  assert.match(snakeUp.committed, /length=3/u);
+  assert.notEqual(snakeRight.candidate, snakeUp.candidate);
+
+  const shortFall = labs.deriveFrameTrace(
+    { id: "platform-land" },
+    { direction: "right", elapsedMs: 10, jump: "off" },
+  );
+  const longFall = labs.deriveFrameTrace(
+    { id: "platform-land" },
+    { direction: "left", elapsedMs: 250, jump: "on" },
+  );
+  assert.match(shortFall.committed, /grounded=False/u);
+  assert.match(longFall.committed, /grounded=True/u);
+  assert.notEqual(shortFall.intent, longFall.intent);
+
+  const activePower = labs.deriveFrameTrace(
+    { id: "power-expiry" },
+    { elapsedMs: 100 },
+  );
+  const expiredPower = labs.deriveFrameTrace(
+    { id: "power-expiry" },
+    { elapsedMs: 250 },
+  );
+  assert.match(activePower.committed, /effect remains active/u);
+  assert.match(expiredPower.committed, /effect-expired event emitted once/u);
 });
 
 test("Snake keeps input in the event queue until the next frame", () => {
@@ -60,6 +107,54 @@ test("Snake keeps input in the event queue until the next frame", () => {
   assert.match(next.lastUpdate, /removed the tail/u);
 });
 
+test("Snake commits at most one queued direction per frame", () => {
+  const initial = labs.createSnakeState();
+  const queued = labs.queueSnakeDirection(initial, "up");
+  const ignored = labs.queueSnakeDirection(queued, "left");
+
+  assert.equal(ignored.queuedDirection, "up");
+  assert.match(ignored.lastEvent, /one direction is already queued/u);
+
+  const next = labs.stepSnake(ignored);
+  const nextQueued = labs.queueSnakeDirection(next, "left");
+  assert.equal(nextQueued.queuedDirection, "left");
+});
+
+test("studio progress callbacks persist discoveries and whole-lab completion", () => {
+  const savedDiscoveries = new Set(["snake-event"]);
+  const savedLabs = new Set();
+  const discoveryWrites = [];
+  const labWrites = [];
+  const activeWrites = [];
+  const tracker = labs.createProgressTracker({
+    activeLab: "snake",
+    isDiscoveryComplete: (id) => savedDiscoveries.has(id),
+    isLabComplete: (id) => savedLabs.has(id),
+    onDiscoveryComplete: (id) => {
+      discoveryWrites.push(id);
+      savedDiscoveries.add(id);
+    },
+    onLabComplete: (id) => {
+      labWrites.push(id);
+      savedLabs.add(id);
+    },
+    onActiveLabChange: (id) => activeWrites.push(id),
+  });
+
+  assert.equal(tracker.getActiveLab(), "snake");
+  assert.equal(tracker.isDiscoveryComplete("snake-event"), true);
+  assert.equal(tracker.complete("snake-event"), false);
+  assert.equal(tracker.complete("snake-update"), true);
+  assert.equal(tracker.complete("snake-food"), true);
+  assert.deepEqual(discoveryWrites, ["snake-update", "snake-food"]);
+  assert.deepEqual(labWrites, ["snake"]);
+  assert.equal(tracker.isLabComplete("snake"), true);
+
+  assert.equal(tracker.select("systems"), true);
+  assert.equal(tracker.select("systems"), false);
+  assert.deepEqual(activeWrites, ["systems"]);
+});
+
 test("Snake rejects reversal, grows at food, and can disable edge wrapping", () => {
   const initial = labs.createSnakeState({ food: { x: 7, y: 4 } });
   const reversed = labs.queueSnakeDirection(initial, "left");
@@ -78,6 +173,27 @@ test("Snake rejects reversal, grows at food, and can disable edge wrapping", () 
   }
   assert.equal(bounded.status, "collision");
   assert.match(bounded.lastUpdate, /Boundary collision/u);
+});
+
+test("Snake normalizes initial food off its body and safely steps without food", () => {
+  const baseline = labs.createSnakeState();
+  const normalized = labs.createSnakeState({ food: baseline.snake[0] });
+
+  assert.equal(
+    normalized.snake.some(
+      (segment) => segment.x === normalized.food.x && segment.y === normalized.food.y,
+    ),
+    false,
+  );
+
+  const withoutFood = Object.freeze({
+    ...baseline,
+    food: null,
+  });
+  const stepped = labs.stepSnake(withoutFood);
+  assert.equal(stepped.food, null);
+  assert.equal(stepped.score, baseline.score);
+  assert.equal(stepped.snake.length, baseline.snake.length);
 });
 
 test("Snake completes a full grid without respawning food inside its body", () => {
@@ -203,6 +319,8 @@ test("systems lab keeps scene transitions, deterministic spawns, and boost time 
   state = labs.stepSystems(state, "collect");
   assert.equal(state.score, 50);
   assert.equal(state.boostRemainingMs, 1500);
+  assert.equal(state.baseSpawnSeed, 4);
+  assert.equal(state.spawnSeed, 5);
   assert.notEqual(state.spawnCell, initialSpawn);
 
   state = labs.stepSystems(state, "toggle-pause");
@@ -224,4 +342,25 @@ test("systems lab keeps scene transitions, deterministic spawns, and boost time 
   assert.equal(state.mode, "running");
   assert.equal(state.tick, 0);
   assert.equal(state.score, 0);
+  assert.equal(state.baseSpawnSeed, 4);
+  assert.equal(state.spawnSeed, 4);
+  assert.equal(state.spawnCell, initialSpawn);
+});
+
+test("systems lab rejects collection when no deterministic spawn is available", () => {
+  let state = labs.createSystemsState({
+    cellCount: 8,
+    occupiedCells: [0, 1, 2, 3, 4, 5, 6, 7],
+    spawnSeed: 12,
+  });
+
+  assert.equal(state.spawnCell, null);
+  state = labs.stepSystems(state, "start");
+  const rejected = labs.stepSystems(state, "collect");
+
+  assert.equal(rejected.score, 0);
+  assert.equal(rejected.boostRemainingMs, 0);
+  assert.equal(rejected.spawnSeed, 12);
+  assert.equal(rejected.baseSpawnSeed, 12);
+  assert.match(rejected.lastTransition, /no free power-up cell/u);
 });

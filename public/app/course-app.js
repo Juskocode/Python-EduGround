@@ -26,6 +26,12 @@
   var CLASS_LAB_CODE_LIMIT = 12000;
   var CLASS_LAB_INPUT_LIMIT = 2000;
   var CLASS_LAB_DRAFT_BUDGET = 64000;
+  var PYGAME_STUDIO_LABS = Object.freeze([
+    "tracer",
+    "snake",
+    "platformer",
+    "systems"
+  ]);
 
   var elements = {
     main: document.getElementById("app-main"),
@@ -52,7 +58,11 @@
   var classMaterials = window.CLASS_MATERIALS || {};
   var classPageView = window.CLASS_PAGE || null;
   var pygameLabsController = window.PYGAME_LABS
-    ? window.PYGAME_LABS.create({ announce: announce })
+    ? window.PYGAME_LABS.create({
+        announce: announce,
+        isLabComplete: isPygameStudioLabComplete,
+        onLabComplete: completePygameStudioLab
+      })
     : null;
   var roundingModel = window.ROUNDING_MODEL || null;
   var roundingLabController = window.ROUNDING_LAB && roundingModel
@@ -189,6 +199,7 @@
     flushDrafts();
     flushClassLabDrafts();
     if (assessmentRooms) assessmentRooms.flush();
+    if (pygameLabsController) pygameLabsController.destroy();
     disposeLandingSnake(false);
   });
   elements.themeToggle.addEventListener("click", toggleTheme);
@@ -218,6 +229,7 @@
     }
 
     if (assessmentRooms) assessmentRooms.dispose();
+    if (pygameLabsController) pygameLabsController.destroy();
     disposeLandingSnake(false);
     disposeActiveEditor();
     currentRoute = parsed;
@@ -823,7 +835,10 @@
       pygameLabsController &&
       typeof pygameLabsController.render === "function"
     )
-      ? pygameLabsController.render(chapter)
+      ? pygameLabsController.render(
+          chapter,
+          deepDive && deepDive.interactiveLab
+        )
       : null;
     var chapterIndex = chapters.findIndex(function (candidate) {
       return String(candidate.id) === chapterId;
@@ -1226,13 +1241,10 @@
     if (lab.kind === "rounding-boundaries" && roundingLabController) {
       return roundingLabController.render(chapter, lab);
     }
-    if (
-      lab.kind === "pygame-frame-tracer" &&
-      pygameLabsController &&
-      typeof pygameLabsController.renderFrameTracer === "function"
-    ) {
-      return pygameLabsController.renderFrameTracer(chapter, lab);
-    }
+    // Chapter 13 places the frame tracer inside its unified mission studio.
+    // Returning null here prevents duplicate controls and duplicate DOM IDs in
+    // the later deep-dive section.
+    if (lab.kind === "pygame-frame-tracer") return null;
     return null;
   }
 
@@ -6104,6 +6116,44 @@
   function isLearningUnderstood(chapter, itemId) {
     var items = learningProgress && learningProgress.get(String(chapter.id));
     return Boolean(items && items.has(itemId));
+  }
+
+  function getPygameStudioProgressId(labId) {
+    return "pygame-studio-" + String(labId || "");
+  }
+
+  function isPygameStudioLabComplete(labId) {
+    if (PYGAME_STUDIO_LABS.indexOf(String(labId)) < 0) {
+      return false;
+    }
+    var items = learningProgress && learningProgress.get("py13");
+    return Boolean(items && items.has(getPygameStudioProgressId(labId)));
+  }
+
+  function completePygameStudioLab(labId) {
+    var normalizedLabId = String(labId || "");
+    if (
+      PYGAME_STUDIO_LABS.indexOf(normalizedLabId) < 0 ||
+      isPygameStudioLabComplete(normalizedLabId)
+    ) {
+      return false;
+    }
+    var items = learningProgress.get("py13") || new Set();
+    items.add(getPygameStudioProgressId(normalizedLabId));
+    learningProgress.set("py13", items);
+    persistLearningProgress();
+
+    var studioComplete = PYGAME_STUDIO_LABS.every(
+      isPygameStudioLabComplete
+    );
+    window.setTimeout(function () {
+      if (studioComplete) {
+        audio.playAchievement();
+      } else {
+        audio.playSuccess();
+      }
+    }, 180);
+    return true;
   }
 
   function readLearningProgress() {

@@ -68,6 +68,236 @@
   line-height: 1.4;
 }
 
+.pygame-studio {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 20px 54px color-mix(in srgb, #020b18 14%, transparent);
+  container-name: game-studio;
+  container-type: inline-size;
+}
+
+.pygame-studio__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 250px);
+  gap: 24px;
+  align-items: end;
+  padding: clamp(20px, 4vw, 30px);
+  border-bottom: 1px solid var(--border);
+  background:
+    radial-gradient(
+      circle at 90% 20%,
+      color-mix(in srgb, var(--primary) 14%, transparent),
+      transparent 42%
+    ),
+    var(--surface-2);
+}
+
+.pygame-studio__title h3 {
+  margin: 5px 0 7px;
+  color: var(--text-strong);
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+}
+
+.pygame-studio__title p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.pygame-studio__progress-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.pygame-studio__progress-output {
+  color: var(--primary-strong);
+  font: 850 0.75rem var(--font-mono);
+  text-align: right;
+}
+
+.pygame-studio__progress-meter {
+  width: 100%;
+  height: 8px;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--primary);
+  appearance: none;
+}
+
+.pygame-studio__progress-meter::-webkit-progress-bar {
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.pygame-studio__progress-meter::-webkit-progress-value {
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), #f2cf59);
+}
+
+.pygame-studio__progress-meter::-moz-progress-bar {
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), #f2cf59);
+}
+
+.pygame-studio__tabs {
+  display: grid;
+  grid-template-columns: repeat(var(--pygame-tab-count, 4), minmax(0, 1fr));
+  gap: 1px;
+  padding: 1px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--border);
+  scrollbar-width: thin;
+}
+
+.pygame-studio__tab {
+  display: grid;
+  min-width: 165px;
+  min-height: 70px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 0;
+  background: var(--surface);
+  color: var(--muted-strong);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.pygame-studio__tab:hover,
+.pygame-studio__tab:focus-visible {
+  background: color-mix(in srgb, var(--primary-softer) 52%, var(--surface));
+  color: var(--text-strong);
+}
+
+.pygame-studio__tab:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--primary);
+  outline-offset: -3px;
+}
+
+.pygame-studio__tab.is-active {
+  background: var(--primary-softer);
+  color: var(--text-strong);
+  box-shadow: inset 0 -3px var(--primary);
+}
+
+.pygame-studio__tab.is-complete {
+  box-shadow: inset 0 -3px #58dba3;
+}
+
+.pygame-studio__tab.is-active.is-complete {
+  box-shadow:
+    inset 0 -3px #58dba3,
+    inset 0 0 0 1px color-mix(in srgb, #58dba3 28%, transparent);
+}
+
+.pygame-studio__tab-number {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--primary-strong);
+  font: 850 0.62rem var(--font-mono);
+}
+
+.pygame-studio__tab-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.pygame-studio__tab-copy strong {
+  color: inherit;
+  font-size: 0.78rem;
+}
+
+.pygame-studio__tab-copy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.67rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pygame-studio__tab-count {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted-strong);
+  font: 800 0.64rem var(--font-mono);
+}
+
+.pygame-studio__tab.is-complete .pygame-studio__tab-count {
+  border-color: color-mix(in srgb, #58dba3 44%, var(--border));
+  background: color-mix(in srgb, #58dba3 12%, transparent);
+  color: #45c590;
+}
+
+.pygame-studio__tab.is-complete .pygame-studio__tab-number {
+  background: color-mix(in srgb, #58dba3 16%, var(--surface-2));
+  color: #45c590;
+}
+
+.pygame-studio__panels {
+  min-width: 0;
+  padding: clamp(12px, 2vw, 18px);
+  background: color-mix(in srgb, var(--surface-2) 55%, var(--surface));
+}
+
+.pygame-studio .pygame-studio__panel {
+  border: 0;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.pygame-studio__panel[hidden] {
+  display: none;
+}
+
+.pygame-studio__status {
+  min-height: 44px;
+  padding: 12px clamp(18px, 3vw, 28px);
+  margin: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted-strong);
+  font: 0.74rem/1.5 var(--font-sans);
+}
+
+.pygame-studio.is-complete .pygame-studio__header {
+  background:
+    radial-gradient(
+      circle at 90% 20%,
+      color-mix(in srgb, #58dba3 20%, transparent),
+      transparent 42%
+    ),
+    var(--surface-2);
+}
+
 .pygame-lab {
   padding: clamp(18px, 3vw, 26px);
   border: 1px solid var(--border);
@@ -103,7 +333,7 @@
   max-width: 460px;
   gap: 6px;
   color: var(--muted-strong);
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   font-weight: 800;
 }
 
@@ -165,7 +395,7 @@
 .pygame-tracer__parameters legend {
   padding: 0 6px;
   color: var(--text-strong);
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   font-weight: 800;
 }
 
@@ -174,7 +404,7 @@
   min-width: 0;
   gap: 6px;
   color: var(--muted-strong);
-  font-size: 0.65rem;
+  font-size: 0.71rem;
   font-weight: 750;
 }
 
@@ -200,7 +430,7 @@
   padding-top: 10px;
   border-top: 1px solid var(--border);
   color: var(--muted);
-  font: 0.62rem/1.45 var(--font-mono);
+  font: 0.68rem/1.5 var(--font-mono);
 }
 
 .pygame-tracer__snapshots {
@@ -221,12 +451,12 @@
 
 .pygame-tracer__snapshot strong {
   color: var(--primary-strong);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
 }
 
 .pygame-tracer__snapshot output {
   color: var(--text-strong);
-  font: 0.68rem/1.5 var(--font-mono);
+  font: 0.72rem/1.5 var(--font-mono);
   overflow-wrap: anywhere;
 }
 
@@ -464,7 +694,7 @@
 .pygame-lab__parameters legend {
   padding: 0 6px;
   color: var(--text-strong);
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   font-weight: 800;
 }
 
@@ -472,7 +702,7 @@
   display: grid;
   gap: 5px;
   color: var(--muted-strong);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 750;
 }
 
@@ -487,7 +717,7 @@
 
 .pygame-lab__parameters label > small {
   color: var(--muted);
-  font-size: 0.59rem;
+  font-size: 0.66rem;
 }
 
 .pygame-lab__parameters .pygame-lab__toggle {
@@ -529,7 +759,7 @@
   margin: auto 0 0;
   border-top: 1px solid var(--border);
   color: var(--muted-strong);
-  font: 0.68rem/1.5 var(--font-mono);
+  font: 0.74rem/1.5 var(--font-mono);
 }
 
 .pygame-lab__inspector {
@@ -549,12 +779,12 @@
 .pygame-lab__inspector > strong {
   margin-top: 5px;
   color: var(--primary-strong);
-  font: 800 0.64rem var(--font-mono);
+  font: 800 0.7rem var(--font-mono);
 }
 
 .pygame-lab__inspector > output {
   color: var(--muted-strong);
-  font-size: 0.68rem;
+  font-size: 0.73rem;
   line-height: 1.45;
 }
 
@@ -570,12 +800,12 @@
 
 .pygame-lab__state-row > span {
   color: var(--muted);
-  font-size: 0.64rem;
+  font-size: 0.7rem;
 }
 
 .pygame-lab__state-row > output {
   color: var(--text-strong);
-  font: 750 0.64rem/1.4 var(--font-mono);
+  font: 750 0.7rem/1.4 var(--font-mono);
   text-align: right;
   overflow-wrap: anywhere;
 }
@@ -602,7 +832,7 @@
   grid-template-columns: 20px minmax(0, 1fr);
   gap: 7px;
   color: var(--muted);
-  font-size: 0.65rem;
+  font-size: 0.71rem;
   line-height: 1.4;
 }
 
@@ -676,13 +906,20 @@
   content: "";
 }
 
-@media (max-width: 760px) {
+@container game-studio (max-width: 760px) {
+  .pygame-studio__header {
+    grid-template-columns: 1fr;
+  }
+
+  .pygame-studio__tabs {
+    grid-template-columns: repeat(var(--pygame-tab-count, 4), minmax(168px, 1fr));
+  }
+
   .pygame-tracer__phases,
   .pygame-tracer__parameters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .pygame-labs__loop,
   .pygame-lab__workspace {
     grid-template-columns: 1fr;
   }
@@ -693,6 +930,17 @@
 
   .pygame-lab__parameters--grid legend {
     grid-column: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .pygame-studio__header {
+    grid-template-columns: 1fr;
+  }
+
+  .pygame-labs__loop,
+  .pygame-lab__workspace {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -730,11 +978,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pygame-studio__tab,
   .pygame-platformer__scene,
   .pygame-platformer__player,
   .pygame-snake__cell--food,
   .pygame-systems__cell--power {
+    animation: none;
     transition: none;
-    transform-duration: 0s;
   }
 }
