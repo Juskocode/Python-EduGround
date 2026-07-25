@@ -858,7 +858,7 @@
     py13: {
       id: "py13-frame-state-clinic",
       title: "Trace one frame without mixing yesterday, now, and next",
-      description: "A game frame is a state transition with an effectful boundary. Events and current controls describe intent, pure rules calculate candidate state, collisions repair invalid motion, and rendering presents the finished snapshot. Trace one platformer jump frame carefully so every read comes from the intended side of the transition.",
+      description: "A game frame is a timed state transition with an effectful boundary. Events and held controls describe intent, pure rules calculate candidate state, collisions repair invalid motion, and rendering presents the committed snapshot. Trace one platformer jump frame carefully, then transfer the same evidence model to pause modes, deterministic spawns, and temporary power-ups.",
       exampleCode: [
         "player_y = 72",
         "vertical_speed = -4",
@@ -927,11 +927,23 @@
           correction: "Resolution depends on movement direction and crossed boundary. Side or underside contact must not be repaired as a landing.",
           probe: "Which previous and candidate edges distinguish falling onto a top surface from rising into a platform underside?",
         },
+        {
+          belief: "Pause can stop the whole loop until the player presses a key.",
+          correction: "A paused scene still consumes window events and presents feedback. It skips only gameplay updates such as physics, score, spawn clocks, and power-up timers.",
+          probe: "How could a completely stopped event loop receive either a quit request or the key intended to resume it?",
+        },
+        {
+          belief: "Random spawn bugs cannot be reproduced because randomness is different every run.",
+          correction: "A dedicated seeded generator or stable candidate list makes spawn decisions replayable when the initial state, seed, input order, and update timing are recorded.",
+          probe: "Which extra evidence must a bug report preserve besides the final occupied cells?",
+        },
       ],
       transferPrompts: [
         "Trace one Snake frame from held direction through new head, food decision, tail decision, self-collision, score update, and drawing order.",
         "Design a fixed-step accumulator and explain what state advances when one rendered frame takes longer than the simulation step.",
         "Specify a pause-state transition that consumes quit events while preventing physics, timers, and score from advancing.",
+        "Describe a boost-collected event whose rule state remains independent from the sound, glow, and particle feedback it triggers.",
+        "Record the smallest replay packet needed to reproduce one invalid power-up spawn without sharing a screenshot.",
       ],
     },
   };

@@ -1622,14 +1622,15 @@
         number: "13",
         title: "Pygame Game Lab",
         folder: "Py13 Pygame Game Lab",
-        summary: "Turn the course’s Snake ideas into a real-time game loop, then reuse movement, collision, timing, and state rules to design a small 2D platformer.",
-        topics: ["Pygame", "game loops", "rectangles", "collision detection", "animation", "platformer physics"],
+        summary: "Turn the landing Snake into replayable game rules, then reuse the same timed loop, collision evidence, state machines, and debugging workflow for a small 2D platformer.",
+        topics: ["Pygame", "event-update-draw loops", "delta time", "Rect collisions", "deterministic state", "power-ups", "platformer physics"],
         runbook: [
-          step("Separate rules from rendering", "Write movement, collision, and scoring as small functions that transform plain Python data before drawing pixels."),
-          step("Trace one frame", "Record events, input intent, state updates, collision decisions, drawing, and clock timing in the exact order they occur."),
-          step("Use a fixed coordinate model", "Choose one origin, axis direction, rectangle convention, grid size, and unit for velocity before implementing movement."),
-          step("Test awkward contact", "Check opposite keys, edge-touching rectangles, corner landings, empty Snake bodies, fast falls, and leaving the level."),
-          step("Tune only after correctness", "Keep constants for speed, gravity, jump strength, and frame duration, then adjust one value while observing one outcome."),
+          step("Prove the local adapter", "Confirm the active interpreter, Pygame version, minimal display, event handling, and clean shutdown before debugging game rules."),
+          step("Separate rules from effects", "Write movement, collision, spawning, scoring, modes, and timers as plain state transformations before drawing pixels or playing sounds."),
+          step("Trace one timed frame", "Record events, held controls, intent, elapsed-time conversion, candidate state, collision resolution, commit, draw, present, and clock timing in order."),
+          step("Use one coordinate contract", "Choose an origin, axis direction, float world position, Rect synchronization point, grid size, and velocity unit before implementing movement."),
+          step("Replay awkward state", "Check opposite keys, edge-only contact, corner landings, fast falls, occupied spawn cells, effect expiry, pause, restart, and leaving the level with a recorded seed."),
+          step("Tune only after correctness", "Keep constants for speed, gravity, jump strength, frame duration, and power-up lifetime, then change one value while observing one measured outcome."),
         ],
         exercises: [
           exercise(

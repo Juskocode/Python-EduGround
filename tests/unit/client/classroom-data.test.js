@@ -30,7 +30,7 @@ vm.runInContext(classMaterialsSource, context, { filename: "class-materials.js" 
 
 const materials = context.window.CLASS_MATERIALS;
 const solutionShape = context.SOLUTION_SHAPE;
-const roomChapterIds = ["py01", "py02", "py03"];
+const roomChapterIds = ["py01", "py02", "py03", "py13"];
 const requiredPy01Concepts = [
   "computer-basics",
   "input-returns-str",
@@ -74,6 +74,32 @@ const passingCodeByTaskId = {
     "    print(\"practice\", practice_step)",
     "    practice_step += 1",
     "print(\"done\")",
+  ].join("\n"),
+  "py13-delta-time-distance": [
+    "speed_px_per_second = 120",
+    "elapsed_ms = 50",
+    "elapsed_seconds = elapsed_ms / 1000",
+    "distance = speed_px_per_second * elapsed_seconds",
+    "print(f\"{distance:.1f}\")",
+  ].join("\n"),
+  "py13-deterministic-spawn": [
+    "occupied = {0, 1, 4}",
+    "candidates = [1, 4, 7, 2]",
+    "spawn_cell = None",
+    "for candidate in candidates:",
+    "    if candidate not in occupied:",
+    "        spawn_cell = candidate",
+    "        break",
+    "print(spawn_cell)",
+  ].join("\n"),
+  "py13-power-up-timer": [
+    "mode = \"boosted\"",
+    "remaining_ms = 900",
+    "elapsed_ms = 1200",
+    "remaining_ms = max(0, remaining_ms - elapsed_ms)",
+    "if remaining_ms == 0:",
+    "    mode = \"running\"",
+    "print(mode, remaining_ms)",
   ].join("\n"),
 };
 
@@ -129,7 +155,7 @@ function runPython(source, stdin) {
   );
 }
 
-test("chapters one to three expose substantive, stable room-task contracts", () => {
+test("interactive classroom chapters expose substantive, stable room-task contracts", () => {
   const allTaskIds = new Set();
 
   for (const chapterId of roomChapterIds) {
