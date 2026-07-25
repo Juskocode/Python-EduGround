@@ -3,14 +3,15 @@
 
 # Security, persistence, delivery, and learner-answer boundaries need explicit review.
 /.github/ @Juskocode
-/db/migrations/ @Juskocode
-/server/api.mjs @Juskocode
-/server/database.mjs @Juskocode
-/server/security.mjs @Juskocode
-/server/submission-files.mjs @Juskocode
+/database/migrations/ @Juskocode
+/src/server/api/ @Juskocode
+/src/server/persistence/ @Juskocode
+/src/server/security/ @Juskocode
+/src/server/curriculum/submission-files.js @Juskocode
 /Dockerfile @Juskocode
 /docker-compose.yml @Juskocode
 /package.json @Juskocode
 /package-lock.json @Juskocode
-/solution-code.js @Juskocode
-/test-data/ @Juskocode
+/curriculum/generated/ @Juskocode
+/curriculum/solutions/ @Juskocode
+/public/content/exercise-tests/ @Juskocode

@@ -26,7 +26,7 @@ Every chapter uses the same predictable sequence:
 8. **Deep dive** — mental model, execution trace, misconception clinic, guided practice, glossary, debugging reference, and checkpoint.
 9. **Problem-solving runbook** — toolbox, coaching conversation, and evidence-driven five-phase workflow.
 10. **Class recap and homework** — retrieval questions, deliverables, and a self-review checklist.
-11. **Official reading and exercises** — authoritative Python references followed by the chapter exercise handoff.
+11. **Official reading and exercises** — authoritative Python or Pygame references followed by the chapter exercise handoff.
 
 The desktop presentation uses a course rail, a focused reading column, and an
 on-page contents rail. The navigation rails become native `<details>` disclosures
@@ -121,10 +121,32 @@ the ordinary graded exercise runner keeps its existing exact-output contract.
 Lecture demonstrations can also declare an expected output for authoring tests;
 lesson-note experiments are ungraded and do not show a **Check task** control.
 
+## Chapter 13 Pygame project studio
+
+Chapter 13 keeps the class usable in the same browser while making the boundary to
+a graphical Pygame program explicit. The browser Python worker does not open an SDL
+window. Instead, the class teaches the portable rules first and then provides two
+interactive state models:
+
+- the **Snake loop lab** queues Arrow-key, WASD, or pointer direction input, steps
+  one frame at a time, optionally plays the loop, toggles edge wrapping, and shows
+  event, update, and draw evidence separately;
+- the **2D platformer lab** accepts keyboard or pointer movement, exposes gravity,
+  jump strength, and movement speed, and reports world position, velocity,
+  grounded state, collision decisions, and camera offset.
+
+Both labs retain explicit **Step frame**, **Reset**, keyboard-focus, live-status,
+and touch-sized controls. Continuous **Play** is disabled when the learner prefers
+reduced motion, while manual stepping remains available. They do not grade
+exercises or render private solutions; they prepare learners to transfer the same
+state transitions into the eight pure-Python chapter exercises and then into a
+locally installed Pygame window.
+
 ## Classroom data contract
 
-`class-materials.js` exports one deeply frozen entry for each course chapter
-through `window.CLASS_MATERIALS`.
+[`public/content/class-materials.js`](../public/content/class-materials.js)
+exports one deeply frozen entry for each course chapter through
+`window.CLASS_MATERIALS`.
 
 ```js
 {
@@ -185,9 +207,10 @@ through `window.CLASS_MATERIALS`.
 }
 ```
 
-`learning-content.js` lesson-note sections can additionally provide
-`exampleCode` and `sampleInput`. The renderer derives stable `lesson-<item id>`
-workspace IDs so code and sample-input drafts return to the correct example.
+[`public/content/learning-content.js`](../public/content/learning-content.js)
+lesson-note sections can additionally provide `exampleCode` and `sampleInput`.
+The renderer derives stable `lesson-<item id>` workspace IDs so code and
+sample-input drafts return to the correct example.
 
 Authoring requirements:
 
@@ -212,9 +235,11 @@ Authoring requirements:
 
 ## Progress and draft persistence
 
-`class-page.js` owns the documentation shell and embedded workspace markup.
-`course-app.js` supplies the runner, answer checks, draft storage, progress, deep
-dives, runbooks, official references, and navigation.
+[`public/features/classroom/class-page.js`](../public/features/classroom/class-page.js)
+owns the documentation shell and embedded workspace markup.
+[`public/app/course-app.js`](../public/app/course-app.js) supplies the runner,
+answer checks, draft storage, progress, deep dives, runbooks, official references,
+and navigation.
 
 Room completions are stored in the existing per-chapter learning-progress set as
 `room:<task id>`. They are idempotent and separate from passed exercise IDs, stars,
@@ -258,7 +283,7 @@ git diff --check
 
 The classroom checks cover:
 
-- all 12 chapters, 1,080 planned minutes, stable IDs, and deeply frozen content;
+- all 13 chapters, 1,170 planned minutes, stable IDs, and deeply frozen content;
 - complete preparation, schedules, activities, practice, recap, and homework;
 - Python compilation, execution with authored input, and exact output for every
   lecture demonstration;
@@ -270,6 +295,8 @@ The classroom checks cover:
 - editable lecture and lesson-note code/input, Reset, `Shift + Enter`, and
   Run-versus-Check behavior;
 - pending-run input locking and responsive mobile layout;
+- keyboard and pointer operation, reduced-motion behavior, responsive layout, and
+  state-inspector updates for both Chapter 13 game-system labs;
 - no reuse of repository solution lines or exercise prompt text;
 - one class-page `h1`, stable scoped section IDs, router-safe contents controls,
   copy support, exercise handoff, and navigation fallbacks.

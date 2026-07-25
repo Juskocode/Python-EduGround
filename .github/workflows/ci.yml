@@ -50,11 +50,14 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Type-check server TypeScript
+        run: npm run validate:types
+
       - name: Run deterministic validation
         run: npm run validate
 
       - name: Check the browser worker
-        run: node --check python-runner-worker.mjs
+        run: node --check public/workers/python-runner-worker.js
 
       - name: Check patch hygiene
         run: git diff --check
@@ -121,6 +124,15 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Validate the isolated AI Compose overlay
+        env:
+          APP_ORIGIN: http://127.0.0.1:8000
+        run: >-
+          docker compose
+          --file docker-compose.yml
+          --file docker-compose.ai.yml
+          config --quiet
+
       - name: Boot and verify the hardened Compose stack
         run: npm run validate:compose
 
@@ -157,7 +169,7 @@ jobs:
         with:
           name: browser-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            playwright-report/
-            test-results/
+            artifacts/playwright/report/
+            artifacts/playwright/results/
           if-no-files-found: ignore
           retention-days: 7

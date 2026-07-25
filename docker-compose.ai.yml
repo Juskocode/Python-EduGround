@@ -1,0 +1,155 @@
+x-ollama-image: &ollama-image
+  image: ollama/ollama:0.32.3@sha256:ec24bcaa2a810eb74171ce7c517813ef4821ed678988845e8d76cf62467036d4
+
+x-ai-logging: &ai-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  # This one-shot service is the only AI component with outbound access. It
+  # downloads the approved model into the named volume, then exits. Once the
+  # model exists, startup works offline without contacting the registry.
+  ollama-model-bootstrap:
+    <<: *ollama-image
+    restart: "no"
+    init: true
+    entrypoint:
+      - /bin/sh
+      - -ec
+    environment:
+      OLLAMA_HOST: 127.0.0.1:11434
+      OLLAMA_MODELS: /models
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M}"
+      OLLAMA_NOHISTORY: "true"
+    command:
+      - |
+        model="$${OLLAMA_MODEL:?OLLAMA_MODEL is required}"
+        case "$$model" in
+          *[!A-Za-z0-9._:/-]*)
+            echo "OLLAMA_MODEL contains unsupported characters" >&2
+            exit 64
+            ;;
+        esac
+
+        ollama serve &
+        server_pid=$$!
+        trap 'kill "$$server_pid" 2>/dev/null || true; wait "$$server_pid" 2>/dev/null || true' EXIT INT TERM
+
+        attempts=0
+        until ollama list >/dev/null 2>&1; do
+          attempts=$$((attempts + 1))
+          if [ "$$attempts" -ge 30 ]; then
+            echo "temporary Ollama bootstrap server did not become ready" >&2
+            exit 1
+          fi
+          sleep 1
+        done
+
+        if ollama show "$$model" >/dev/null 2>&1; then
+          echo "Approved model $$model is already present; skipping download."
+          exit 0
+        fi
+
+        ollama pull "$$model"
+        ollama show "$$model" >/dev/null
+    volumes:
+      - ollama_models:/models
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    stop_grace_period: 20s
+    logging: *ai-logging
+    networks:
+      - model-download
+
+  # The long-running API has no host port and no route to the internet. Only
+  # the Node app can reach it over the internal `ai` network.
+  ollama:
+    <<: *ollama-image
+    restart: unless-stopped
+    init: true
+    depends_on:
+      ollama-model-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_MODELS: /models
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-10m}"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_QUEUE: "${OLLAMA_MAX_QUEUE:-20}"
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-4096}"
+      OLLAMA_FLASH_ATTENTION: "1"
+      OLLAMA_NOHISTORY: "true"
+    volumes:
+      - ollama_models:/models
+    expose:
+      - "11434"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: "${OLLAMA_MEMORY_LIMIT:-8g}"
+    cpus: "${OLLAMA_CPU_LIMIT:-4.0}"
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - ollama
+        - list
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *ai-logging
+    networks:
+      - ai
+
+  app:
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      RAG_ENABLED: "true"
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_ALLOWED_HOSTS: ollama
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M}"
+      OLLAMA_REQUEST_TIMEOUT_MS: "${OLLAMA_REQUEST_TIMEOUT_MS:-90000}"
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-10m}"
+      RAG_MAX_ANSWER_TOKENS: "${RAG_MAX_ANSWER_TOKENS:-420}"
+      RAG_MODEL_CONTEXT_TOKENS: "${RAG_MODEL_CONTEXT_TOKENS:-4096}"
+      RAG_MAX_MESSAGE_CHARACTERS: "${RAG_MAX_MESSAGE_CHARACTERS:-1200}"
+      RAG_MAX_CONTEXT_CHUNKS: "${RAG_MAX_CONTEXT_CHUNKS:-4}"
+      RAG_MAX_CONTEXT_CHARACTERS: "${RAG_MAX_CONTEXT_CHARACTERS:-8000}"
+      RAG_MAX_CONCURRENT_REQUESTS: "${RAG_MAX_CONCURRENT_REQUESTS:-1}"
+      RAG_MAX_QUEUE_DEPTH: "${RAG_MAX_QUEUE_DEPTH:-20}"
+      RAG_QUEUE_TIMEOUT_MS: "${RAG_QUEUE_TIMEOUT_MS:-15000}"
+      RAG_RESPONSE_CACHE_TTL_MS: "${RAG_RESPONSE_CACHE_TTL_MS:-300000}"
+      RAG_MAX_CACHED_RESPONSES: "${RAG_MAX_CACHED_RESPONSES:-100}"
+      RAG_REQUESTS_PER_MINUTE: "${RAG_REQUESTS_PER_MINUTE:-4}"
+      RAG_IP_REQUESTS_PER_MINUTE: "${RAG_IP_REQUESTS_PER_MINUTE:-80}"
+    networks:
+      - edge
+      - database
+      - ai
+
+volumes:
+  ollama_models:
+
+networks:
+  ai:
+    internal: true
+  model-download:

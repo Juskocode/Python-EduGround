@@ -1,0 +1,483 @@
+.pygame-labs {
+  display: grid;
+  gap: 28px;
+}
+
+.pygame-labs__intro {
+  padding: clamp(20px, 4vw, 30px);
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--primary-softer) 78%, transparent), transparent 60%),
+    var(--surface-2);
+}
+
+.pygame-labs__intro h3 {
+  margin: 5px 0 8px;
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+}
+
+.pygame-labs__intro > p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted-strong);
+  line-height: 1.65;
+}
+
+.pygame-labs__loop {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  padding: 0;
+  margin: 22px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--border);
+  list-style: none;
+}
+
+.pygame-labs__loop li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 3px 9px;
+  padding: 15px;
+  background: var(--surface);
+}
+
+.pygame-labs__loop-number {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  grid-row: 1 / span 2;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary-softer);
+  color: var(--primary-strong);
+  font: 850 0.7rem var(--font-mono);
+}
+
+.pygame-labs__loop strong {
+  color: var(--text-strong);
+  font-size: 0.74rem;
+}
+
+.pygame-labs__loop small {
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.pygame-lab {
+  padding: clamp(18px, 3vw, 26px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 16px 44px color-mix(in srgb, #020b18 10%, transparent);
+}
+
+.pygame-lab__heading {
+  margin-bottom: 18px;
+}
+
+.pygame-lab__heading h3 {
+  margin: 5px 0 7px;
+  font-size: clamp(1.2rem, 2.7vw, 1.55rem);
+}
+
+.pygame-lab__heading p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.pygame-lab__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(210px, 0.75fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.pygame-lab__visual,
+.pygame-lab__inspector {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.pygame-lab__visual {
+  display: flex;
+  flex-direction: column;
+}
+
+.pygame-snake,
+.pygame-platformer {
+  position: relative;
+  min-height: 260px;
+  overflow: hidden;
+  outline: 0;
+  background:
+    linear-gradient(color-mix(in srgb, var(--primary) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--primary) 8%, transparent) 1px, transparent 1px),
+    color-mix(in srgb, #07101e 96%, var(--surface));
+  background-size: 32px 32px;
+}
+
+.pygame-snake:focus-visible,
+.pygame-platformer:focus-visible {
+  box-shadow: inset 0 0 0 3px var(--primary);
+}
+
+.pygame-snake {
+  display: grid;
+  grid-template-columns: repeat(var(--snake-columns), 1fr);
+  gap: 2px;
+  padding: 12px;
+  aspect-ratio: 3 / 2;
+}
+
+.pygame-snake__cell {
+  border-radius: 3px;
+  background: color-mix(in srgb, #17263a 82%, transparent);
+}
+
+.pygame-snake__cell--body {
+  background: color-mix(in srgb, var(--primary) 72%, #1fcda7);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 20%, transparent);
+}
+
+.pygame-snake__cell--head {
+  position: relative;
+  background: #f2cf59;
+  box-shadow: 0 0 15px color-mix(in srgb, #f2cf59 45%, transparent);
+}
+
+.pygame-snake__cell--food {
+  border-radius: 50%;
+  background: #ff6b89;
+  box-shadow: 0 0 14px color-mix(in srgb, #ff6b89 55%, transparent);
+  transform: scale(0.64);
+}
+
+.pygame-lab__controls {
+  display: grid;
+  gap: 13px;
+  padding: 14px;
+}
+
+.pygame-lab__transport,
+.pygame-snake__directions,
+.pygame-platformer__directions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pygame-lab__transport .button {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 0.7rem;
+}
+
+.pygame-snake__direction,
+.pygame-platformer__direction {
+  min-width: 42px;
+  min-height: 40px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-strong);
+  cursor: pointer;
+  font: 800 0.76rem var(--font-sans);
+}
+
+.pygame-snake__direction:hover,
+.pygame-platformer__direction:hover,
+.pygame-snake__direction:focus-visible,
+.pygame-platformer__direction:focus-visible {
+  border-color: var(--primary);
+  background: var(--primary-softer);
+  color: var(--primary-strong);
+}
+
+.pygame-snake__directions {
+  display: grid;
+  width: 142px;
+  grid-template-columns: repeat(3, 42px);
+}
+
+.pygame-snake__direction:nth-child(1) {
+  grid-column: 2;
+}
+
+.pygame-snake__direction:nth-child(2) {
+  grid-column: 1;
+}
+
+.pygame-lab__parameters {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.pygame-lab__parameters legend {
+  padding: 0 6px;
+  color: var(--text-strong);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.pygame-lab__parameters label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted-strong);
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.pygame-lab__parameters label > span:first-child {
+  color: var(--text-strong);
+}
+
+.pygame-lab__parameters input[type="range"] {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.pygame-lab__parameters label > small {
+  color: var(--muted);
+  font-size: 0.59rem;
+}
+
+.pygame-lab__parameters .pygame-lab__toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pygame-lab__toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.pygame-lab__parameters--grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pygame-lab__parameters--grid legend {
+  grid-column: 1 / -1;
+}
+
+.pygame-lab__parameters--grid label {
+  grid-template-columns: 1fr auto;
+}
+
+.pygame-lab__parameters--grid input {
+  grid-column: 1 / -1;
+}
+
+.pygame-lab__parameters output {
+  color: var(--primary-strong);
+  font: 800 0.67rem var(--font-mono);
+}
+
+.pygame-lab__status {
+  min-height: 52px;
+  padding: 11px 14px;
+  margin: auto 0 0;
+  border-top: 1px solid var(--border);
+  color: var(--muted-strong);
+  font: 0.68rem/1.5 var(--font-mono);
+}
+
+.pygame-lab__inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  overflow: auto;
+}
+
+.pygame-lab__inspector h4 {
+  margin: 2px 0 5px;
+  color: var(--text-strong);
+  font-size: 0.77rem;
+}
+
+.pygame-lab__inspector > strong {
+  margin-top: 5px;
+  color: var(--primary-strong);
+  font: 800 0.64rem var(--font-mono);
+}
+
+.pygame-lab__inspector > output {
+  color: var(--muted-strong);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.pygame-lab__state-row {
+  display: grid;
+  grid-template-columns: minmax(74px, 0.85fr) minmax(92px, 1.15fr);
+  flex: 0 0 auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pygame-lab__state-row > span {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.pygame-lab__state-row > output {
+  color: var(--text-strong);
+  font: 750 0.64rem/1.4 var(--font-mono);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.pygame-lab__state-row--wide {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.pygame-lab__state-row--wide > output {
+  text-align: left;
+}
+
+.pygame-lab__discoveries {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.pygame-lab__discoveries li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.pygame-lab__discoveries li.is-complete {
+  color: var(--text-strong);
+}
+
+.pygame-lab__discovery-mark {
+  color: var(--border-strong);
+  font: 800 0.72rem var(--font-mono);
+}
+
+.pygame-lab__discoveries li.is-complete .pygame-lab__discovery-mark {
+  color: var(--primary);
+}
+
+.pygame-platformer {
+  aspect-ratio: 3 / 2;
+}
+
+.pygame-platformer__scene {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 250%;
+  transform: translateX(calc(var(--camera-x, 0) * -2.5%));
+  transition: transform 90ms linear;
+}
+
+.pygame-platformer__surface {
+  position: absolute;
+  bottom: calc(var(--platform-y) * 8%);
+  left: calc(var(--platform-x) * 2.5%);
+  width: calc(var(--platform-width) * 2.5%);
+  height: 9px;
+  border: 1px solid color-mix(in srgb, var(--primary) 58%, #fff);
+  border-radius: 3px 3px 0 0;
+  background: color-mix(in srgb, var(--primary) 58%, #20364d);
+  box-shadow: 0 -5px 18px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.pygame-platformer__surface--ground {
+  height: 18px;
+  border-radius: 0;
+}
+
+.pygame-platformer__player {
+  position: absolute;
+  bottom: calc(var(--player-y, 0) * 8% + 18px);
+  left: calc(var(--player-x, 0) * 2.5%);
+  width: 22px;
+  height: 30px;
+  border: 2px solid #f5fbff;
+  border-radius: 6px 6px 4px 4px;
+  background: #58dba3;
+  box-shadow: 0 0 18px color-mix(in srgb, #58dba3 42%, transparent);
+  transform: translateX(-50%);
+  transition:
+    bottom 90ms linear,
+    left 90ms linear;
+}
+
+.pygame-platformer__player::before {
+  position: absolute;
+  top: 7px;
+  left: 5px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #07101e;
+  box-shadow: 7px 0 #07101e;
+  content: "";
+}
+
+@media (max-width: 760px) {
+  .pygame-labs__loop,
+  .pygame-lab__workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .pygame-lab__parameters--grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pygame-lab__parameters--grid legend {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 470px) {
+  .pygame-lab {
+    padding: 13px;
+    border-radius: 12px;
+  }
+
+  .pygame-snake,
+  .pygame-platformer {
+    min-height: 210px;
+  }
+
+  .pygame-lab__transport .button {
+    flex: 1 1 30%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pygame-platformer__scene,
+  .pygame-platformer__player,
+  .pygame-snake__cell--food {
+    transition: none;
+    transform-duration: 0s;
+  }
+}

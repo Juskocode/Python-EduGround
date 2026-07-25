@@ -15,7 +15,7 @@
 <!-- Include commands, results, screenshots, or API responses. -->
 
 - [ ] `npm run validate`
-- [ ] `node --check python-runner-worker.mjs`
+- [ ] `npm run validate:syntax`
 - [ ] PostgreSQL integration test, when persistence or API behavior changes
 - [ ] `npm run validate:links`, when curated external references change
 - [ ] Responsive light/dark screenshots, when UI behavior changes

@@ -13,6 +13,7 @@ production-ready release branch.
    - `CI / Offline validation (Node 24.18.0)`
    - `CI / PostgreSQL integration`
    - `CI / Compose secure-stack integration`
+   - `CI / Browser journeys and accessibility`
    - `Supply-chain security / Dependency review`
    - `Supply-chain security / npm audit`
    - `CodeQL / Analyze (actions)`

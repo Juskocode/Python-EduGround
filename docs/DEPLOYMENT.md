@@ -24,6 +24,12 @@ PostgreSQL has no host-published port in `docker-compose.yml`. The application p
 binds to `127.0.0.1` by default. Keep that default when a reverse proxy runs on the
 host; do not expose the Node or database port directly to the internet.
 
+The optional chapter tutor is deployed through the separate
+`docker-compose.ai.yml` overlay. Its model bootstrap, network isolation, resource
+budget, and 10–20 learner capacity plan are documented in
+[AI_CLASSROOM_OPERATIONS.md](AI_CLASSROOM_OPERATIONS.md). Never publish Ollama's
+unauthenticated port.
+
 ## First Compose deployment
 
 Requirements:
@@ -121,7 +127,7 @@ below:
 ```bash
 current_owner_file="$(pwd)/secrets/postgres_password"
 rotation_dir="$(mktemp -d "$(pwd)/.credential-rotation.XXXXXX")"
-SECRET_DIR="$rotation_dir" sh scripts/init-secrets.sh
+SECRET_DIR="$rotation_dir" sh scripts/database/init-secrets.sh
 new_owner_file="$rotation_dir/postgres_password"
 new_app_file="$rotation_dir/app_database_password"
 
@@ -172,7 +178,9 @@ export PGPASSWORD_FILE='/run/secrets/eduground-owner-password'
 export DATABASE_SSL='require'
 export DATABASE_SSL_CA_FILE='/run/secrets/provider-root-ca.pem'
 
-npm ci --ignore-scripts --omit=dev --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
+npm run build:server
+npm prune --omit=dev --ignore-scripts --no-audit
 npm run migrate
 ```
 
@@ -187,14 +195,14 @@ export SUBMISSIONS_DIR='/var/lib/python-eduground/submissions'
 export HOST='127.0.0.1'
 export PORT='8000'
 
-npm run serve
+npm start
 ```
 
 Have the database administrator create `eduground_app` as `NOSUPERUSER`,
 `NOCREATEDB`, `NOCREATEROLE`, run migrations first, and then apply only the reviewed
 per-table and sequence operations. Do not grant future tables by default.
-[`docker/bootstrap-app-role.sql`](../docker/bootstrap-app-role.sql) is the executable
-Compose implementation and a reference for managed-database grants.
+[`database/bootstrap/app-role.sql`](../database/bootstrap/app-role.sql) is the
+executable Compose implementation and a reference for managed-database grants.
 
 `DATABASE_SSL=true` and `DATABASE_SSL=require` both enable certificate verification.
 Set `DATABASE_SSL_CA_FILE` when the provider CA is not in the host trust store.
@@ -310,7 +318,7 @@ export TRUST_PROXY_HOPS='0'
 export SECRET_DIR="$(mktemp -d "$(pwd)/.restore-drill-secrets.XXXXXX")"
 export POSTGRES_PASSWORD_FILE="$SECRET_DIR/postgres_password"
 export APP_DATABASE_PASSWORD_FILE="$SECRET_DIR/app_database_password"
-sh scripts/init-secrets.sh
+sh scripts/database/init-secrets.sh
 
 docker compose up -d postgres
 docker compose exec -T postgres sh -ec \

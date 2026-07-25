@@ -1,6 +1,6 @@
 # Python EduGround
 
-Python EduGround turns the 12 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL. The repository also ships a hardened container topology, secure-cookie account boundary, mandatory PostgreSQL and browser/accessibility gates, and a reviewable CI/release pipeline.
+Python EduGround turns the 13 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, build game systems in a final Pygame studio, and optionally sync their own work to PostgreSQL. The repository also ships a hardened container topology, secure-cookie account boundary, mandatory PostgreSQL and browser/accessibility gates, and a reviewable CI/release pipeline.
 
 ## Product tour
 
@@ -34,17 +34,17 @@ Python EduGround turns the 12 exercise chapters in this repository into a local-
 
 | Area | Included |
 | --- | --- |
-| Curriculum | 12 chapters, 102 exercises, 316 exercise tests, and 274 collectible difficulty stars |
-| Classroom material | Twelve distinct 90-minute classes: 1,080 planned minutes, 48 summary outcomes, 60 lesson-plan blocks, 12 editable lecture demonstrations with separate input and terminal output, 24 collaborative activities, 48 independent-practice prompts, 60 recap questions, and 12 transfer-focused homework briefs |
-| Guided learning | Eleven answer-or-code room tasks across Chapters 1–3, editable lesson-note examples, 48 lesson-note sections, 60 runbook phases, 60 mental-model steps, 24 guided practices, 12 concept clinics with 72 worked trace rows, 36 misconception probes, and 36 transfer prompts, plus one interactive number-line lab, 42 coaching exchanges, and 47 toolbox cards |
+| Curriculum | 13 chapters, 110 exercises, 341 exercise tests, and 294 collectible difficulty stars |
+| Classroom material | Thirteen distinct 90-minute classes: 1,170 planned minutes, 52 summary outcomes, 65 lesson-plan blocks, 13 editable lecture demonstrations with separate input and terminal output, 26 collaborative activities, 52 independent-practice prompts, 65 recap questions, and 13 transfer-focused homework briefs |
+| Guided learning | Eleven answer-or-code room tasks across Chapters 1–3, editable lesson-note examples, 52 lesson-note sections, 65 runbook phases, 65 mental-model steps, 26 guided practices, 13 concept clinics with 78 worked trace rows, 39 misconception probes, and 39 transfer prompts, plus one interactive number-line lab, two browser game-system labs, 46 coaching exchanges, and 51 toolbox cards |
 | Timed assessments | Four chapter blocks, each with 15 theory questions in 20 minutes and five practical tasks in 60 minutes; theory and practical pass independently at 60/100 |
-| Reference material | 77 glossary terms, 73 debugging checks, one checkpoint per chapter, and 67 curated official Python documentation links: 46 in chapter guides and 21 in assessments |
+| Reference material | 84 glossary terms, 80 debugging checks, one checkpoint per chapter, and 71 curated official Python or Pygame documentation links: 50 in chapter guides and 21 in assessments |
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, progressive hints, and selected technique contracts that coach the intended Python construct |
 | Editor | Vendored Ace with persistent Sublime or Vim keys, Monokai styling, Python highlighting, autocomplete, search, folding, line numbers, copy/paste controls, and resizable lesson, editor, and feedback panes |
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
 | Runner | Pyodide in a dedicated browser worker; account APIs additionally require a tab-only capability never sent to that worker |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
-| Motivation | A focused welcome page with an optional Python Snake arcade, completion-driven green/blue/yellow snake fleets, chapter progress, four stage recaps, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, crisp action-specific coding cues, and a geometric space-navigation motion system |
+| Motivation | A focused welcome page with an optional Python Snake arcade, completion-driven green/blue/yellow snake fleets, chapter progress, four assessed-stage recaps, a final game-project studio, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, crisp action-specific coding cues, and a geometric space-navigation motion system |
 | Persistence | Local browser storage by default; optional PostgreSQL sync with HttpOnly cookie sessions, bounded per-exercise run history, and a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
@@ -58,7 +58,7 @@ Every chapter is presented as a complete class:
 6. Collaborative class activities end with concrete evidence another learner or teacher can inspect.
 7. A visual mental model, concept clinic, guided prediction practice, glossary, debugging checklist, and knowledge checkpoint deepen the core notes.
 8. Independent practice, retrieval questions, and transfer-focused homework turn reading into active learning.
-9. A chapter-specific toolbox, five-phase runbook, official Python references, exercise handoff, and previous/next navigation support practice after class.
+9. A chapter-specific toolbox, five-phase runbook, official Python or Pygame references, exercise handoff, and previous/next navigation support practice after class.
 
 Chapter 1 assumes no previous programming experience and first names the editor,
 sample-input panel, **Run** control, and terminal. It then introduces the complete
@@ -83,16 +83,18 @@ Python Snake preview opens an optional dialog only when selected; the determinis
 arcade caps its score at 1,000, includes three collision-avoidance splits, slow
 asteroid drift, rare falling stars, and shield, boost, and stasis power-ups. The
 stable pooled SVG renderer updates existing nodes instead of rebuilding the board
-on every tick, preventing animation flicker. The dashboard
-presents the curriculum as four animated module paths. Each path connects three
+on every tick, preventing animation flicker. The dashboard presents the assessed
+curriculum as four animated module paths. Each path connects three
 chapter stops to a bookmarkable stage recap and its timed checkpoint, deriving
 preview, learning, ready, and complete states from existing saved progress.
 Recaps combine chapter progress, retrieval prompts, cross-chapter synthesis,
 checkpoint evidence, and official Python references without introducing another
 graded score. The final route shows the Python Pathforger award; it unlocks only
-after every chapter and all four checkpoints are complete. On narrow screens the
-same path becomes a vertical timeline, while reduced-motion preferences disable
-route and badge motion without hiding completion state.
+after every chapter and all four checkpoints are complete. A separate final
+project stage then applies the same state-and-feedback habits to Snake and
+platformer systems. On narrow screens each path becomes a vertical timeline,
+while reduced-motion preferences disable route and badge motion without hiding
+completion state.
 
 The code-native geospace layer makes those surfaces feel like one navigation
 console: orbit geometry and a scanning Python terminal introduce the welcome page,
@@ -114,6 +116,15 @@ Concepts that benefit from direct manipulation can also include a focused lab. C
 
 Chapter 12 adds a complete problem-solving track: decomposition and counterexamples, justified greedy selection, memoization, bottom-up tabulation, capacity and reachability states, and paired-sequence tables. Its ten exercises progress from Two Sum and interval scheduling through climbing stairs, grid paths, 0/1 knapsack, coin change, maximum non-adjacent sum, subset sum, longest common subsequence, and edit distance. Four original local SVG diagrams support the class and each exercise reuses a relevant visual reasoning cue without exposing its solution.
 
+Chapter 13 is a game-project studio motivated by the welcome-page Snake. Its class
+traces the Pygame event → update → draw loop, rectangle collisions, elapsed-time
+animation, Snake growth, platformer intent, gravity, landing, and camera state.
+Two accessible browser labs let learners step the same state transitions with a
+keyboard or pointer before attempting eight solution-free Python game-logic
+exercises. The browser labs intentionally model game rules without opening an SDL
+window; the class also explains how to install Pygame and run the graphical loop
+locally.
+
 Lesson notes, concept clinics, runbooks, and guided room tasks keep learning
 markers separately from graded exercise passes, so classroom completion never
 awards exercise stars. Editable classroom code and sample input use their own
@@ -121,7 +132,7 @@ bounded draft store and do not create canonical chapter `exNN.py` files. The
 desktop class view includes a course rail and an on-page contents rail; both
 collapse into keyboard-accessible disclosures on smaller screens.
 
-The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10–12 capstone. Each room keeps its own active deadline, drafts, recent attempts, and best score; assessment results do not award exercise stars. See [docs/ASSESSMENTS.md](docs/ASSESSMENTS.md) for the room rules, source transparency, scoring, official references, and client-side security limitations.
+The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10–12 capstone. Chapter 13 remains an untimed project studio rather than changing those four assessment contracts. Each room keeps its own active deadline, drafts, recent attempts, and best score; assessment results do not award exercise stars. See [docs/ASSESSMENTS.md](docs/ASSESSMENTS.md) for the room rules, source transparency, scoring, official references, and client-side security limitations.
 
 ## Run locally
 
@@ -140,9 +151,9 @@ npm run serve
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000). A different host or port can be selected when needed:
 
 ```bash
-node scripts/serve.mjs --port 4173
-PORT=4173 node scripts/serve.mjs
-node scripts/serve.mjs --help
+npm run serve -- --port 4173
+PORT=4173 npm run serve
+npm run serve -- --help
 ```
 
 HTTP serving is required for the module-based Python worker. Ace is checked into the repository. The first Python run downloads a pinned Pyodide runtime from jsDelivr, with a separately pinned UNPKG fallback, so the initial run needs an internet connection.
@@ -179,12 +190,12 @@ export PGUSER='eduground_owner'
 export PGPASSWORD_FILE='/run/secrets/eduground-owner-password'
 export DATABASE_SSL='require'
 export DATABASE_SSL_CA_FILE='/run/secrets/provider-root-ca.pem'
-npm run migrate
+npm run migrate:build
 
 export PGUSER='eduground_app'
 export PGPASSWORD_FILE='/run/secrets/eduground-runtime-password'
 export APP_ORIGIN='https://learn.example.com'
-npm run serve
+npm start
 ```
 
 Database-backed saving is opt-in from the profile menu. Unsigned learners remain
@@ -281,13 +292,17 @@ submissions/<user UUID>/
 │   └── ...
 ├── Py02 Simple data/
 │   └── ...
-└── Py12 Problem Solving & Dynamic Programming/
+├── Py12 Problem Solving & Dynamic Programming/
+│   ├── ex00.py
+│   ├── ...
+│   └── ex09.py
+└── Py13 Pygame Game Lab/
     ├── ex00.py
     ├── ...
-    └── ex09.py
+    └── ex07.py
 ```
 
-The server owns this 102-file mapping. Learner input cannot select a path, and these files never share the repository's original `Py*/` solution directories. PostgreSQL remains authoritative; reading a saved account file recreates a missing mirror.
+The server owns this 110-file mapping. Learner input cannot select a path, and these files never share the repository's original `Py*/` solution directories. PostgreSQL remains authoritative; reading a saved account file recreates a missing mirror.
 
 ## What is saved
 
@@ -311,7 +326,7 @@ Local storage is scoped to the exact browser origin. For example, `127.0.0.1:800
 npm run validate
 npm run validate:browser
 npm run validate:links
-node --check python-runner-worker.mjs
+npm run validate:syntax
 git diff --check
 ```
 
@@ -324,13 +339,14 @@ npm run clean
 ```
 
 `npm run validate` performs the deterministic offline checks for application and
-backend syntax/tests, the security policy, all 12 chapter definitions, all 102
-exercise definitions, all 316 exercise tests, every solution-free starter, every
+backend TypeScript, emitted JavaScript, unit tests, the security policy, all 13
+chapter definitions, all 110
+exercise definitions, all 341 exercise tests, every solution-free starter, every
 lesson section and runbook phase, all concept clinics, the rounding lab, toolbox
-cards, and the complete classroom/assessment schema. It also verifies cookie/origin
+cards, both Pygame game-system labs, and the complete classroom/assessment schema. It also verifies cookie/origin
 helpers, database TLS configuration, migration manifests, public-file isolation,
 and hardened container/workflow policy. `npm run validate:links` is the optional
-network check for curated Python documentation references.
+network check for curated official Python and Pygame documentation references.
 
 Database and release candidates must additionally use an isolated PostgreSQL
 database:
@@ -356,12 +372,13 @@ evidence only when the browser gate fails.
 
 Validation coverage includes:
 
-- All 12 dashboard → chapter → class and exercise routes, plus representative
+- All 13 dashboard → chapter → class and exercise routes, plus representative
   mobile overflow checks.
 - Four animated module paths, saved completed/current/upcoming states, keyboard
   access, vertical mobile layout, and reduced-motion behavior.
 - Persistent class-section understanding markers.
-- Worked concept clinics, guided-practice reveal, the Chapter 2 rounding lab, and chapter checkpoint feedback.
+- Worked concept clinics, guided-practice reveal, the Chapter 2 rounding lab, the
+  Chapter 13 Snake and platformer labs, and chapter checkpoint feedback.
 - Safe starter code with no repository answer loaded into the page.
 - Sublime/Vim switching, Monokai styling, editor keyboard shortcuts, pointer and
   keyboard pane resizing, layout persistence/reset, and responsive fallback.
@@ -385,56 +402,46 @@ conflict journeys remain explicit roadmap items.
 
 | Path | Responsibility |
 | --- | --- |
-| `index.html` | Stable application shell and vendored asset loading order |
-| `course-ui.css` | Shared responsive light/dark UI, account panel, runbook, and IDE layout |
-| `course-app.js` | Router and application orchestration for persistence, profile, editor, runner controls, and shared result rendering |
-| `workbench-mode.css` | Exercise-route-only compact application chrome that gives the lesson and IDE more viewport space |
-| `dashboard-model.js` | Pure resume-target, stage-status, and milestone derivation for the home learning path |
-| `dashboard-view.js` / `dashboard-ui.css` | Focused stage-based home renderer and responsive presentation |
-| `landing-view.js` / `landing-ui.css` | Course welcome page, learning-loop preview, and progress-aware entry action |
-| `landing-snake.js` / `landing-snake.css` | Deterministic, keyboard/touch-accessible Python Snake arcade with a stable renderer, slow asteroid drift, power-ups, three splits, a 1,000-point cap, and local best-score persistence |
-| `progress-snake-view.js` / `progress-snake.css` | Pointer-inert green, blue, and yellow snake rewards derived from mastered chapters, completed stages, and passed timed rooms |
-| `stage-recaps.js` | Solution-free synthesis content for the four stable three-chapter stages |
-| `stage-recap-view.js` / `stage-recap-ui.css` | Stage recap pages and the accessible animated final-course award |
-| `class-materials.js` | Twelve deeply frozen 90-minute class syllabi plus the Chapters 1–3 beginner-room explanations, answer tasks, code tasks, canonical inputs, and technique rules |
-| `class-page.js` / `class-page.css` | Reusable documentation renderer with course navigation, contents rail, editable lecture/lesson labs, guided room tasks, terminal feedback, and mobile disclosures |
-| `learning-content.js` | Ranks, badges, tutorials, deep dives, checkpoints, and runbooks |
-| `learning-toolbox.js` | Per-chapter Python functionality guide with conversions, imports, results, cautions, and copyable examples |
-| `learning-clinics.js` | Twelve immutable, solution-free worked traces, misconception probes, and transfer sets |
-| `concept-clinic.js` / `learning-clinic.css` | Accessible clinic component and its isolated responsive styling |
-| `rounding-model.js` | Tested Python-compatible floor, ceiling, truncation, and ties-to-even comparisons for the Chapter 2 lab |
-| `rounding-lab.js` / `rounding-lab.css` | Self-contained interactive number-line controller, derived view state, listeners, and styling |
-| `assessment-data.js` | Four assessment blocks, theory questions, practical contracts/tests, source notes, and official references |
-| `assessment-engine.js` | Assessment scoring, deadline, sanitization, history, and conflict-merge rules |
-| `assessment-room.js` | Assessment routes, timed-room controller, practical editor, submission flow, and results |
-| `assessment-ui.css` | Responsive light/dark assessment hub, room, editor, and result styling |
-| `exercise-data.js` | Chapters, prompts, topics, source paths, and hints |
-| `test-data/` | 206 visible and 110 hidden learning checks |
-| `starter-code.js` | Generated solution-free starters and public function signatures |
-| `solution-code.js` | Build-time repository artifact that is deliberately not loaded by the learner page |
-| `audio-feedback.js` | Synthesized click, run, full-suite, task-completion, failure, and achievement cues |
-| `python-runner-worker.mjs` | Dedicated-worker Python execution, output capture, timeout handling, and traceback capture |
-| `assets/vendor/ace/` | Pinned Ace 1.44.0 runtime, Monokai theme, Sublime/Vim keymaps, and license |
-| `assets/illustrations/problem-solving/` | Original accessible SVG field guide for decomposition, state tables, knapsack choices, and strategy recognition |
-| `server/` | Same-origin HTTP API, authentication, PostgreSQL access, security helpers, and static serving |
-| `server/exercise-manifest.mjs` | Stable 102-exercise mapping to chapter directories and zero-based `exNN.py` names |
-| `server/submission-files.mjs` | Atomic, private per-user filesystem mirror with traversal and symlink protection |
-| `server/runtime-security.mjs` | Cookie, origin, trusted-proxy, browser-header, and HTTP resource policy |
-| `server/database-config.mjs` | Bounded `PG*`/URL configuration and verified PostgreSQL TLS |
-| `db/migrations/` | Ordered, checksum-protected PostgreSQL schema migrations |
-| `scripts/migrate.mjs` | Migration command used locally and during deployment |
-| `docker-compose.yml` / `docker/` | Private database, split owner/runtime roles, one-shot migration, and restricted app runtime |
+| `public/` | The complete and only HTTP-served browser application |
+| `public/app/` | Router, application orchestration, audio, theme bootstrap, and shared source-shape helpers |
+| `public/content/` | Solution-free curriculum data, generated starters, and visible/hidden learning checks |
+| `public/features/` | Vertical UI features with their controller/view and local styles together |
+| `public/styles/` | Shared responsive visual system and exercise-workbench chrome |
+| `public/workers/` | Dedicated browser-Python worker and execution boundary |
+| `public/assets/` | Vendored Ace runtime, original illustrations, sprites, and other static media |
+| `src/server/` | NodeNext server source; strict TypeScript is introduced here incrementally |
+| `src/server/api/` | Same-origin account, state, file, run-history, and health routes |
+| `src/server/curriculum/` | Stable exercise manifest and private submission-file mirror |
+| `src/server/http/` | Static-file and HTTP response helpers |
+| `src/server/persistence/` | PostgreSQL configuration, migrations, and learner-state operations |
+| `src/server/rag/` | Chapter-scoped retrieval, guarded prompts, bounded Ollama adapter, and tutor admission |
+| `src/server/security/` | Credentials, cookies, origin checks, CSP, proxy policy, and runtime guards |
+| `curriculum/solutions/` | Private Python reference solutions, grouped by the 13 course chapters |
+| `curriculum/generated/` | Private generated solution bundle used only by build-time validation |
+| `database/` | Ordered migrations and the restricted application-role bootstrap |
+| `scripts/build/` | Starter/solution generation and vendored dependency refresh |
+| `scripts/database/` | Migration, backup, restore, and secret-initialization commands |
+| `scripts/maintenance/` | Safe cleanup utilities |
+| `scripts/validation/` | Structure, syntax, content, security, integration, and link gates |
+| `tests/unit/` | Fast client and server unit tests |
+| `tests/integration/` | PostgreSQL-backed persistence and account integration tests |
+| `tests/e2e/` | Chromium learner journeys, responsive behavior, and accessibility checks |
+| `dist/server/` | Git-ignored JavaScript emitted from `src/server/` and executed by tests and production |
+| `docker-compose.ai.yml` | Optional local-only Ollama overlay with one-shot model seeding and isolated inference |
 | `.github/workflows/` | CI, PostgreSQL integration, CodeQL, supply-chain, container, documentation, and release workflows |
-| `scripts/validate-assessment-data.mjs` | Assessment structure, timing, stable-ID, syntax, test, solution-leak, and official-link validation |
-| `server/tests/class-materials.test.mjs` | Classroom coverage, timing, executable demos with supplied input, immutability, and solution/prompt leakage validation |
-| `server/tests/class-room-data.test.mjs` | Guided-room schema, beginner-topic coverage, runnable fixtures, source-rule enforcement, and prompt-echo isolation |
-| `e2e/class-room.spec.mjs` | Answer feedback, room progress, editable labs, Run/Check separation, draft restore, keyboard use, and responsive classroom checks |
-| `server/tests/class-page.test.mjs` | Deterministic class-page hierarchy, navigation, accessibility, and fallback rendering validation |
+| `artifacts/` | Git-ignored browser results and generated validation evidence |
+| `docs/ARCHITECTURE.md` | Detailed boundaries, runtime flow, change map, and extension rules |
 | `docs/CLASSROOM.md` | Learner-facing class sequence, authoring contract, solution boundary, rendering integration, and validation guide |
 | `docs/ASSESSMENTS.md` | Timed-room rules, chapter/PDF mapping, scoring, references, persistence, and security boundaries |
 | `docs/PERSISTENCE.md` | Account sync, data model, storage bounds, migrations, and deletion behavior |
 | `docs/DEPLOYMENT.md` | First deploy, proxy, upgrade, backup/restore drill, image promotion, and rollback runbook |
+| `docs/AI_CLASSROOM_OPERATIONS.md` | Ollama isolation, resource bounds, classroom capacity plan, and incident procedures |
 | `docs/SECURE_SDLC.md` | Trust boundaries, local/CI gates, release policy, incident response, and residual risks |
+
+The browser deliberately remains a small ordered classic-script application, so
+adding TypeScript to the server does not introduce a frontend bundler or change
+learner asset URLs. `npm run build:server` compiles NodeNext source into
+`dist/server/`; `npm run validate:types` performs the strict no-emit check.
 
 ## Content, privacy, and assessment transparency
 
@@ -444,7 +451,13 @@ Hidden cases stay masked in the interface until a complete run returns. Their Ja
 
 The assessment practical prompts are independently paraphrased from four PDFs supplied by the project owner. PDF wording, screenshots, and reference solutions are excluded; the public examples and tests are independently authored. Theory questions and explanations are original course material. Assessment question data, answer indexes, hidden tests, scores, and timers are client-side and therefore inspectable or modifiable. These rooms are educational practice, not proctored or tamper-resistant examinations.
 
-`solution-code.js` supports local generation and validation only. It is not requested by `index.html`, `window.SOLUTION_CODE` is not created in the learner page, and editor resets restore a safe starter rather than an answer. The server uses a public-file allowlist, so the solution bundle, original `Py*/` sources, migrations, backend modules, and deployment secrets are not downloadable from the web application.
+`curriculum/generated/solution-code.js` supports local generation and validation
+only. It is not requested by `public/index.html`,
+`window.SOLUTION_CODE` is not created in the learner page, and editor resets
+restore a safe starter rather than an answer. The server exposes exactly the
+`public/` tree, so the solution bundle, `curriculum/solutions/` sources,
+migrations, backend modules, and deployment secrets are not downloadable from the
+web application.
 
 Unsigned use sends no learner code or progress to the application API. Creating an account opts into syncing drafts, saved files, progress, editor mode, and detailed test results to PostgreSQL, plus the configured private submission-file mirror. Python code still executes in a browser worker, not on the Node server. The worker is not a safe sandbox for untrusted pasted code; it has a JavaScript bridge and network access to the CSP-allowed runtime origins. Account APIs require a separate tab capability that is never sent to the worker. Persisted run claims are explicitly labelled as learner-device evidence. The history view can reopen and copy recorded expected output, actual output, streams, and tracebacks, but the history API does not return source code or original test inputs. See the [secure-SDLC trust boundaries](docs/SECURE_SDLC.md#security-objective) before exposing account sync publicly.
 
@@ -453,7 +466,7 @@ Unsigned use sends no learner code or progress to the application API. Creating 
 After intentionally changing a Python solution:
 
 ```bash
-node scripts/build-solution-bundle.mjs
+npm run build:solutions
 npm run build:starters
 ```
 
