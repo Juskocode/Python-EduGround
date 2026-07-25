@@ -153,6 +153,22 @@ const CHAPTERS = [
     directory: "Py11 Divide and Conquer",
     exercises: ["py11-bubble-sort", "py11-count-zeros", "py11-bitonic-point"],
   },
+  {
+    id: "py12",
+    directory: "Py12 Problem Solving & Dynamic Programming",
+    exercises: [
+      "py12-two-sum",
+      "py12-interval-scheduling",
+      "py12-climbing-stairs",
+      "py12-grid-paths",
+      "py12-knapsack",
+      "py12-coin-change",
+      "py12-house-robber",
+      "py12-subset-sum",
+      "py12-lcs",
+      "py12-edit-distance",
+    ],
+  },
 ];
 
 function createManifest() {

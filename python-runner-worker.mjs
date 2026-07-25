@@ -78,10 +78,13 @@ def _run_script_case(source, case):
     output = io.StringIO()
     errors = io.StringIO()
     input_values = iter(case.get("input", []))
+    echo_input_prompts = bool(case.get("echoInputPrompts", False))
 
-    def fake_input(_prompt=""):
+    def fake_input(prompt=""):
+        if prompt and echo_input_prompts:
+            print(str(prompt), end="")
         try:
-            return next(input_values)
+            return str(next(input_values))
         except StopIteration as exc:
             raise EOFError("The program requested more input than this test provides.") from exc
 

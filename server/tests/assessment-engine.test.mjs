@@ -150,6 +150,58 @@ test("absolute 20 and 60 minute deadlines survive serialized reloads", () => {
   assert.equal(engine.remainingSeconds(theory.deadlineAt, theory.deadlineAt + 1), 0);
 });
 
+test("a content revision retires stale drafts without losing submitted evidence", () => {
+  const revisedConfig = {
+    version: 2,
+    blocks: [{
+      ...config.blocks[0],
+      revision: 2,
+    }],
+  };
+  const legacy = engine.createProgress(revisedConfig);
+  legacy.blocks["py01-py03"].theory.active = {
+    id: "legacy-v1-draft",
+    blockId: "py01-py03",
+    mode: "theory",
+    status: "active",
+    revision: 1,
+    startedAt: 1_000,
+    deadlineAt: 1_201_000,
+    updatedAt: 2_000,
+    answers: { "theory-1": [0, 2] },
+  };
+  legacy.blocks["py01-py03"].theory.history = [
+    { ...submittedAttempt("legacy-v1-pass", 80, 3_000), revision: 1 },
+  ];
+  legacy.blocks["py01-py03"].theory.bestScore = 80;
+  legacy.blocks["py01-py03"].theory.completed = true;
+
+  const sanitized = engine.sanitizeProgress(legacy, revisedConfig);
+  const sanitizedMode = sanitized.blocks["py01-py03"].theory;
+  assert.equal(sanitizedMode.active, null, "a v1 draft must not resume against v2 questions");
+  assert.equal(sanitizedMode.history.length, 1);
+  assert.equal(sanitizedMode.history[0].revision, 1);
+  assert.equal(sanitizedMode.bestScore, 80);
+  assert.equal(sanitizedMode.completed, true);
+
+  const emptyCurrent = engine.createProgress(revisedConfig);
+  const merged = engine.mergeProgress(emptyCurrent, legacy, revisedConfig);
+  assert.equal(merged.blocks["py01-py03"].theory.active, null, "sync must not resurrect a stale draft");
+  assert.equal(merged.blocks["py01-py03"].theory.bestScore, 80);
+  assert.equal(merged.blocks["py01-py03"].theory.completed, true);
+
+  const current = engine.createProgress(revisedConfig);
+  current.blocks["py01-py03"].theory.active = engine.createAttempt(revisedConfig, {
+    id: "current-v2-draft",
+    blockId: "py01-py03",
+    mode: "theory",
+    startedAt: 4_000,
+  });
+  const currentReload = engine.sanitizeProgress(current, revisedConfig);
+  assert.equal(currentReload.blocks["py01-py03"].theory.active.id, "current-v2-draft");
+  assert.equal(currentReload.blocks["py01-py03"].theory.active.revision, 2);
+});
+
 test("created and sanitized attempts retain unique immutable IDs", () => {
   const first = engine.createAttempt(config, {
     blockId: "py01-py03",

@@ -207,12 +207,17 @@
   }
 
   function canPlay(name, cooldownMs) {
-    if (!isEnabled || !userHasInteracted()) {
+    if (
+      !isEnabled ||
+      !userHasInteracted() ||
+      (global.document && global.document.hidden)
+    ) {
       return false;
     }
 
     var now = monotonicNow();
-    if (now - (lastPlayedAt[name] || 0) < cooldownMs) {
+    var previousPlay = lastPlayedAt[name];
+    if (typeof previousPlay === "number" && now - previousPlay < cooldownMs) {
       return false;
     }
     if (name === "click" && now - lastNonClickAt < 90) {
@@ -349,6 +354,53 @@
     });
   }
 
+  function playRun() {
+    return playCue("run", 140, function (audioContext, startAt, scale) {
+      addTone(audioContext, startAt, 420, 0.11, 0.026 * scale, {
+        type: "triangle",
+        attack: 0.004,
+        endFrequency: 660
+      });
+      addTone(audioContext, startAt + 0.042, 1050, 0.08, 0.012 * scale, {
+        type: "sine",
+        attack: 0.003,
+        endFrequency: 1320
+      });
+    });
+  }
+
+  function playRunAll() {
+    return playCue("run-all", 220, function (audioContext, startAt, scale) {
+      [330, 495, 740].forEach(function (frequency, index) {
+        addTone(audioContext, startAt + index * 0.036, frequency, 0.13, 0.019 * scale, {
+          type: "triangle",
+          attack: 0.004,
+          endFrequency: frequency * 1.08
+        });
+      });
+      addTone(audioContext, startAt + 0.112, 1320, 0.11, 0.011 * scale, {
+        type: "sine",
+        attack: 0.003,
+        endFrequency: 1760
+      });
+    });
+  }
+
+  function playCheck() {
+    return playCue("check", 180, function (audioContext, startAt, scale) {
+      addTone(audioContext, startAt, 440, 0.1, 0.023 * scale, {
+        type: "triangle",
+        attack: 0.004,
+        endFrequency: 554.37
+      });
+      addTone(audioContext, startAt + 0.052, 659.25, 0.11, 0.019 * scale, {
+        type: "sine",
+        attack: 0.004,
+        endFrequency: 880
+      });
+    });
+  }
+
   function playFailure() {
     return playCue("failure", 420, function (audioContext, startAt, scale) {
       addGlassNoise(audioContext, startAt, reducedIntensity ? 0.09 : 0.14, 0.018 * scale);
@@ -368,19 +420,91 @@
     });
   }
 
+  function rememberPositiveCue(played) {
+    if (played) {
+      lastSuccessAt = monotonicNow();
+    }
+    return played;
+  }
+
+  function completionDelay(previousNames, minimumGapMs) {
+    var latest = previousNames.reduce(function (timestamp, name) {
+      var playedAt = lastPlayedAt[name];
+      return typeof playedAt === "number" ? Math.max(timestamp, playedAt) : timestamp;
+    }, 0);
+    return latest
+      ? Math.max(0, minimumGapMs - (monotonicNow() - latest)) / 1000
+      : 0;
+  }
+
+  function playRunComplete() {
+    return rememberPositiveCue(playCue("run-complete", 260, function (audioContext, startAt, scale) {
+      var cueStart = startAt + completionDelay(["run", "check"], 135);
+      addTone(audioContext, cueStart, 880, 0.13, 0.02 * scale, {
+        type: "triangle",
+        attack: 0.003,
+        endFrequency: 1174.66
+      });
+      addTone(audioContext, cueStart + 0.052, 1760, 0.075, 0.008 * scale, {
+        type: "sine",
+        attack: 0.003
+      });
+    }));
+  }
+
+  function playTestComplete() {
+    return rememberPositiveCue(playCue("test-complete", 620, function (audioContext, startAt, scale) {
+      var cueStart = startAt + completionDelay(["run-all"], 230);
+      var frequencies = reducedIntensity
+        ? [659.25, 783.99, 1046.5]
+        : [523.25, 659.25, 783.99, 1046.5, 1318.51];
+      addTone(audioContext, cueStart, 261.63, 0.24, 0.011 * scale, {
+        type: "sine",
+        attack: 0.008,
+        endFrequency: 392
+      });
+      frequencies.forEach(function (frequency, index) {
+        addTone(audioContext, cueStart + 0.035 + index * 0.035, frequency, 0.2, 0.021 * scale, {
+          type: index % 2 === 0 ? "triangle" : "sine",
+          attack: 0.004,
+          endFrequency: frequency * 1.035
+        });
+      });
+    }));
+  }
+
+  function playTaskComplete() {
+    return rememberPositiveCue(playCue("task-complete", 560, function (audioContext, startAt, scale) {
+      var cueStart = startAt + completionDelay(["check"], 170);
+      var frequencies = reducedIntensity
+        ? [783.99, 987.77, 1318.51]
+        : [659.25, 783.99, 987.77, 1318.51];
+      frequencies.forEach(function (frequency, index) {
+        addTone(audioContext, cueStart + index * 0.034, frequency, 0.18, 0.022 * scale, {
+          type: index < 2 ? "triangle" : "sine",
+          attack: 0.004,
+          endFrequency: frequency * 1.025
+        });
+      });
+      if (!reducedIntensity) {
+        addTone(audioContext, cueStart + 0.118, 1975.53, 0.085, 0.007 * scale, {
+          type: "sine",
+          attack: 0.003,
+          endFrequency: 2093
+        });
+      }
+    }));
+  }
+
   function playSuccess() {
-    var played = playCue("success", 520, function (audioContext, startAt, scale) {
+    return rememberPositiveCue(playCue("success", 520, function (audioContext, startAt, scale) {
       [523.25, 659.25, 783.99, 1046.5].forEach(function (frequency, index) {
         addTone(audioContext, startAt + index * 0.026, frequency, 0.27 - index * 0.018, 0.025 * scale, {
           type: index < 3 ? "triangle" : "sine",
           attack: 0.012
         });
       });
-    });
-    if (played) {
-      lastSuccessAt = monotonicNow();
-    }
-    return played;
+    }));
   }
 
   function playAchievement() {
@@ -414,7 +538,13 @@
     unlock: unlock,
     playClick: playClick,
     playSubmit: playSubmit,
+    playRun: playRun,
+    playRunAll: playRunAll,
+    playCheck: playCheck,
     playFailure: playFailure,
+    playRunComplete: playRunComplete,
+    playTestComplete: playTestComplete,
+    playTaskComplete: playTaskComplete,
     playSuccess: playSuccess,
     playAchievement: playAchievement
   });

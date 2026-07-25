@@ -1,0 +1,16 @@
+# Default ownership keeps all changes reviewable.
+* @Juskocode
+
+# Security, persistence, delivery, and learner-answer boundaries need explicit review.
+/.github/ @Juskocode
+/db/migrations/ @Juskocode
+/server/api.mjs @Juskocode
+/server/database.mjs @Juskocode
+/server/security.mjs @Juskocode
+/server/submission-files.mjs @Juskocode
+/Dockerfile @Juskocode
+/docker-compose.yml @Juskocode
+/package.json @Juskocode
+/package-lock.json @Juskocode
+/solution-code.js @Juskocode
+/test-data/ @Juskocode

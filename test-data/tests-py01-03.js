@@ -25,6 +25,28 @@
       ],
       visual: "text",
       mode: "script",
+      sourceRules: [
+        {
+          id: "fixme-two-assignments",
+          label: "Create two variables",
+          target: "code",
+          pattern: "^\\s*[A-Za-z_]\\w*\\s*=(?!=)",
+          flags: "m",
+          minMatches: 2,
+          passFeedback: "Your program creates at least two named pieces before producing the result.",
+          failFeedback: "Create at least two named variables so each part of the text has a clear role.",
+        },
+        {
+          id: "fixme-string-concatenation",
+          label: "Build and print the concatenated value",
+          target: "code",
+          pattern: "^\\s*([A-Za-z_]\\w*)\\s*=(?!=)\\s*[A-Za-z_]\\w*\\s*\\+[^\\n]*$[\\s\\S]*?^\\s*print\\s*\\(\\s*\\1\\s*\\)",
+          flags: "m",
+          minMatches: 1,
+          passFeedback: "Your program stores the concatenated result and prints that named value.",
+          failFeedback: "Store the concatenated result in a variable, then print that same variable.",
+        },
+      ],
       tests: [
         { id: "py01-fixme-public-greeting", name: "Combined greeting", hidden: false, input: [], expectedOutput: "Hello world!\n" },
         { id: "py01-fixme-public-format", name: "Exact spacing", hidden: false, input: [], expectedOutput: "Hello world!\n" },
@@ -57,6 +79,17 @@
       ],
       visual: "math",
       mode: "script",
+      sourceRules: [
+        {
+          id: "avoid-sums-no-binary-plus",
+          label: "Avoid binary addition",
+          target: "code",
+          pattern: "[A-Za-z0-9_)\\]]\\s*\\+\\s*[+\\-~\\s]*[A-Za-z0-9_(\\[]",
+          maxMatches: 0,
+          passFeedback: "No binary addition was detected in executable code.",
+          failFeedback: "Reframe the calculation with subtraction and negation instead of binary addition.",
+        },
+      ],
       tests: [
         { id: "py01-avoid-sums-public-positive", name: "Two positive integers", hidden: false, input: ["7", "5"], expectedOutput: "12\n" },
         { id: "py01-avoid-sums-public-mixed", name: "Mixed signs", hidden: false, input: ["9", "-4"], expectedOutput: "5\n" },
@@ -265,6 +298,17 @@
       ],
       visual: "loop",
       mode: "script",
+      sourceRules: [
+        {
+          id: "who-needs-for-while-loop",
+          label: "Use a while loop",
+          target: "code",
+          pattern: "\\bwhile\\s+[^:\\n]+:",
+          minMatches: 1,
+          passFeedback: "Your code contains a while loop with an explicit continuation condition.",
+          failFeedback: "Use a while loop and update its state until the stopping boundary is reached.",
+        },
+      ],
       tests: [
         { id: "py03-who-needs-for-public-sequence", name: "Complete sequence", hidden: false, input: [], expectedOutput: "4\n7\n10\n13\n16\n19\n22\n25\n28\n31\n34\n37\n40\n43\n46\n49\n" },
         { id: "py03-who-needs-for-public-repeat", name: "Deterministic rerun", hidden: false, input: [], expectedOutput: "4\n7\n10\n13\n16\n19\n22\n25\n28\n31\n34\n37\n40\n43\n46\n49\n" },

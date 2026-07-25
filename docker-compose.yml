@@ -1,43 +1,199 @@
 name: "${COMPOSE_PROJECT_NAME:-fundamentos-de-programacao-playground}"
 
+x-postgres-image: &postgres-image
+  image: postgres:16.14-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+
+x-app-image: &app-image
+  image: "${APP_IMAGE:-python-eduground:local}"
+  build:
+    context: .
+    args:
+      BUILD_DATE: "${BUILD_DATE:-}"
+      VCS_REF: "${VCS_REF:-local}"
+      VERSION: "${IMAGE_TAG:-local}"
+
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   postgres:
-    image: postgres:16-alpine
+    <<: *postgres-image
     restart: unless-stopped
+    init: true
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-eduground}
-      POSTGRES_USER: ${POSTGRES_USER:-eduground}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      POSTGRES_DB: "${POSTGRES_DB:-eduground}"
+      POSTGRES_USER: "${POSTGRES_USER:-eduground}"
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
       interval: 5s
       timeout: 3s
       retries: 12
+      start_period: 5s
+    pids_limit: 200
+    mem_limit: 768m
+    cpus: 1.0
+    logging: *bounded-logging
+    networks:
+      - database
 
-  app:
-    build: .
-    restart: unless-stopped
+  database-bootstrap:
+    <<: *postgres-image
+    restart: "no"
+    user: postgres
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: "${POSTGRES_DB:-eduground}"
+      PGUSER: "${POSTGRES_USER:-eduground}"
+    secrets:
+      - postgres_password
+      - app_database_password
+    command:
+      - sh
+      - -ec
+      - |
+        export PGPASSWORD="$$(cat /run/secrets/postgres_password)"
+        export APP_DATABASE_PASSWORD="$$(cat /run/secrets/app_database_password)"
+        exec psql --set=ON_ERROR_STOP=1 --file=/bootstrap/bootstrap-app-role.sql
+    volumes:
+      - ./docker/bootstrap-app-role.sql:/bootstrap/bootstrap-app-role.sql:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 50
+    mem_limit: 128m
+    cpus: 0.25
+    logging: *bounded-logging
+    networks:
+      - database
+
+  migrate:
+    <<: *app-image
+    restart: "no"
+    init: true
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-eduground}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-eduground}
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: "${POSTGRES_DB:-eduground}"
+      PGUSER: "${POSTGRES_USER:-eduground}"
+      PGPASSWORD_FILE: /run/secrets/postgres_password
       DATABASE_SSL: "false"
-      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8000,http://127.0.0.1:8000}
-      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-2592000}
+      DATABASE_CONNECT_TIMEOUT_MS: "${DATABASE_CONNECT_TIMEOUT_MS:-5000}"
+      MIGRATION_LOCK_TIMEOUT_MS: "${MIGRATION_LOCK_TIMEOUT_MS:-30000}"
+    secrets:
+      - postgres_password
+    command:
+      - node
+      - scripts/migrate.mjs
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *bounded-logging
+    networks:
+      - database
+
+  app:
+    <<: *app-image
+    restart: unless-stopped
+    init: true
+    depends_on:
+      database-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: "${POSTGRES_DB:-eduground}"
+      PGUSER: eduground_app
+      PGPASSWORD_FILE: /run/secrets/app_database_password
+      DATABASE_SSL: "false"
+      DATABASE_POOL_SIZE: "${DATABASE_POOL_SIZE:-10}"
+      DATABASE_CONNECT_TIMEOUT_MS: "${DATABASE_CONNECT_TIMEOUT_MS:-3000}"
+      DATABASE_IDLE_TIMEOUT_MS: "${DATABASE_IDLE_TIMEOUT_MS:-30000}"
+      DATABASE_STATEMENT_TIMEOUT_MS: "${DATABASE_STATEMENT_TIMEOUT_MS:-10000}"
+      APP_ORIGIN: "${APP_ORIGIN:?Set APP_ORIGIN in .env}"
+      SESSION_TTL_SECONDS: "${SESSION_TTL_SECONDS:-2592000}"
+      RUN_HISTORY_LIMIT: "${RUN_HISTORY_LIMIT:-500}"
+      ALLOW_BEARER_SESSION_TOKENS: "false"
+      TRUST_PROXY_HOPS: "${TRUST_PROXY_HOPS:-0}"
+      SERVER_REQUEST_TIMEOUT_MS: "${SERVER_REQUEST_TIMEOUT_MS:-30000}"
+      SERVER_HEADERS_TIMEOUT_MS: "${SERVER_HEADERS_TIMEOUT_MS:-10000}"
+      SERVER_KEEP_ALIVE_TIMEOUT_MS: "${SERVER_KEEP_ALIVE_TIMEOUT_MS:-5000}"
+      SERVER_MAX_HEADERS: "${SERVER_MAX_HEADERS:-100}"
+      SERVER_MAX_REQUESTS_PER_SOCKET: "${SERVER_MAX_REQUESTS_PER_SOCKET:-1000}"
+      HSTS_MAX_AGE_SECONDS: "${HSTS_MAX_AGE_SECONDS:-31536000}"
       SUBMISSIONS_DIR: /app/submissions
       HOST: 0.0.0.0
-      PORT: 8000
+      PORT: "8000"
+    secrets:
+      - app_database_password
     volumes:
       - submissions_data:/app/submissions
     ports:
-      - "${PORT:-8000}:8000"
-    command: ["sh", "-c", "npm run migrate && npm run serve -- --host 0.0.0.0"]
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${PORT:-8000}:8000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    mem_limit: 512m
+    cpus: 1.0
+    stop_grace_period: 10s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8000/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging: *bounded-logging
+    networks:
+      - edge
+      - database
 
 volumes:
   postgres_data:
   submissions_data:
+
+secrets:
+  postgres_password:
+    file: "${POSTGRES_PASSWORD_FILE:-./secrets/postgres_password}"
+  app_database_password:
+    file: "${APP_DATABASE_PASSWORD_FILE:-./secrets/app_database_password}"
+
+networks:
+  edge:
+  database:
+    internal: true

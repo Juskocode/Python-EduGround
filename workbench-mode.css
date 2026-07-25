@@ -1,0 +1,239 @@
+body[data-route="exercise"] .site-topbar__inner {
+  min-height: 56px;
+  gap: 14px;
+}
+
+body[data-route="exercise"] .site-brand {
+  gap: 9px;
+}
+
+body[data-route="exercise"] .site-brand__mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+}
+
+body[data-route="exercise"] .site-brand__copy strong {
+  font-size: 0.86rem;
+}
+
+body[data-route="exercise"] .site-brand__copy small {
+  display: none;
+}
+
+body[data-route="exercise"] .site-actions,
+body[data-route="exercise"] .site-primary-nav {
+  gap: 6px;
+}
+
+body[data-route="exercise"] .topbar-home {
+  min-height: 38px;
+  padding-inline: 10px;
+  border-radius: 10px;
+  font-size: 0.76rem;
+}
+
+body[data-route="exercise"] .icon-button {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+body[data-route="exercise"] .profile-button {
+  min-height: 42px;
+  gap: 8px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 12px;
+}
+
+body[data-route="exercise"] .profile-button__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 0.68rem;
+}
+
+body[data-route="exercise"] .profile-button__copy small {
+  font-size: 0.57rem;
+}
+
+body[data-route="exercise"] .profile-button__copy strong {
+  max-width: 118px;
+  font-size: 0.7rem;
+}
+
+body[data-route="exercise"] .profile-panel {
+  top: calc(100% + 7px);
+  max-height: min(760px, calc(100dvh - 68px));
+}
+
+body[data-route="exercise"] .app-main {
+  min-height: calc(100dvh - 56px);
+  padding: 9px 0 24px;
+}
+
+body[data-route="exercise"] .exercise-page__shell {
+  width: min(calc(100% - 20px), var(--shell));
+}
+
+body[data-route="exercise"] .exercise-page__shell > .breadcrumbs {
+  overflow-x: auto;
+  padding: 1px 2px 4px;
+  margin-bottom: 5px;
+  scrollbar-width: thin;
+}
+
+body[data-route="exercise"] .exercise-page__shell > .breadcrumbs ol {
+  width: max-content;
+  min-width: 100%;
+  flex-wrap: nowrap;
+  gap: 5px;
+  font-size: 0.67rem;
+  white-space: nowrap;
+}
+
+body[data-route="exercise"] .exercise-page__shell > .breadcrumbs li {
+  gap: 5px;
+}
+
+body[data-route="exercise"] .exercise-workbench .ide-section__heading {
+  min-height: 48px;
+  gap: 10px;
+  padding: 7px 10px;
+}
+
+body[data-route="exercise"] .exercise-workbench .ide-section__heading .eyebrow,
+body[data-route="exercise"] .exercise-workbench .ide-section__heading p:last-child {
+  display: none;
+}
+
+body[data-route="exercise"] .exercise-workbench .ide-section__heading h2 {
+  display: block;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+body[data-route="exercise"] .ide-section__actions {
+  gap: 6px;
+}
+
+body[data-route="exercise"] .ide-section__actions .section-heading__count {
+  padding: 5px 8px;
+  font-size: 0.62rem;
+}
+
+body[data-route="exercise"] .ide-layout-reset,
+body[data-route="exercise"] .ide-focus-button {
+  min-height: 32px;
+  padding-inline: 9px;
+  border-radius: 8px;
+  font-size: 0.62rem;
+}
+
+body[data-route="exercise"] .exercise-bottom-nav {
+  gap: 9px;
+  padding-top: 15px;
+}
+
+@media (min-width: 981px) {
+  body[data-route="exercise"] .exercise-workbench__lesson,
+  body[data-route="exercise"] .exercise-workbench__code,
+  body[data-route="exercise"] .exercise-workbench.is-editor-focused .exercise-workbench__code {
+    height: clamp(680px, calc(100dvh - 108px), 1040px);
+  }
+}
+
+@media (max-width: 900px) {
+  body[data-route="exercise"] .app-main {
+    padding-top: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  body[data-route="exercise"] .site-topbar__inner {
+    min-height: 54px;
+    gap: 8px;
+  }
+
+  body[data-route="exercise"] .site-brand__copy {
+    display: none;
+  }
+
+  body[data-route="exercise"] .site-actions,
+  body[data-route="exercise"] .site-primary-nav {
+    gap: 4px;
+  }
+
+  body[data-route="exercise"] .topbar-home {
+    width: 38px;
+    min-height: 38px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  body[data-route="exercise"] .icon-button {
+    width: 38px;
+    height: 38px;
+  }
+
+  body[data-route="exercise"] .profile-button {
+    min-height: 38px;
+    padding: 2px;
+  }
+
+  body[data-route="exercise"] .profile-button__avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  body[data-route="exercise"] .app-main {
+    min-height: calc(100dvh - 54px);
+    padding-top: 7px;
+  }
+
+  body[data-route="exercise"] .exercise-page__shell {
+    width: min(calc(100% - 14px), var(--shell));
+  }
+
+  body[data-route="exercise"] .exercise-workbench .ide-section__heading {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  body[data-route="exercise"] .ide-section__actions {
+    width: auto;
+    margin-left: auto;
+  }
+
+  body[data-route="exercise"] .ide-section__actions .section-heading__count {
+    display: none;
+  }
+}
+
+@media (max-width: 470px) {
+  body[data-route="exercise"] .topbar-home[href="#welcome"] {
+    display: none;
+  }
+
+  body[data-route="exercise"] .exercise-workbench .ide-section__heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body[data-route="exercise"] .ide-section__actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  body[data-route="exercise"] .ide-section__actions > button {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-route="exercise"] .site-topbar__inner,
+  body[data-route="exercise"] .app-main {
+    transition: none;
+  }
+}

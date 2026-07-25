@@ -16,7 +16,9 @@ const expectedBlocks = [
   ["py01-py03", ["py01", "py02", "py03"]],
   ["py04-py06", ["py04", "py05", "py06"]],
   ["py07-py09", ["py07", "py08", "py09"]],
-  ["py10-py11", ["py10", "py11"]],
+  // Keep the legacy block ID so previously saved attempts remain attached
+  // while the fourth stage expands to the new problem-solving chapter.
+  ["py10-py11", ["py10", "py11", "py12"]],
 ];
 const solutionLines = new Set(
   Object.values(window.SOLUTION_CODE || {})
@@ -69,6 +71,9 @@ if (!data || typeof data !== "object") {
   uniqueId(block.id, label);
   if (!expected || block.id !== expected[0]) errors.push(`${label}: unexpected block ID or order.`);
   if (JSON.stringify(block.chapters) !== JSON.stringify(expected?.[1])) errors.push(`${label}: incorrect chapter coverage.`);
+  if (!Number.isInteger(Number(block.revision)) || Number(block.revision) < 1) {
+    errors.push(`${label}: revision must be a positive integer.`);
+  }
   if (!nonEmpty(block.title) || !nonEmpty(block.sourceNote) || !block.sourceNote.toLowerCase().includes("solution")) {
     errors.push(`${label}: title/source note must explain that solutions are excluded.`);
   }

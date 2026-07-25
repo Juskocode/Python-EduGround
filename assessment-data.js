@@ -1051,10 +1051,10 @@
       {
         id: "py10-py11",
         number: 4,
-        revision: 1,
-        title: "Functional Tools and Lazy Algorithms",
-        chapters: ["py10", "py11"],
-        sourceNote: "Practical prompts are independently paraphrased from PE04 (19 December 2019), supplied by the user. Reference solutions and source screenshots are intentionally excluded.",
+        revision: 2,
+        title: "Functional Tools and Problem-Solving Algorithms",
+        chapters: ["py10", "py11", "py12"],
+        sourceNote: "The functional and search prompts are independently paraphrased from PE04 (19 December 2019), supplied by the user; the dynamic-programming extension is original to this course. Reference solutions and source screenshots are intentionally excluded.",
         references: [
           {
             label: "Functional Programming HOWTO",
@@ -1080,6 +1080,11 @@
             label: "functools.reduce()",
             description: "Cumulative reduction of an iterable into one result.",
             url: "https://docs.python.org/3/library/functools.html#functools.reduce",
+          },
+          {
+            label: "functools.cache()",
+            description: "Unbounded memoization for functions whose arguments can be used as cache keys.",
+            url: "https://docs.python.org/3/library/functools.html#functools.cache",
           },
         ],
         theory: {
@@ -1195,56 +1200,61 @@
               "Geometry prunes irrelevant branches. Empty leaves contribute nothing, and set union combines discovered labels."
             ),
             theoryQuestion(
-              "a4-theory-11",
-              "For componentwise multiplication of two sparse vectors, what is the result at a position missing from either vector?",
+              "a4-v2-theory-dp-signals",
+              "Which signs suggest that dynamic programming may fit a problem? Select every correct answer.",
               [
-                "Zero, so that position is omitted",
-                "One, because missing values are multiplicative identities",
-                "The key itself",
-                "A nested tuple",
+                "A solution can be expressed through smaller versions of the same decision.",
+                "The same smaller states are reached through several different decision paths.",
+                "Each input item can be handled independently without any shared state.",
+                "A state and transition can summarize all information needed for the remaining work.",
+              ],
+              [0, 1, 3],
+              "Dynamic programming is especially useful when subproblems overlap and an optimal answer has a recurrence over smaller states. A precise state must preserve everything future decisions need."
+            ),
+            theoryQuestion(
+              "a4-v2-theory-memo-stairs",
+              "What does this memoized function return for ways(4)?",
+              ["3", "5", "7", "8"],
+              [1],
+              "The recurrence counts one-step and two-step endings. Starting with ways(0)=1 and ways(1)=1 gives 1, 1, 2, 3, 5.",
+              "from functools import cache\n\n@cache\ndef ways(n):\n    if n < 2:\n        return 1\n    return ways(n - 1) + ways(n - 2)"
+            ),
+            theoryQuestion(
+              "a4-v2-theory-knapsack-transition",
+              "For a 0/1 knapsack state best(i, capacity), which transition is correct when item i fits?",
+              [
+                "Take the larger of skipping the item and taking its value plus the best smaller-capacity state.",
+                "Always take the item because it fits.",
+                "Take the item repeatedly until the capacity is full.",
+                "Sort by value-to-weight ratio and stop after one choice.",
               ],
               [0],
-              "Sparse-vector absence means numeric zero. Multiplication by that implicit zero produces zero, which is not stored."
+              "In 0/1 knapsack each item is available once. The transition compares skip with take; the take branch advances past the item and subtracts its weight.",
+              "skip = best(i + 1, capacity)\ntake = values[i] + best(i + 1, capacity - weights[i])\nanswer = max(skip, take)"
             ),
             theoryQuestion(
-              "a4-theory-12",
-              "What list is printed?",
-              ["[2, 5]", "[2, 3, 5]", "[2, 3, 4, 5]", "[3, 5]"],
-              [1],
-              "Each interval includes both endpoints. The first yields 2 and 3, and the second yields 5.",
-              "def interval_values(intervals):\n    for low, high in intervals:\n        for value in range(low, high + 1):\n            yield value\n\nprint(list(interval_values([(2, 3), (5, 5)])))"
-            ),
-            theoryQuestion(
-              "a4-theory-13",
-              "A task forbids explicit loops but permits functional tools and comprehensions. Which choices comply? Select every correct answer.",
+              "a4-v2-theory-coin-greedy-trap",
+              "Why can a greedy largest-coin-first strategy fail for coins [1, 3, 4] and amount 6?",
               [
-                "A list comprehension with a filter condition",
-                "map or filter with a side-effect-free callable",
-                "A hidden while loop inside a helper",
-                "functools.reduce for an appropriate cumulative result",
+                "Greedy chooses 4 + 1 + 1, while the optimal solution is 3 + 3.",
+                "Greedy cannot use a coin more than once.",
+                "Dynamic programming is only valid when every coin is even.",
+                "There is no way to make amount 6 with these coins.",
               ],
-              [0, 1, 3],
-              "The stated alternatives express iteration without explicit for or while statements. Hiding a forbidden loop does not satisfy the constraint."
+              [0],
+              "A locally largest choice does not always lead to the fewest coins. Dynamic programming compares all smaller reachable amounts and finds the two-coin solution."
             ),
             theoryQuestion(
-              "a4-theory-14",
-              "What value is printed?",
-              ["2", "3", "4", "5"],
-              [1],
-              "Zero occurs twice and contributes one repetition; three occurs three times and contributes two, for a total of three.",
-              "values = [0, 0, 3, 3, 3]\nrepetitions = sum(values.count(value) - 1 for value in set(values))\nprint(repetitions)"
-            ),
-            theoryQuestion(
-              "a4-theory-15",
-              "Which choices can reduce unnecessary memory or work? Select every correct answer.",
+              "a4-v2-theory-lcs-table",
+              "Which statements correctly describe a longest-common-subsequence table? Select every correct answer.",
               [
-                "Yield interval values lazily instead of building a large list.",
-                "Store only non-zero sparse-vector entries.",
-                "Expand every quadrant even when it cannot intersect the query.",
-                "Stop consuming an iterator when the required result is known.",
+                "State (i, j) can represent the LCS length of two prefixes.",
+                "Matching final characters extend the diagonal state by one.",
+                "Different final characters require choosing the better state after dropping one final character.",
+                "The answer must always be a contiguous substring.",
               ],
-              [0, 1, 3],
-              "Lazy production, sparse representation, geometric pruning, and early termination all avoid materializing or processing irrelevant data."
+              [0, 1, 2],
+              "A subsequence preserves order but may skip characters. Prefix states lead to a diagonal match transition or the better of the top and left states."
             ),
           ],
         },
@@ -1305,29 +1315,30 @@
               ],
             },
             {
-              id: "a4-practical-03",
-              title: "Compare even and odd repetitions",
+              id: "a4-v2-practical-knapsack",
+              title: "Maximize a 0/1 knapsack",
               points: 20,
-              prompt: "Return the number of repeated even occurrences minus the number of repeated odd occurrences.",
+              prompt: "Choose each item at most once and return the greatest total value whose total weight does not exceed the capacity.",
               contract: [
-                "Define repeated(nlist).",
-                "A value occurring n times contributes n - 1 repetitions.",
-                "Treat zero as even.",
+                "Define knapsack_value(weights, values, capacity).",
+                "weights[i] and values[i] describe one indivisible item.",
+                "Return the maximum achievable integer value.",
               ],
               constraints: [
-                "Do not use explicit for or while statements.",
-                "Use map, filter, reduce, comprehensions, or suitable collection operations.",
-                "The input contains integers and may be empty.",
+                "weights and values have equal length and contain non-negative integers.",
+                "Each item can be selected zero or one time; do not mutate either input.",
+                "An empty item list or zero capacity returns 0.",
               ],
               examples: [
-                { call: "repeated([2, 2, 2, 3, 3, 4])", expected: "1" },
+                { call: "knapsack_value([2, 3, 4], [4, 5, 7], 5)", expected: "9" },
               ],
-              starterCode: "def repeated(nlist):\n    # Compare duplicate counts by parity without an explicit loop statement.\n    pass\n",
+              starterCode: "def knapsack_value(weights, values, capacity):\n    # Define a state, base case, and take/skip transition.\n    pass\n",
               mode: "function",
               tests: [
-                testCase("a4-p3-visible-mixed", "Even and odd repeats", "repeated([2, 2, 2, 3, 3, 4])", "1"),
-                testCase("a4-p3-visible-zero", "Zero is even", "repeated([0, 0, 1])", "1"),
-                testCase("a4-p3-hidden-odd", "More odd repetitions", "repeated([1, 1, 2, 2, 2, 3, 3, 3, 3])", "-2", true),
+                testCase("a4-p3-visible-combination", "Two-item optimum", "knapsack_value([2, 3, 4], [4, 5, 7], 5)", "9"),
+                testCase("a4-p3-visible-empty", "No available items", "knapsack_value([], [], 8)", "0"),
+                testCase("a4-p3-hidden-greedy-trap", "Best value is not the lightest choice", "knapsack_value([3, 4, 5], [30, 50, 60], 8)", "90", true),
+                testCase("a4-p3-hidden-zero-capacity", "Zero capacity", "knapsack_value([1, 2], [10, 30], 0)", "0", true),
               ],
             },
             {

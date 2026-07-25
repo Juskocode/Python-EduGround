@@ -1,0 +1,329 @@
+.concept-clinic {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(20px, 3vw, 30px);
+  margin-top: 30px;
+  border: 1px solid color-mix(in srgb, var(--info) 28%, var(--border));
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--info) 10%, transparent), transparent 25rem),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface-2) 86%, transparent), var(--surface));
+  box-shadow: var(--shadow-sm);
+}
+
+.concept-clinic::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--info), var(--primary), transparent 82%);
+  content: "";
+}
+
+.concept-clinic.is-understood {
+  border-color: color-mix(in srgb, var(--success) 48%, var(--border));
+}
+
+.concept-clinic.is-understood::before {
+  background: linear-gradient(90deg, var(--success), var(--primary), transparent 82%);
+}
+
+.concept-clinic__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.concept-clinic__header-actions {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 9px;
+  justify-items: end;
+}
+
+.concept-clinic__header-actions .learning-mark {
+  width: 100%;
+  margin-left: 0;
+}
+
+.concept-clinic__header > div {
+  max-width: 900px;
+}
+
+.concept-clinic__header .eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--info);
+  font-size: 0.75rem;
+}
+
+.concept-clinic__header h3 {
+  max-width: 760px;
+  margin-bottom: 10px;
+  font-size: clamp(1.2rem, 2vw, 1.55rem);
+}
+
+.concept-clinic__description {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.85rem;
+  line-height: 1.75;
+}
+
+.concept-clinic__badge {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--info) 30%, var(--border));
+  border-radius: 999px;
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.concept-clinic__code {
+  margin-bottom: 0;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.13);
+}
+
+.concept-clinic__trace,
+.concept-clinic__misconceptions,
+.concept-clinic__transfer {
+  margin-top: 28px;
+}
+
+.concept-clinic__trace h4,
+.concept-clinic__misconceptions h4,
+.concept-clinic__transfer h4 {
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+
+.concept-clinic__section-intro {
+  max-width: 820px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.concept-clinic__table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text-strong) 5%, transparent);
+  overscroll-behavior-inline: contain;
+}
+
+.concept-clinic__table-scroll:focus-visible {
+  outline-offset: 4px;
+}
+
+.concept-clinic__table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.concept-clinic__table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.concept-clinic__table th,
+.concept-clinic__table td {
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.concept-clinic__table thead th {
+  background: var(--surface-3);
+  color: var(--muted-strong);
+  font-size: 0.75rem;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.concept-clinic__table thead th:first-child {
+  width: 18%;
+}
+
+.concept-clinic__table thead th:nth-child(2) {
+  width: 32%;
+}
+
+.concept-clinic__table tbody th {
+  color: var(--text-strong);
+  font-size: 0.78rem;
+}
+
+.concept-clinic__table td {
+  color: var(--muted-strong);
+  font-size: 0.76rem;
+  line-height: 1.65;
+}
+
+.concept-clinic__table td code {
+  color: var(--primary-strong);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.concept-clinic__table tbody tr:last-child th,
+.concept-clinic__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.concept-clinic__table tbody tr:hover {
+  background: color-mix(in srgb, var(--primary-softer) 55%, transparent);
+}
+
+.concept-clinic__misconception-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.concept-clinic__misconception {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+}
+
+.concept-clinic__misconception h5 {
+  margin: 0 0 9px;
+  color: var(--warning);
+  font-size: 0.75rem;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.concept-clinic__misconception blockquote {
+  padding: 0 0 0 12px;
+  margin: 0 0 16px;
+  border-left: 3px solid color-mix(in srgb, var(--warning) 60%, var(--border));
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.55;
+}
+
+.concept-clinic__correction,
+.concept-clinic__probe {
+  padding-top: 13px;
+  border-top: 1px solid var(--border);
+}
+
+.concept-clinic__probe {
+  margin-top: 13px;
+}
+
+.concept-clinic__correction strong,
+.concept-clinic__probe strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--primary-strong);
+  font-size: 0.75rem;
+}
+
+.concept-clinic__probe strong {
+  color: var(--info);
+}
+
+.concept-clinic__correction p,
+.concept-clinic__probe p {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.76rem;
+  line-height: 1.62;
+}
+
+.concept-clinic__transfer-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  counter-reset: transfer-prompt;
+}
+
+.concept-clinic__transfer-list li {
+  position: relative;
+  min-width: 0;
+  padding: 16px 16px 16px 48px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 14px;
+  background: var(--primary-softer);
+  color: var(--muted-strong);
+  counter-increment: transfer-prompt;
+  font-size: 0.76rem;
+  line-height: 1.62;
+}
+
+.concept-clinic__transfer-list li::before {
+  position: absolute;
+  top: 16px;
+  left: 15px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--surface);
+  content: counter(transfer-prompt, decimal-leading-zero);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+@media (max-width: 980px) {
+  .concept-clinic__misconception-grid,
+  .concept-clinic__transfer-list {
+    grid-template-columns: 1fr;
+  }
+
+  .concept-clinic__misconception-grid {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 680px) {
+  .concept-clinic {
+    padding: 18px 15px;
+    border-radius: 16px;
+  }
+
+  .concept-clinic__header {
+    display: block;
+  }
+
+  .concept-clinic__header-actions {
+    margin-top: 14px;
+    justify-items: start;
+  }
+
+  .concept-clinic__badge {
+    display: inline-flex;
+  }
+
+  .concept-clinic__table th,
+  .concept-clinic__table td {
+    padding: 11px 12px;
+  }
+}

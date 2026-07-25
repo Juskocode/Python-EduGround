@@ -7,11 +7,25 @@
     theme: "fp-playground.theme.v1",
     lastExercise: "fp-playground.last-exercise.v2",
     learning: "fp-playground.learning.v1",
+    classLabs: "fp-playground.class-labs.v1",
     assessments: "fp-playground.assessments.v1",
     editorMode: "fp-playground.editor-mode.v1",
-    authToken: "fp-playground.auth-token.v1",
-    authUser: "fp-playground.auth-user.v1"
+    ideLayout: "fp-playground.ide-layout.v1",
+    authSession: "fp-playground.auth-session.v2",
+    legacyAuthToken: "fp-playground.auth-token.v1",
+    authUser: "fp-playground.auth-user.v1",
+    authClientCapability: "fp-playground.auth-client-capability.v1",
+    authSignedOut: "fp-playground.auth-signed-out.v1"
   };
+  var COOKIE_SESSION_MARKER = "cookie-session";
+  var IDE_LAYOUT_DEFAULTS = { lesson: 36, editor: 55 };
+  var IDE_LAYOUT_LIMITS = {
+    lesson: { min: 25, max: 60 },
+    editor: { min: 40, max: 70 }
+  };
+  var CLASS_LAB_CODE_LIMIT = 12000;
+  var CLASS_LAB_INPUT_LIMIT = 2000;
+  var CLASS_LAB_DRAFT_BUDGET = 64000;
 
   var elements = {
     main: document.getElementById("app-main"),
@@ -27,9 +41,25 @@
 
   var course = window.COURSE_DATA;
   var testData = window.EXERCISE_TESTS || {};
+  var solutionShape = window.SOLUTION_SHAPE || null;
   var starterCode = window.STARTER_CODE || {};
   var learning = window.LEARNING_CONTENT || {};
   var toolboxByChapter = window.LEARNING_TOOLBOX || {};
+  var clinicsByChapter = window.LEARNING_CLINICS || {};
+  var conceptClinicView = window.CONCEPT_CLINIC || null;
+  var classMaterials = window.CLASS_MATERIALS || {};
+  var classPageView = window.CLASS_PAGE || null;
+  var roundingModel = window.ROUNDING_MODEL || null;
+  var roundingLabController = window.ROUNDING_LAB && roundingModel
+    ? window.ROUNDING_LAB.create({ model: roundingModel, announce: announce })
+    : null;
+  var dashboardModel = window.DASHBOARD_MODEL || null;
+  var dashboardView = window.DASHBOARD_VIEW || null;
+  var progressSnakeView = window.PROGRESS_SNAKE_VIEW || null;
+  var landingSnake = window.LANDING_SNAKE || null;
+  var landingView = window.LANDING_VIEW || null;
+  var stageRecapView = window.STAGE_RECAP_VIEW || null;
+  var stageRecaps = window.STAGE_RECAPS || {};
   var assessmentData = window.ASSESSMENT_DATA || { version: 1, blocks: [] };
   var assessmentEngine = window.ASSESSMENT_ENGINE || {};
   var audio = window.APP_AUDIO || createSilentAudio();
@@ -61,15 +91,30 @@
     assessmentById.set(String(block.id), block);
   });
 
-  var authToken = safeRead(STORAGE_KEYS.authToken) || "";
-  var authUserId = authToken ? (safeRead(STORAGE_KEYS.authUser) || "") : "";
-  if (!authToken) {
-    // A user workspace is only selected while its session is restorable. The
-    // scoped data remains on disk, but signed-out visitors see the anonymous
-    // workspace instead of the last account used on a shared browser.
+  var deliberateLocalSignOut = safeRead(STORAGE_KEYS.authSignedOut) === "1";
+  // The capability lives only in the top-level page's sessionStorage. Python
+  // executes in a Worker, where sessionStorage is unavailable, so learner code
+  // cannot replay cookie-authenticated account requests.
+  var clientCapability = deliberateLocalSignOut
+    ? ""
+    : safeSessionRead(STORAGE_KEYS.authClientCapability) || "";
+  var authToken = clientCapability ? COOKIE_SESSION_MARKER : "";
+  var authUserId = "";
+  if (deliberateLocalSignOut || !clientCapability) {
+    // The HttpOnly cookie is intentionally unreadable from JavaScript. Keep a
+    // local tombstone so an offline sign-out cannot silently re-authenticate
+    // this browser on the next reload.
+    safeRemove(STORAGE_KEYS.authSession);
+    safeRemove(STORAGE_KEYS.legacyAuthToken);
     safeRemove(STORAGE_KEYS.authUser);
   }
-  var workspaceScope = authUserId ? "user." + authUserId : "";
+  if (deliberateLocalSignOut) {
+    safeSessionRemove(STORAGE_KEYS.authClientCapability);
+  }
+  // Never select a remembered user's local storage before /api/me validates
+  // the HttpOnly session. This prevents account drafts from flashing on a
+  // shared browser while a restore request is pending or failing.
+  var workspaceScope = "";
 
   // Keep IDs that are temporarily unknown to this release. They do not count
   // toward visible progress, but preserving them prevents a pull that renames
@@ -77,24 +122,41 @@
   var passed = new Set(readPassedIds());
   var drafts = readDrafts();
   var learningProgress = readLearningProgress();
+  var classLabDrafts = readClassLabDrafts();
   var assessmentProgress = readAssessmentProgress();
   var editorMode = readEditorMode();
   var currentUser = null;
-  var syncState = { kind: "idle", message: authToken ? "Restoring your session…" : "Local-only mode" };
+  var syncState = {
+    kind: "idle",
+    message: deliberateLocalSignOut
+      ? "Signed out on this device"
+      : authToken
+        ? "Restoring your session…"
+        : "Local-only mode"
+  };
   var revealedHints = new Map();
   var runResults = new Map();
+  var runHistoryByExercise = new Map();
   var draftPersistTimer = null;
+  var classLabPersistTimer = null;
   var stateSyncTimer = null;
   var suppressStateSync = false;
   var workspaceEpoch = 0;
   var remoteFilesLoaded = new Set();
   var accountFileSaves = new Map();
   var activeEditor = null;
+  var activeEditorResizeFrame = null;
   var activeRun = null;
+  var activeLandingSnake = null;
+  var activeLandingSnakeDialog = null;
+  var activeLandingSnakeLauncher = null;
   var currentRoute = null;
   var selectedBadgeId = null;
+  var signOutInProgress = false;
+  var geospaceMotionObserver = null;
   var pythonRunner = createPythonRunner();
   var assessmentRooms = createAssessmentRoomsController();
+  var ideLayoutPreferences = readIdeLayoutPreferences();
 
   syncThemeButton();
   syncSoundButton();
@@ -106,7 +168,9 @@
   });
   window.addEventListener("pagehide", function () {
     flushDrafts();
+    flushClassLabDrafts();
     if (assessmentRooms) assessmentRooms.flush();
+    disposeLandingSnake(false);
   });
   elements.themeToggle.addEventListener("click", toggleTheme);
   elements.soundToggle.addEventListener("click", toggleSound);
@@ -115,12 +179,18 @@
   elements.profilePanel.addEventListener("submit", handleProfileSubmit);
   elements.main.addEventListener("click", handleMainClick);
   elements.main.addEventListener("change", handleMainChange);
+  elements.main.addEventListener("input", handleMainInput);
+  elements.main.addEventListener("submit", handleMainSubmit);
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("pointerdown", unlockAudio, { once: true });
+  document.addEventListener("pointerdown", showGeometricPressFeedback);
+  document.addEventListener("visibilitychange", syncGeospaceVisibility);
   document.addEventListener("keydown", handleDocumentKeydown);
-  restoreAuthenticatedSession();
+  if (!deliberateLocalSignOut && clientCapability) {
+    restoreAuthenticatedSession();
+  }
 
-  function renderRoute(announceChange) {
+  function renderRoute(announceChange, focusTarget) {
     var parsed = parseRoute();
 
     if (parsed.redirect) {
@@ -129,12 +199,18 @@
     }
 
     if (assessmentRooms) assessmentRooms.dispose();
+    disposeLandingSnake(false);
     disposeActiveEditor();
     currentRoute = parsed;
+    document.body.dataset.route = parsed.name;
+    syncPrimaryNavigation(parsed);
     closeProfile();
 
     var view;
-    if (parsed.name === "chapter") {
+    if (parsed.name === "landing") {
+      view = renderLanding();
+      document.title = "Learn Python · Python EduGround";
+    } else if (parsed.name === "chapter") {
       view = renderChapterHub(parsed.chapter);
       document.title = parsed.chapter.title + " · Python EduGround";
     } else if (parsed.name === "exercises") {
@@ -142,7 +218,7 @@
       document.title = "Exercises · " + parsed.chapter.title;
     } else if (parsed.name === "tutorial") {
       view = renderTutorial(parsed.chapter);
-      document.title = "Runbook · " + parsed.chapter.title;
+      document.title = "Class · " + parsed.chapter.title;
     } else if (parsed.name === "exercise") {
       view = renderExerciseWorkspace(parsed.exercise, parsed.chapter);
       document.title = parsed.exercise.title + " · Python Exercise";
@@ -158,14 +234,21 @@
     } else if (parsed.name === "assessment-mode") {
       view = assessmentRooms.renderMode(parsed.block, parsed.mode);
       document.title = (parsed.mode === "theory" ? "Theory" : "Practical") + " · " + parsed.block.title;
+    } else if (parsed.name === "stage-recap") {
+      view = renderStageRecap(parsed.block);
+      document.title = "Stage recap · " + parsed.block.title;
     } else {
       view = renderDashboard();
       document.title = "Python EduGround · Learning Path";
     }
 
     elements.main.replaceChildren(view);
+    refreshGeospaceMotion();
     renderProfile();
 
+    if (parsed.name === "landing") {
+      setupLandingSnakeDialog();
+    }
     if (parsed.name === "exercise") {
       window.requestAnimationFrame(function () {
         initializeExerciseEditor(parsed.exercise);
@@ -177,11 +260,68 @@
       });
     }
 
+    if (focusTarget) {
+      window.requestAnimationFrame(function () {
+        focusRouteTarget(focusTarget);
+      });
+    }
+
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
-    if (announceChange) {
+    if (announceChange && !focusTarget) {
+      try {
+        elements.main.focus({ preventScroll: true });
+      } catch (error) {
+        elements.main.focus();
+      }
       announce(getRouteAnnouncement(parsed));
     }
+  }
+
+  function focusRouteTarget(targetName) {
+    var target = elements.main.querySelector(
+      "[data-route-focus='" + cssEscape(targetName) + "']"
+    );
+    if (!target) {
+      target = elements.main;
+    } else if (!target.hasAttribute("tabindex")) {
+      target.tabIndex = -1;
+    }
+    try {
+      target.focus({ preventScroll: true });
+    } catch (error) {
+      target.focus();
+    }
+  }
+
+  function syncPrimaryNavigation(route) {
+    var chapterRoute = route && [
+      "home",
+      "stage-recap",
+      "chapter",
+      "exercises",
+      "tutorial",
+      "exercise"
+    ].includes(route.name);
+    var assessmentRoute = route && [
+      "assessments",
+      "assessment-block",
+      "assessment-mode"
+    ].includes(route.name);
+    var landingRoute = route && route.name === "landing";
+    document.querySelectorAll(".topbar-home[href]").forEach(function (link) {
+      var isCurrent = (
+        (landingRoute && link.getAttribute("href") === "#welcome") ||
+        (chapterRoute && link.getAttribute("href") === "#home") ||
+        (assessmentRoute && link.getAttribute("href") === "#assessments")
+      );
+      link.classList.toggle("is-current", Boolean(isCurrent));
+      if (isCurrent) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
   }
 
   function parseRoute() {
@@ -194,7 +334,10 @@
     }
 
     decoded = decoded.replace(/^\/+|\/+$/g, "");
-    if (!decoded || decoded === "home") {
+    if (!decoded || decoded === "welcome") {
+      return { name: "landing" };
+    }
+    if (decoded === "home") {
       return { name: "home" };
     }
 
@@ -232,6 +375,10 @@
       return { name: "assessments" };
     }
 
+    if (parts[0] === "stage" && assessmentById.has(parts[1]) && parts[2] === "recap") {
+      return { name: "stage-recap", block: assessmentById.get(parts[1]) };
+    }
+
     if (parts[0] === "assessment" && assessmentById.has(parts[1])) {
       var block = assessmentById.get(parts[1]);
       if (!parts[2]) {
@@ -246,6 +393,9 @@
   }
 
   function getRouteAnnouncement(route) {
+    if (route.name === "landing") {
+      return "Opened the Python EduGround welcome page.";
+    }
     if (route.name === "chapter") {
       return "Opened " + route.chapter.title + ".";
     }
@@ -253,7 +403,7 @@
       return "Opened the " + route.chapter.title + " exercise list.";
     }
     if (route.name === "tutorial") {
-      return "Opened the " + route.chapter.title + " tutorial and runbook.";
+      return "Opened the " + route.chapter.title + " class materials.";
     }
     if (route.name === "exercise") {
       return "Opened " + route.exercise.title + ".";
@@ -270,170 +420,228 @@
     if (route.name === "assessment-mode") {
       return "Opened the " + route.mode + " room for " + route.block.title + ".";
     }
+    if (route.name === "stage-recap") {
+      return "Opened the stage recap for " + route.block.title + ".";
+    }
     return "Opened the chapter dashboard.";
   }
 
-  function renderDashboard() {
-    var wrapper = el("div", "page-shell dashboard-page");
+  function buildDashboardSnapshot() {
     var stats = getOverallStats();
     var rank = getCurrentRank(stats);
     var nextRank = getNextRank(rank);
-    var continueChapter = getContinueChapter();
-    var continueChapterProgress = getChapterProgress(continueChapter);
-    var continueLearningProgress = getChapterLearningProgress(continueChapter);
-    var hero = el("section", "dashboard-hero");
-    var heroCopy = el("div", "dashboard-hero__copy");
-    var eyebrow = el("p", "eyebrow", "Python learning path");
-    var title = el("h1", null, "Build fluency, one green test at a time.");
-    var lede = el(
-      "p",
-      "dashboard-hero__lede",
-      "Explore 11 focused chapters, learn from practical runbooks, then solve every exercise in a real Python editor."
-    );
-    var heroActions = el("div", "button-row");
-    var continueLink = anchor(
-      "#chapter/" + encodeURIComponent(String(continueChapter.id)),
-      "button button--primary",
-      stats.passedExercises > 0 ? "Continue learning" : "Start the path"
-    );
-    var badgeLink = anchor("#profile/badges", "button button--quiet", "View badges");
-    var heroProgress = el("section", "dashboard-progress");
-    var currentLearning = anchor(
-      "#chapter/" + encodeURIComponent(String(continueChapter.id)),
-      "dashboard-current-learning"
-    );
-    var currentLearningMarker = el("span", "dashboard-current-learning__marker", "→");
-    var currentLearningCopy = el("span", "dashboard-current-learning__copy");
-    currentLearningMarker.setAttribute("aria-hidden", "true");
-    currentLearningCopy.append(
-      el("span", "dashboard-current-learning__label", stats.passedExercises ? "Continue your current chapter" : "Recommended starting point"),
-      el("strong", null, "Chapter " + padChapter(continueChapter.number) + " · " + continueChapter.title),
-      el(
-        "span",
-        "dashboard-current-learning__meta",
-        continueChapterProgress.done + " / " + continueChapterProgress.total + " exercises · " +
-          continueLearningProgress.done + " / " + continueLearningProgress.total + " guide sections"
-      )
-    );
-    currentLearning.append(currentLearningMarker, currentLearningCopy, el("span", "dashboard-current-learning__open", "Open →"));
-    var progressTop = el("div", "dashboard-progress__top");
-    var progressLabel = el("div");
-    var progressEyebrow = el("span", "dashboard-progress__label", "Overall progress");
-    var progressTitle = el("strong", null, rank.name);
-    var progressPercent = el("strong", "dashboard-progress__percent", stats.progressPercent + "%");
-    var progress = progressElement(
-      stats.passedExercises,
-      stats.totalExercises,
-      stats.passedExercises + " of " + stats.totalExercises + " exercises passed"
-    );
-    var statGrid = el("div", "dashboard-stat-grid");
+    var assessmentStats = getAssessmentStats();
+    var badges = getBadgeStates(stats);
 
-    title.id = "dashboard-title";
-    hero.setAttribute("aria-labelledby", title.id);
-    heroActions.append(continueLink, badgeLink);
-    heroCopy.append(eyebrow, title, lede, currentLearning, heroActions);
-
-    progressLabel.append(progressEyebrow, progressTitle);
-    progressTop.append(progressLabel, progressPercent);
-    heroProgress.append(progressTop, progress);
-    statGrid.append(
-      renderStat("Collected stars", stats.earnedStars + " / " + stats.maxStars, "★"),
-      renderStat("Exercises passed", stats.passedExercises + " / " + stats.totalExercises, "✓"),
-      renderStat("Chapters mastered", stats.completedChapters + " / " + chapters.length, "◆")
-    );
-    heroProgress.append(statGrid);
-    if (nextRank) {
-      heroProgress.append(
-        el(
-          "p",
-          "dashboard-progress__next",
-          Math.max(0, nextRank.minStars - stats.earnedStars) + " stars to Level " + nextRank.level + " · " + nextRank.name
-        )
-      );
-    } else {
-      heroProgress.append(el("p", "dashboard-progress__next", "The full constellation is yours."));
+    if (!dashboardModel || typeof dashboardModel.build !== "function") {
+      return null;
     }
-    hero.append(heroCopy, heroProgress);
 
-    var section = el("section", "chapter-map");
-    var headingRow = el("header", "section-heading section-heading--row");
-    var headingCopy = el("div");
-    var chapterTitle = el("h2", null, "Choose a chapter");
-    var chapterCopy = el("p", null, "Open a chapter to choose its exercises or guided runbook.");
-    var courseCount = el("span", "section-heading__count", chapters.length + " chapters");
-    var grid = el("div", "chapter-grid");
-
-    headingCopy.append(chapterTitle, chapterCopy);
-    headingRow.append(headingCopy, courseCount);
-    section.append(headingRow);
-    chapters.forEach(function (chapter, index) {
-      grid.append(renderChapterCard(chapter, index));
+    return dashboardModel.build({
+      chapters: chapters.map(function (chapter) {
+        var classMaterial = classMaterials[String(chapter.id)] || {};
+        return {
+          id: String(chapter.id),
+          number: Number(chapter.number),
+          title: chapter.title,
+          summary: chapter.summary,
+          topics: chapter.topics,
+          recapQuestions: Array.isArray(classMaterial.recapQuestions)
+            ? classMaterial.recapQuestions
+            : [],
+          exercises: getChapterProgress(chapter),
+          guide: getChapterLearningProgress(chapter),
+          exerciseItems: getExercises(chapter).map(function (exercise) {
+            return {
+              id: String(exercise.id),
+              title: exercise.title,
+              passed: passed.has(String(exercise.id))
+            };
+          })
+        };
+      }),
+      assessmentBlocks: (Array.isArray(assessmentData.blocks) ? assessmentData.blocks : []).map(function (block) {
+        var blockStats = getAssessmentBlockStats(block);
+        return {
+          id: String(block.id),
+          number: Number(block.number),
+          title: block.title,
+          chapters: Array.isArray(block.chapters) ? block.chapters.map(String) : [],
+          passedModes: blockStats.passedModes,
+          totalModes: 2,
+          modes: blockStats.modes,
+          references: Array.isArray(block.references) ? block.references : [],
+          recap: stageRecaps[String(block.id)] || null
+        };
+      }),
+      stats: stats,
+      rank: rank,
+      nextRank: nextRank,
+      unlockedBadges: badges.filter(function (item) { return item.unlocked; }).length,
+      totalBadges: badges.length,
+      passedAssessmentModes: assessmentStats.passedModes,
+      totalAssessmentModes: assessmentStats.totalModes,
+      lastExerciseId: workspaceRead(STORAGE_KEYS.lastExercise),
+      note: course.note
     });
-    section.append(grid);
-
-    var note = el("aside", "source-note");
-    note.append(
-      el("span", "source-note__icon", "i"),
-      el("p", null, course.note || "Exercises are reconstructed from the solution files in this repository.")
-    );
-
-    wrapper.append(hero, renderAssessmentDashboardCallout(), section, note);
-    return wrapper;
   }
 
-  function renderAssessmentDashboardCallout() {
-    var stats = getAssessmentStats();
-    var callout = anchor("#assessments", "dashboard-assessment-callout");
-    var copy = el("div");
-    var score = el("div", "dashboard-assessment-callout__score");
-    copy.append(
-      el("p", "eyebrow", "Timed checkpoints"),
-      el("h2", null, "Theory plus practical assessment rooms"),
-      el("p", null, "Every three-chapter stage ends with a 20-minute knowledge exam and a 60-minute five-task Python practical.")
+  function renderUnavailablePage(title, message) {
+    var unavailable = el("div", "page-shell empty-state");
+    unavailable.append(
+      el("strong", null, title),
+      el("p", null, message)
     );
-    score.append(
-      el("strong", null, stats.passedModes + " / " + stats.totalModes),
-      el("span", null, "rooms passed"),
-      el("small", null, "60/100 required · progress survives updates"),
-      el("span", "dashboard-assessment-callout__open", "Open assessments →")
-    );
-    callout.append(el("span", "dashboard-assessment-callout__icon", "◷"), copy, score);
-    return callout;
+    return unavailable;
   }
 
-  function renderChapterCard(chapter, index) {
-    var progress = getChapterProgress(chapter);
-    var card = anchor(
-      "#chapter/" + encodeURIComponent(String(chapter.id)),
-      "chapter-card" + (progress.done === progress.total && progress.total ? " is-complete" : "")
-    );
-    var art = renderChapterArt(chapter, "chapter-card__art");
-    var body = el("div", "chapter-card__body");
-    var top = el("div", "chapter-card__top");
-    var number = el("span", "chapter-number", "Chapter " + padChapter(chapter.number));
-    var starCount = el("span", "chapter-card__stars", "★ " + progress.stars + " / " + progress.maxStars);
-    var title = el("h3", null, chapter.title);
-    var summary = el("p", "chapter-card__summary", chapter.summary);
-    var tags = renderTags(chapter.topics, 3);
-    var progressRow = el("div", "chapter-card__progress-row");
-    var progressLabel = el("span", null, progress.done + " / " + progress.total + " passed");
-    var progressPercent = el("strong", null, progress.percent + "%");
-    var open = el("span", "chapter-card__open", progress.done ? "Continue chapter →" : "Open chapter →");
+  function renderLanding() {
+    var model = buildDashboardSnapshot();
+    if (!model || !landingView || typeof landingView.render !== "function") {
+      return renderUnavailablePage(
+        "The welcome page could not load.",
+        "Refresh the page so the landing assets can be loaded in order."
+      );
+    }
+    return landingView.render(model);
+  }
 
-    card.style.setProperty("--card-delay", Math.min(index * 35, 280) + "ms");
-    top.append(number, starCount);
-    progressRow.append(progressLabel, progressPercent);
-    body.append(
-      top,
-      title,
-      summary,
-      tags,
-      progressRow,
-      progressElement(progress.done, progress.total, chapter.title + ": " + progress.done + " of " + progress.total + " passed"),
-      open
-    );
-    card.append(art, body);
-    return card;
+  function setupLandingSnakeDialog() {
+    var dialog = elements.main.querySelector("[data-snake-dialog]");
+    if (!dialog) {
+      return;
+    }
+    dialog.addEventListener("close", function () {
+      if (activeLandingSnakeDialog === dialog) {
+        disposeLandingSnake(true);
+        announce("Closed Python Snake.");
+      }
+    });
+    dialog.addEventListener("click", function (event) {
+      var toggle = event.target.closest("button[data-snake-action='toggle']");
+      if (!toggle) {
+        return;
+      }
+      window.requestAnimationFrame(function () {
+        var arcade = dialog.querySelector("[data-landing-snake]");
+        var playfield = dialog.querySelector("[data-snake-playfield]");
+        if (
+          dialog.open &&
+          arcade &&
+          arcade.dataset.snakePhase === "running" &&
+          playfield
+        ) {
+          try {
+            playfield.focus({ preventScroll: true });
+          } catch (error) {
+            playfield.focus();
+          }
+        }
+      });
+    });
+  }
+
+  function openLandingSnakeDialog(launcher) {
+    var dialog = elements.main.querySelector("[data-snake-dialog]");
+    var arcade = dialog && dialog.querySelector("[data-landing-snake]");
+    if (
+      !dialog ||
+      !arcade ||
+      !landingSnake ||
+      typeof landingSnake.mount !== "function"
+    ) {
+      announce("Python Snake is unavailable. Refresh the welcome page and try again.");
+      return;
+    }
+    if (activeLandingSnakeDialog && activeLandingSnakeDialog !== dialog) {
+      disposeLandingSnake(false);
+    }
+    if (!dialog.open) {
+      if (typeof dialog.showModal === "function") {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute("open", "");
+      }
+    }
+    activeLandingSnakeDialog = dialog;
+    activeLandingSnakeLauncher = launcher;
+    launcher.setAttribute("aria-expanded", "true");
+    if (!activeLandingSnake) {
+      activeLandingSnake = landingSnake.mount(arcade, { audio: audio });
+    }
+    refreshGeospaceMotion();
+    window.requestAnimationFrame(function () {
+      var start = dialog.querySelector("button[data-snake-action='toggle']");
+      if (dialog.open && start) {
+        try {
+          start.focus({ preventScroll: true });
+        } catch (error) {
+          start.focus();
+        }
+      }
+    });
+    announce("Opened Python Snake. The mission is idle until you press Start.");
+  }
+
+  function closeLandingSnakeDialog() {
+    var dialog = activeLandingSnakeDialog ||
+      elements.main.querySelector("[data-snake-dialog][open]");
+    if (!dialog) {
+      return;
+    }
+    if (typeof dialog.close === "function") {
+      dialog.close();
+    } else {
+      dialog.removeAttribute("open");
+      disposeLandingSnake(true);
+      announce("Closed Python Snake.");
+    }
+  }
+
+  function disposeLandingSnake(restoreFocus) {
+    var launcher = activeLandingSnakeLauncher;
+    if (activeLandingSnake) {
+      activeLandingSnake.destroy();
+      activeLandingSnake = null;
+    }
+    if (launcher) {
+      launcher.setAttribute("aria-expanded", "false");
+    }
+    activeLandingSnakeDialog = null;
+    activeLandingSnakeLauncher = null;
+    if (restoreFocus && launcher && launcher.isConnected) {
+      window.requestAnimationFrame(function () {
+        if (launcher.isConnected) {
+          launcher.focus();
+        }
+      });
+    }
+  }
+
+  function renderDashboard() {
+    var model = buildDashboardSnapshot();
+    if (!model || !dashboardView || typeof dashboardView.render !== "function") {
+      return renderUnavailablePage(
+        "The learning dashboard could not load.",
+        "Refresh the page so the dashboard assets can be loaded in order."
+      );
+    }
+    return dashboardView.render(model);
+  }
+
+  function renderStageRecap(block) {
+    var model = buildDashboardSnapshot();
+    var blockId = String(block && block.id || "");
+    var stage = model && Array.isArray(model.stages)
+      ? model.stages.find(function (candidate) { return candidate.id === blockId; })
+      : null;
+    if (!stage || !stageRecapView || typeof stageRecapView.render !== "function") {
+      return renderUnavailablePage(
+        "This stage recap could not load.",
+        "Return to the roadmap and choose one of the four available stage recaps."
+      );
+    }
+    return stageRecapView.render(stage, model);
   }
 
   function renderStat(label, value, symbol) {
@@ -447,6 +655,7 @@
   function renderChapterHub(chapter) {
     var wrapper = el("div", "page-shell chapter-page");
     var progress = getChapterProgress(chapter);
+    var guideProgress = getChapterLearningProgress(chapter);
     var hero = el("section", "chapter-hero");
     var art = renderChapterArt(chapter, "chapter-hero__art");
     var content = el("div", "chapter-hero__content");
@@ -471,6 +680,25 @@
     );
     content.append(eyebrow, title, summary, renderTags(chapter.topics), progressPanel);
     hero.append(art, content);
+    if (
+      progressSnakeView &&
+      typeof progressSnakeView.render === "function" &&
+      progress.total > 0 &&
+      progress.done === progress.total &&
+      guideProgress.total > 0 &&
+      guideProgress.done === guideProgress.total
+    ) {
+      var chapterAmbience = progressSnakeView.render({
+        groups: [
+          { id: "chapters", tone: "green", count: 1, total: 1 },
+          { id: "stages", tone: "blue", count: 0, total: 1 },
+          { id: "tests", tone: "yellow", count: 0, total: 2 }
+        ]
+      }, { variant: "chapter" });
+      if (chapterAmbience) {
+        hero.append(chapterAmbience);
+      }
+    }
 
     var choiceSection = el("section", "chapter-choices");
     var choiceHeading = el("header", "section-heading");
@@ -492,15 +720,18 @@
     var tutorialCount = chapterLearning && Array.isArray(chapterLearning.tutorial)
       ? chapterLearning.tutorial.length
       : 0;
-    var guideProgress = getChapterLearningProgress(chapter);
+    var classMaterial = classMaterials[String(chapter.id)] || null;
+    var classMinutes = classMaterial && Number.isFinite(Number(classMaterial.estimatedMinutes))
+      ? " · " + Number(classMaterial.estimatedMinutes) + " min class"
+      : "";
     var runbookChoice = renderChoiceCard({
       href: "#chapter/" + encodeURIComponent(String(chapter.id)) + "/tutorials",
       icon: "{ }",
-      eyebrow: "Learn the concepts",
-      title: "Runbook & tutorials",
-      copy: "Build a mental model with worked Python examples, common pitfalls, and a practical problem-solving sequence.",
-      meta: guideProgress.done + " / " + guideProgress.total + " guide sections understood · " + tutorialCount + " tutorials",
-      action: "Open learning guide"
+      eyebrow: "Study before you practise",
+      title: "Class materials",
+      copy: "Follow a real lesson: preparation, class plan, written notes, live demo, activities, recap, homework, and official references.",
+      meta: guideProgress.done + " / " + guideProgress.total + " class sections understood · " + tutorialCount + " lessons" + classMinutes,
+      action: "Open class"
     });
     choiceGrid.append(exercisesChoice, runbookChoice);
     var assessmentBlock = getAssessmentEndingAtChapter(chapter);
@@ -627,17 +858,79 @@
   }
 
   function renderTutorial(chapter) {
+    var chapterId = String(chapter.id);
+    var material = classMaterials[chapterId] || null;
+    if (!material || !classPageView || typeof classPageView.render !== "function") {
+      return renderLegacyTutorial(chapter);
+    }
+
+    var content = getChapterLearning(chapter);
+    var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
+    var runbook = content && Array.isArray(content.runbook) ? content.runbook : [];
+    var deepDive = content && content.deepDive && typeof content.deepDive === "object" ? content.deepDive : null;
+    var clinic = conceptClinicView && typeof conceptClinicView.render === "function"
+      ? clinicsByChapter[chapterId] || null
+      : null;
+    var lessonNodes = tutorials.length
+      ? tutorials.map(function (tutorial, index) {
+        return renderTutorialSection(chapter, tutorial, index, "h3");
+      })
+      : [renderFallbackTutorial(chapter, "h3")];
+    var deepDiveNode = hasDeepDiveContent(deepDive, clinic)
+      ? renderDeepDive(chapter, deepDive || {}, clinic, "h3")
+      : null;
+    var runbookNode = renderDeepRunbook(chapter, runbook, content, false, "h3");
+    var documentation = content && Array.isArray(content.documentation) ? content.documentation : [];
+    var officialDocsNode = renderPythonDocumentation(chapter, documentation);
+    var chapterIndex = chapters.findIndex(function (candidate) {
+      return String(candidate.id) === chapterId;
+    });
+    var navigationChapters = chapters.map(function (candidate) {
+      var stats = getChapterLearningProgress(candidate);
+      return Object.assign({}, candidate, {
+        href: "#chapter/" + encodeURIComponent(String(candidate.id)) + "/tutorials",
+        statusLabel: stats.done === stats.total
+          ? "Class complete"
+          : stats.done + " / " + stats.total + " sections"
+      });
+    });
+    return classPageView.render({
+      chapter: chapter,
+      chapters: navigationChapters,
+      material: material,
+      progressNode: renderLearningProgressPanel(chapter),
+      completedRoomTaskIds: getClassRoomTasks(material).filter(function (task) {
+        return isLearningUnderstood(chapter, getClassRoomProgressId(task.id));
+      }).map(function (task) {
+        return String(task.id);
+      }),
+      labDrafts: getClassLabDraftsForChapter(chapterId),
+      lessonNodes: lessonNodes,
+      deepDiveNode: deepDiveNode,
+      runbookNode: runbookNode,
+      officialDocsNode: officialDocsNode,
+      exerciseHref: "#chapter/" + encodeURIComponent(chapterId) + "/exercises",
+      previousChapter: chapterIndex > 0 ? chapters[chapterIndex - 1] : null,
+      nextChapter: chapterIndex >= 0 && chapterIndex < chapters.length - 1 ? chapters[chapterIndex + 1] : null
+    });
+  }
+
+  function renderLegacyTutorial(chapter) {
     var content = getChapterLearning(chapter);
     var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
     var runbook = content && Array.isArray(content.runbook) ? content.runbook : [];
     var objectives = content && Array.isArray(content.objectives) ? content.objectives : [];
     var deepDive = content && content.deepDive && typeof content.deepDive === "object" ? content.deepDive : null;
+    var clinic = conceptClinicView && typeof conceptClinicView.render === "function"
+      ? clinicsByChapter[String(chapter.id)] || null
+      : null;
+    var hasDeepDive = hasDeepDiveContent(deepDive, clinic);
     var wrapper = el("div", "page-shell tutorial-page");
 
     wrapper.append(renderBreadcrumbs([
       { label: "Chapters", href: "#home" },
       { label: chapter.title, href: "#chapter/" + encodeURIComponent(String(chapter.id)) },
-      { label: "Runbook & tutorials" }
+      { label: "Class materials" }
     ]));
 
     var hero = el("header", "tutorial-hero");
@@ -697,13 +990,23 @@
       item.append(button);
       tocList.append(item);
     });
-    if (hasDeepDiveContent(deepDive)) {
+    if (hasDeepDive) {
       var deepDiveItem = el("li");
       var deepDiveButton = el("button", "tutorial-toc__button", "Deep dive · Practise the model");
       deepDiveButton.type = "button";
       deepDiveButton.dataset.scrollTarget = "chapter-deep-dive";
       deepDiveItem.append(deepDiveButton);
       tocList.append(deepDiveItem);
+    }
+    if (clinic) {
+      var clinicItem = el("li");
+      var clinicButton = el("button", "tutorial-toc__button", "Concept clinic · Trace and transfer");
+      clinicButton.type = "button";
+      clinicButton.dataset.scrollTarget = "concept-clinic-" + domId(clinic.id || chapter.id) + "-section";
+      clinicButton.dataset.learningToc = "concept-clinic";
+      clinicButton.classList.toggle("is-understood", isLearningUnderstood(chapter, "concept-clinic"));
+      clinicItem.append(clinicButton);
+      tocList.append(clinicItem);
     }
     var runbookButtonItem = el("li");
     var runbookButton = el("button", "tutorial-toc__button", "Runbook · Practice loop");
@@ -723,8 +1026,8 @@
         article.append(renderTutorialSection(chapter, tutorial, index));
       });
     }
-    if (hasDeepDiveContent(deepDive)) {
-      article.append(renderDeepDive(chapter, deepDive));
+    if (hasDeepDive) {
+      article.append(renderDeepDive(chapter, deepDive || {}, clinic));
     }
     article.append(renderDeepRunbook(chapter, runbook, content));
     layout.append(toc, article);
@@ -751,17 +1054,19 @@
     var top = el("div", "tutorial-progress__top");
     var copy = el("div");
     var count = el("strong", "tutorial-progress__count", stats.done + " / " + stats.total);
-    var bar = progressElement(stats.done, stats.total, chapter.title + " learning guide progress");
+    var bar = progressElement(stats.done, stats.total, chapter.title + " class progress");
     var status = el(
       "p",
       "tutorial-progress__status",
-      stats.done === stats.total ? "Guide complete — revisit any section whenever you need it." : "Mark each concept after you can explain it in your own words."
+      stats.done === stats.total
+        ? "Class complete — revisit any lesson whenever you need it."
+        : "Mark each lesson after you can explain it in your own words."
     );
     panel.dataset.learningProgressPanel = String(chapter.id);
     count.dataset.learningProgressCount = String(chapter.id);
     bar.dataset.learningProgressBar = String(chapter.id);
     status.dataset.learningProgressStatus = String(chapter.id);
-    copy.append(el("span", null, "Learning guide"), el("strong", null, stats.percent + "% understood"));
+    copy.append(el("span", null, "Class progress"), el("strong", null, stats.percent + "% understood"));
     top.append(copy, count);
     panel.append(top, bar, status);
     return panel;
@@ -777,33 +1082,53 @@
     return button;
   }
 
-  function renderTutorialSection(chapter, tutorial, index) {
+  function renderTutorialSection(chapter, tutorial, index, headingTag) {
     var section = el("section", "tutorial-section");
     var heading = el("header", "tutorial-section__heading");
     var number = el("span", "tutorial-section__number", String(index + 1).padStart(2, "0"));
-    var title = el("h2", null, tutorial.title);
-    var codeBox = el("div", "tutorial-code");
-    var codeHeader = el("div", "tutorial-code__header");
-    var pre = el("pre");
-    var code = el("code", null, tutorial.exampleCode || "# Try a small example here.");
+    var title = el(headingTag || "h2", null, tutorial.title);
     var checklist = el("section", "tutorial-checklist");
     var checklistList = el("ul");
     var takeaway = el("aside", "tutorial-takeaway");
     var pitfall = el("aside", "tutorial-pitfall");
     var learningItemId = getTutorialItemId(tutorial, index);
+    var lessonLabId = "lesson-" + domId(learningItemId);
+    var lessonDraft = classLabDrafts.get(
+      classLabDraftKey(String(chapter.id), lessonLabId)
+    );
+    var codeBox;
 
     section.id = "tutorial-section-" + index;
     section.dataset.learningItem = learningItemId;
     section.classList.toggle("is-understood", isLearningUnderstood(chapter, learningItemId));
     heading.append(number, title, renderLearningToggle(chapter, learningItemId));
-    var codeMeta = el("span", "tutorial-code__meta");
-    var copyButton = el("button", "tutorial-copy-button", "Copy example");
-    copyButton.type = "button";
-    copyButton.dataset.copySnippet = "true";
-    codeMeta.append(el("span", null, "Python 3"), copyButton);
-    codeHeader.append(el("span", null, "concept-example.py"), codeMeta);
-    pre.append(code);
-    codeBox.append(codeHeader, pre);
+    if (classPageView && typeof classPageView.renderRunnableLab === "function") {
+      codeBox = classPageView.renderRunnableLab({
+        id: lessonLabId,
+        filename: String(chapter.id) + "-concept-" + (index + 1) + ".py",
+        starterCode: tutorial.exampleCode || "# Try a small example here.",
+        stdin: Array.isArray(tutorial.sampleInput) ? tutorial.sampleInput : [],
+        expectedOutput: "",
+      }, {
+        chapterId: String(chapter.id),
+        taskId: "",
+        draft: lessonDraft,
+      });
+    } else {
+      codeBox = el("div", "tutorial-code");
+      var codeHeader = el("div", "tutorial-code__header");
+      var pre = el("pre");
+      var code = el("code", null, tutorial.exampleCode || "# Try a small example here.");
+      var codeMeta = el("span", "tutorial-code__meta");
+      var copyButton = el("button", "tutorial-copy-button", "Copy example");
+      pre.tabIndex = 0;
+      copyButton.type = "button";
+      copyButton.dataset.copySnippet = "true";
+      codeMeta.append(el("span", null, "Python 3"), copyButton);
+      codeHeader.append(el("span", null, "concept-example.py"), codeMeta);
+      pre.append(code);
+      codeBox.append(codeHeader, pre);
+    }
 
     checklist.append(el("h3", null, "Check your understanding"));
     (tutorial.checklist || []).forEach(function (item) {
@@ -817,28 +1142,47 @@
     return section;
   }
 
-  function hasDeepDiveContent(deepDive) {
-    return Boolean(deepDive && (
+  function hasDeepDiveContent(deepDive, clinic) {
+    return Boolean(clinic || (deepDive && (
       deepDive.mentalModel ||
       (Array.isArray(deepDive.guidedPractice) && deepDive.guidedPractice.length) ||
       (Array.isArray(deepDive.glossary) && deepDive.glossary.length) ||
       (Array.isArray(deepDive.debugChecklist) && deepDive.debugChecklist.length) ||
+      deepDive.interactiveLab ||
       deepDive.checkpoint
-    ));
+    )));
   }
 
-  function renderDeepDive(chapter, deepDive) {
+  function renderDeepDive(chapter, deepDive, clinic, headingTag) {
     var section = el("section", "tutorial-section deep-dive-section");
     var heading = el("header", "tutorial-section__heading");
-    heading.append(el("span", "tutorial-section__number", "DD"), el("h2", null, "Deepen the mental model"));
+    heading.append(el("span", "tutorial-section__number", "DD"), el(headingTag || "h2", null, "Deepen the mental model"));
     section.id = "chapter-deep-dive";
     section.append(
       heading,
-      el("p", "tutorial-section__explanation", "Slow down here: trace the model, practise on a fresh situation, then check what you can explain without running code.")
+      el("p", "tutorial-section__explanation", "Slow down here: trace state line by line, challenge a tempting misconception, transfer the model to a fresh situation, then check what you can explain without running code.")
     );
 
+    var visualGallery = renderChapterVisualGallery(chapter);
+    if (visualGallery) {
+      section.append(visualGallery);
+    }
     if (deepDive.mentalModel && typeof deepDive.mentalModel === "object") {
       section.append(renderMentalModel(deepDive.mentalModel));
+    }
+    if (clinic && conceptClinicView && typeof conceptClinicView.render === "function") {
+      var clinicSection = conceptClinicView.render(chapter, clinic, {
+        action: renderLearningToggle(chapter, "concept-clinic")
+      });
+      clinicSection.dataset.learningItem = "concept-clinic";
+      clinicSection.classList.toggle("is-understood", isLearningUnderstood(chapter, "concept-clinic"));
+      section.append(clinicSection);
+    }
+    if (deepDive.interactiveLab && typeof deepDive.interactiveLab === "object") {
+      var interactiveLab = renderInteractiveLab(chapter, deepDive.interactiveLab);
+      if (interactiveLab) {
+        section.append(interactiveLab);
+      }
     }
     if (Array.isArray(deepDive.guidedPractice) && deepDive.guidedPractice.length) {
       section.append(renderGuidedPractice(chapter, deepDive.guidedPractice));
@@ -852,6 +1196,60 @@
     if (deepDive.checkpoint && typeof deepDive.checkpoint === "object") {
       section.append(renderCheckpoint(chapter, deepDive.checkpoint));
     }
+    return section;
+  }
+
+  function renderChapterVisualGallery(chapter) {
+    if (!chapter || String(chapter.id) !== "py12") {
+      return null;
+    }
+    var visuals = [
+      {
+        src: "assets/illustrations/problem-solving/decomposition-roadmap.svg",
+        title: "Turn a prompt into checkpoints",
+        caption: "Separate the contract, examples, state, transition, and verification before choosing an algorithm.",
+        alt: "A problem-decomposition roadmap that divides one large prompt into smaller connected and verifiable steps."
+      },
+      {
+        src: "assets/illustrations/problem-solving/dynamic-programming-table.svg",
+        title: "Reuse solved states",
+        caption: "Memoization caches repeated calls; tabulation orders the same dependencies in a table.",
+        alt: "Repeated recursive states flowing into a memo cache and then into a dynamic-programming table with a highlighted final answer."
+      },
+      {
+        src: "assets/illustrations/problem-solving/knapsack-choice.svg",
+        title: "Compare take with skip",
+        caption: "A 0/1 item creates two branches. The state keeps only the best feasible value for the remaining capacity.",
+        alt: "A backpack and candidate items branching into take and skip choices before combining into the best feasible value."
+      },
+      {
+        src: "assets/illustrations/problem-solving/problem-pattern-map.svg",
+        title: "Match the shape to a strategy",
+        caption: "Binary search, two pointers, traversal, dynamic programming, and greedy reasoning each depend on a recognizable input promise.",
+        alt: "A strategy map connecting binary search, two pointers, graph traversal, dynamic programming, and greedy interval selection."
+      }
+    ];
+    var section = el("section", "chapter-visuals");
+    var heading = el("header", "deep-dive-heading");
+    var grid = el("div", "chapter-visuals__grid");
+    heading.append(
+      el("span", "eyebrow", "Visual field guide"),
+      el("h3", null, "See the state before writing the loop"),
+      el("p", null, "Use each diagram as a prediction tool. Describe the arrows aloud, then translate only those dependencies into code.")
+    );
+    visuals.forEach(function (visual) {
+      var figure = el("figure", "chapter-visual");
+      var image = el("img");
+      var caption = el("figcaption");
+      image.src = visual.src;
+      image.alt = visual.alt;
+      image.loading = "lazy";
+      image.decoding = "async";
+      caption.append(el("strong", null, visual.title), el("span", null, visual.caption));
+      figure.append(image, caption);
+      grid.append(figure);
+    });
+    section.append(heading, grid);
     return section;
   }
 
@@ -880,6 +1278,13 @@
     return block;
   }
 
+  function renderInteractiveLab(chapter, lab) {
+    if (lab.kind === "rounding-boundaries" && roundingLabController) {
+      return roundingLabController.render(chapter, lab);
+    }
+    return null;
+  }
+
   function renderGuidedPractice(chapter, practices) {
     var block = el("section", "guided-practice");
     var heading = el("header", "deep-dive-heading");
@@ -899,6 +1304,7 @@
         var codeMeta = el("span", "tutorial-code__meta");
         var copyButton = el("button", "tutorial-copy-button", "Copy starter");
         var pre = el("pre");
+        pre.tabIndex = 0;
         copyButton.type = "button";
         copyButton.dataset.copySnippet = "true";
         copyButton.dataset.copyRestingLabel = "Copy starter";
@@ -966,7 +1372,6 @@
     var feedback = el("p", "knowledge-check__feedback");
     var feedbackId = "checkpoint-feedback-" + domId(chapter.id);
     block.dataset.checkpoint = String(chapter.id);
-    block.dataset.checkpointExplanation = checkpoint.explanation || "Review the mental model and explain why the option fits.";
     block.append(el("span", "eyebrow", "Quick checkpoint"), el("h3", null, checkpoint.question || "Which statement best matches the model?"));
     var optionList = el("div", "knowledge-check__options");
     optionList.setAttribute("role", "group");
@@ -975,7 +1380,6 @@
       var button = el("button", "knowledge-check__option", option);
       button.type = "button";
       button.dataset.checkpointOption = String(index);
-      button.dataset.answerIndex = String(Number(checkpoint.answerIndex));
       button.setAttribute("aria-pressed", "false");
       button.setAttribute("aria-describedby", feedbackId);
       optionList.append(button);
@@ -988,10 +1392,10 @@
     return block;
   }
 
-  function renderDeepRunbook(chapter, steps, content) {
+  function renderDeepRunbook(chapter, steps, content, includeDocumentation, headingTag) {
     var section = el("section", "runbook-section");
     var heading = el("header", "tutorial-section__heading");
-    heading.append(el("span", "tutorial-section__number", "RB"), el("h2", null, "Problem-solving runbook"), renderLearningToggle(chapter, "runbook"));
+    heading.append(el("span", "tutorial-section__number", "RB"), el(headingTag || "h2", null, "Problem-solving runbook"), renderLearningToggle(chapter, "runbook"));
     section.id = "chapter-runbook";
     section.dataset.learningItem = "runbook";
     section.classList.toggle("is-understood", isLearningUnderstood(chapter, "runbook"));
@@ -1035,10 +1439,12 @@
       list.append(item);
     });
     section.append(list);
-    var documentation = content && Array.isArray(content.documentation) ? content.documentation : [];
-    var documentationPanel = renderPythonDocumentation(chapter, documentation);
-    if (documentationPanel) {
-      section.append(documentationPanel);
+    if (includeDocumentation !== false) {
+      var documentation = content && Array.isArray(content.documentation) ? content.documentation : [];
+      var documentationPanel = renderPythonDocumentation(chapter, documentation);
+      if (documentationPanel) {
+        section.append(documentationPanel);
+      }
     }
     return section;
   }
@@ -1100,6 +1506,7 @@
     var codeMeta = el("span", "tutorial-code__meta");
     var copyButton = el("button", "tutorial-copy-button", "Copy example");
     var pre = el("pre");
+    pre.tabIndex = 0;
     copyButton.type = "button";
     copyButton.dataset.copySnippet = "true";
     codeMeta.append(el("span", null, "Python 3"), copyButton);
@@ -1210,9 +1617,9 @@
     }
   }
 
-  function renderFallbackTutorial(chapter) {
+  function renderFallbackTutorial(chapter, headingTag) {
     var section = el("section", "tutorial-section");
-    section.append(el("h2", null, "Start with a concrete trace"), el("p", null, chapter.summary));
+    section.append(el(headingTag || "h2", null, "Start with a concrete trace"), el("p", null, chapter.summary));
     return section;
   }
 
@@ -1340,10 +1747,19 @@
       success.append(successList);
       brief.append(success);
     }
+    var techniqueContract = renderTechniqueContract(testSpec);
+    if (techniqueContract) {
+      brief.append(techniqueContract);
+    }
 
     var hints = renderHintPanel(exercise);
     problemGrid.append(brief, hints);
-    problem.append(problemHeader, problemGrid);
+    var conceptVisual = renderExerciseConceptVisual(exercise);
+    problem.append(problemHeader);
+    if (conceptVisual) {
+      problem.append(conceptVisual);
+    }
+    problem.append(problemGrid);
 
     var examples = el("section", "examples-section");
     var examplesHeading = el("header", "section-heading section-heading--row");
@@ -1364,17 +1780,140 @@
     }
     examples.append(exampleGrid);
 
-    var ide = renderIdeWorkspace(exercise, testSpec, visibleTests.length, hiddenCount);
-    shell.append(problem, examples, ide, renderExerciseBottomNavigation(chapterExercises, exerciseIndex, chapter));
+    var lessonPane = el("section", "exercise-workbench__lesson");
+    lessonPane.id = "exercise-lesson-" + domId(exerciseId);
+    lessonPane.setAttribute("aria-label", "Exercise lesson and visible examples");
+    lessonPane.tabIndex = 0;
+    lessonPane.append(problem, examples);
+
+    var codePane = el("section", "exercise-workbench__code");
+    codePane.id = "exercise-code-" + domId(exerciseId);
+    codePane.setAttribute("aria-label", "Python code workspace and results");
+    codePane.tabIndex = 0;
+    codePane.append(renderIdeWorkspace(exercise, testSpec, visibleTests.length, hiddenCount));
+
+    var workbench = el("div", "exercise-workbench");
+    workbench.dataset.ideWorkbench = exerciseId;
+    workbench.style.setProperty("--ide-lesson-percent", ideLayoutPreferences.lesson + "%");
+    workbench.append(
+      lessonPane,
+      createIdePaneResizer(
+        exerciseId,
+        "lesson",
+        lessonPane.id + " " + codePane.id
+      ),
+      codePane
+    );
+    shell.append(workbench, renderExerciseBottomNavigation(chapterExercises, exerciseIndex, chapter));
     wrapper.append(shell);
     workspaceWrite(STORAGE_KEYS.lastExercise, exerciseId);
     return wrapper;
+  }
+
+  function renderExerciseConceptVisual(exercise) {
+    var exerciseId = String(exercise && exercise.id || "");
+    if (!exerciseId.startsWith("py12-")) {
+      return null;
+    }
+    var visualByExercise = {
+      "py12-two-sum": {
+        src: "assets/illustrations/problem-solving/decomposition-roadmap.svg",
+        title: "Decompose before optimizing",
+        caption: "Separate the pair contract, discovery order, and no-match case before choosing a complement lookup.",
+        alt: "A roadmap dividing one large problem into smaller verifiable tasks."
+      },
+      "py12-interval-scheduling": {
+        src: "assets/illustrations/problem-solving/problem-pattern-map.svg",
+        title: "A greedy rule needs a promise",
+        caption: "Earliest finish is safe because an exchange argument preserves room for every compatible task that follows.",
+        alt: "A strategy map connecting input promises to several algorithm families."
+      },
+      "py12-knapsack": {
+        src: "assets/illustrations/problem-solving/knapsack-choice.svg",
+        title: "Every item creates take and skip branches",
+        caption: "The capacity state compares both legal futures while the one-use rule controls the table's update direction.",
+        alt: "A backpack and candidate items branching into take and skip choices."
+      }
+    };
+    var dynamicProgrammingExercises = new Set([
+      "py12-climbing-stairs",
+      "py12-grid-paths",
+      "py12-coin-change",
+      "py12-house-robber",
+      "py12-subset-sum",
+      "py12-lcs",
+      "py12-edit-distance"
+    ]);
+    var visual = visualByExercise[exerciseId];
+    if (!visual && dynamicProgrammingExercises.has(exerciseId)) {
+      visual = {
+        src: "assets/illustrations/problem-solving/dynamic-programming-table.svg",
+        title: "Name each state before filling it",
+        caption: "Base cases anchor the table; dependency arrows determine a safe evaluation order and whether storage can be compressed.",
+        alt: "Repeated recursive states flowing through memoization into an ordered dynamic-programming table."
+      };
+    }
+    if (!visual) {
+      return null;
+    }
+
+    var figure = el("figure", "problem-concept-visual");
+    var image = el("img");
+    var caption = el("figcaption");
+    image.src = visual.src;
+    image.alt = visual.alt;
+    image.loading = "eager";
+    image.decoding = "async";
+    caption.append(
+      el("span", "eyebrow", "Visual reasoning cue"),
+      el("strong", null, visual.title),
+      el("p", null, visual.caption)
+    );
+    figure.append(image, caption);
+    return figure;
   }
 
   function renderSpecBlock(label, value) {
     var block = el("div", "spec-block");
     block.append(el("span", "spec-block__label", label), el("p", null, value));
     return block;
+  }
+
+  function renderTechniqueContract(testSpec) {
+    var rules = testSpec && Array.isArray(testSpec.sourceRules)
+      ? testSpec.sourceRules
+      : [];
+    if (!rules.length) {
+      return null;
+    }
+    var section = el("section", "technique-contract");
+    var list = el("ul");
+    section.append(
+      el("span", "technique-contract__eyebrow", "Technique contract"),
+      el("h3", null, "Show the idea in your code"),
+      el(
+        "p",
+        null,
+        "For this exercise, correct output is only part of the goal. The full test run also checks these visible implementation requirements."
+      )
+    );
+    rules.forEach(function (rule) {
+      var item = el("li");
+      item.append(
+        el("span", "technique-contract__check", "◇"),
+        el("strong", null, String(rule.label || "Use the requested technique"))
+      );
+      list.append(item);
+    });
+    section.append(
+      list,
+      el(
+        "small",
+        null,
+        "These checks are lightweight coaching heuristics. They inspect code shape without loading or revealing a repository solution."
+      )
+    );
+    return section;
   }
 
   function renderExercisePager(exercises, index) {
@@ -1457,6 +1996,7 @@
   function renderIoField(label, value) {
     var field = el("section", "io-field");
     var pre = el("pre");
+    pre.tabIndex = 0;
     pre.append(el("code", null, value === "" ? "<empty>" : value));
     field.append(el("span", "io-field__label", label), pre);
     return field;
@@ -1466,16 +2006,36 @@
     var exerciseId = String(exercise.id);
     var tests = Array.isArray(testSpec.tests) ? testSpec.tests : [];
     var section = el("section", "ide-section");
+    section.dataset.ideWorkspace = exerciseId;
     var heading = el("header", "section-heading section-heading--row ide-section__heading");
     var headingCopy = el("div");
-    headingCopy.append(
-      el("p", "eyebrow", "Browser Python workspace"),
-      el("h2", null, "Write, run, and inspect"),
-      el("p", null, "Start from a clean template. Run checks visible examples; Run tests adds hidden cases and awards stars only when all pass.")
+    var headingActions = el("div", "ide-section__actions");
+    var focusButton = el("button", "ide-focus-button", "Focus editor");
+    var layoutResetButton = el("button", "ide-layout-reset", "Reset layout");
+    focusButton.type = "button";
+    focusButton.dataset.ideFocus = exerciseId;
+    focusButton.setAttribute("aria-pressed", "false");
+    focusButton.setAttribute("aria-label", "Focus editor and hide the lesson panel");
+    layoutResetButton.type = "button";
+    layoutResetButton.dataset.ideLayoutReset = exerciseId;
+    layoutResetButton.setAttribute(
+      "aria-label",
+      "Reset layout for lesson, editor, and feedback pane sizes"
     );
-    heading.append(headingCopy, el("span", "section-heading__count", visibleCount + " visible · " + hiddenCount + " hidden"));
+    headingCopy.append(
+      el("p", "eyebrow", "Python workspace"),
+      el("h2", null, "Code and feedback"),
+      el("p", null, "Run uses visible examples; Run tests adds hidden cases and awards stars.")
+    );
+    headingActions.append(
+      el("span", "section-heading__count", visibleCount + " visible · " + hiddenCount + " hidden"),
+      layoutResetButton,
+      focusButton
+    );
+    heading.append(headingCopy, headingActions);
 
     var layout = el("div", "ide-layout");
+    layout.id = "ide-editor-pane-" + domId(exerciseId);
     var editorShell = el("section", "ide-editor-shell");
     var topbar = el("header", "ide-topbar");
     var windowControls = el("span", "ide-window-controls");
@@ -1487,6 +2047,7 @@
     var fileTab = el("span", "ide-file-tab");
     var modified = el("span", "ide-file-tab__modified");
     modified.dataset.editorModified = exerciseId;
+    modified.setAttribute("role", "img");
     modified.setAttribute("aria-label", "Starter code");
     fileTab.append(el("span", "ide-file-tab__type", "PY"), el("span", null, getExerciseFileName(exercise)), modified);
     var actions = el("div", "ide-actions");
@@ -1500,6 +2061,9 @@
     var resetButton = el("button", "ide-button ide-button--quiet", "Restart");
     var runButton = el("button", "ide-button ide-button--run", "Run");
     var testsButton = el("button", "ide-button ide-button--tests", "Run tests");
+    var tools = el("details", "ide-tools");
+    var toolsSummary = el("summary", "ide-button ide-button--quiet", "File");
+    var toolsMenu = el("div", "ide-tools__menu");
     modeSelect.dataset.editorMode = exerciseId;
     modeSelect.setAttribute("aria-label", "Editor keyboard mode");
     [
@@ -1524,15 +2088,22 @@
     downloadButton.setAttribute("aria-label", "Download current Python code as a .py file");
     resetButton.type = "button";
     resetButton.dataset.resetCode = exerciseId;
+    resetButton.title = "Restore the starter code";
     runButton.type = "button";
     runButton.dataset.runExercise = exerciseId;
     runButton.dataset.runScope = "visible";
+    runButton.title = "Run the visible examples (Shift + Enter)";
+    runButton.setAttribute("aria-label", "Run visible examples");
     testsButton.type = "button";
     testsButton.dataset.runExercise = exerciseId;
     testsButton.dataset.runScope = "all";
+    testsButton.title = "Run visible and hidden tests (Control or Command + Enter)";
+    toolsSummary.setAttribute("aria-label", "Open file and editing actions");
     runButton.disabled = !tests.some(function (test) { return !test.hidden; });
     testsButton.disabled = !tests.length;
-    actions.append(modeField, copyButton, pasteButton, saveButton, downloadButton, resetButton, runButton, testsButton);
+    toolsMenu.append(copyButton, pasteButton, downloadButton, resetButton);
+    tools.append(toolsSummary, toolsMenu);
+    actions.append(modeField, tools, saveButton, runButton, testsButton);
     topbar.append(windowControls, fileTab, actions);
 
     var frame = el("div", "ide-editor-frame");
@@ -1565,14 +2136,15 @@
     editorShell.setAttribute("aria-label", "Python editor for " + exercise.title);
     editorShell.append(topbar, frame, statusbar);
 
-    var plan = renderTestPlan(testSpec);
-    layout.append(editorShell, plan);
+    layout.append(editorShell);
 
     var runtime = el("p", "runtime-note");
     runtime.append(
       el("span", "runtime-note__dot"),
-      document.createTextNode(" Python runs in an isolated browser worker. Drafts stay local by default; after sign-in, your own code and progress sync to your account. Repository solutions are never loaded into this page.")
+      document.createTextNode(" Python runs in a dedicated browser worker; only run code you trust. Account APIs require a tab key that is never sent to that worker. Drafts stay local by default; after sign-in, your own code and progress sync to your account. Repository solutions are never loaded into this page.")
     );
+    var runtimeDetails = el("details", "ide-runtime-details");
+    runtimeDetails.append(el("summary", null, "How this runner protects and saves your work"), runtime);
     var submissionSave = el(
       "p",
       "submission-save submission-save--" + (currentUser ? "ready" : "local"),
@@ -1593,39 +2165,428 @@
       results.append(renderResultsEmpty());
     }
 
-    section.append(heading, layout, runtime, submissionSave, results);
+    var output = el("section", "ide-output-panel");
+    var outputHeading = el("header", "ide-output-panel__header");
+    var outputHeadingCopy = el("div");
+    outputHeadingCopy.append(
+      el("h3", null, "Output"),
+      el("p", null, "Compare expected and actual values, then use the traceback to find the first useful line.")
+    );
+    outputHeading.append(outputHeadingCopy, el("span", null, "Expected · actual · traceback"));
+    output.append(outputHeading, submissionSave, results, runtimeDetails);
+
+    var storedResult = runResults.get(exerciseId);
+    var activeTab = storedResult ? "results" : "tests";
+    var dock = el("section", "ide-dock");
+    dock.id = "ide-feedback-pane-" + domId(exerciseId);
+    var dockTablist = el("div", "ide-dock__tabs");
+    var testCasesPanel = createIdeDockPanel(exerciseId, "tests");
+    var resultPanel = createIdeDockPanel(exerciseId, "results");
+    var historyPanel = createIdeDockPanel(exerciseId, "history");
+    dock.dataset.ideDock = exerciseId;
+    dock.setAttribute("aria-label", "Tests, results, and run history");
+    dockTablist.setAttribute("role", "tablist");
+    dockTablist.setAttribute("aria-label", "Workspace feedback");
+    dockTablist.setAttribute("aria-orientation", "horizontal");
+    dockTablist.append(
+      createIdeDockTab(exerciseId, "tests", "Test cases", String(tests.length), activeTab === "tests"),
+      createIdeDockTab(exerciseId, "results", "Result", getIdeResultBadge(storedResult), activeTab === "results"),
+      createIdeDockTab(exerciseId, "history", "History", getIdeHistoryBadge(exerciseId), activeTab === "history")
+    );
+    testCasesPanel.hidden = activeTab !== "tests";
+    testCasesPanel.append(
+      el(
+        "p",
+        "ide-dock__coach",
+        Array.isArray(testSpec.sourceRules) && testSpec.sourceRules.length
+          ? "Predict one output case at a time. The full run also checks the visible technique contract shown beside the editor."
+          : "Choose one case, predict the output, then run your code. Locked cases protect the full challenge."
+      ),
+      renderTestPlan(testSpec, exerciseId)
+    );
+    resultPanel.hidden = activeTab !== "results";
+    resultPanel.append(output);
+    historyPanel.hidden = activeTab !== "history";
+    historyPanel.append(renderRunHistory(exercise));
+    dock.append(dockTablist, testCasesPanel, resultPanel, historyPanel);
+
+    var stack = el("div", "ide-stack");
+    stack.style.setProperty("--ide-editor-percent", ideLayoutPreferences.editor + "%");
+    stack.append(
+      layout,
+      createIdePaneResizer(
+        exerciseId,
+        "editor",
+        layout.id + " " + dock.id
+      ),
+      dock
+    );
+    section.append(heading, stack);
     return section;
   }
 
-  function renderTestPlan(testSpec) {
-    var aside = el("aside", "test-plan-panel");
+  function createIdeDockTab(exerciseId, name, label, badge, selected) {
+    var button = el("button", "ide-dock__tab" + (selected ? " is-active" : ""));
+    var tabId = "ide-tab-" + domId(exerciseId) + "-" + name;
+    var panelId = "ide-panel-" + domId(exerciseId) + "-" + name;
+    var badgeNode = el("span", "ide-dock__badge", badge);
+    button.type = "button";
+    button.id = tabId;
+    button.dataset.ideTab = name;
+    button.dataset.ideExercise = exerciseId;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", String(selected));
+    button.setAttribute("aria-controls", panelId);
+    button.tabIndex = selected ? 0 : -1;
+    if (name === "results") {
+      badgeNode.dataset.ideResultBadge = exerciseId;
+    } else if (name === "history") {
+      badgeNode.dataset.ideHistoryBadge = exerciseId;
+    }
+    button.append(el("span", null, label), badgeNode);
+    return button;
+  }
+
+  function createIdeDockPanel(exerciseId, name) {
+    var panel = el("div", "ide-dock__panel ide-dock__panel--" + name);
+    panel.id = "ide-panel-" + domId(exerciseId) + "-" + name;
+    panel.dataset.idePanel = name;
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", "ide-tab-" + domId(exerciseId) + "-" + name);
+    panel.tabIndex = 0;
+    if (name === "results") {
+      panel.setAttribute("aria-live", "polite");
+    }
+    return panel;
+  }
+
+  function createIdePaneResizer(exerciseId, dimension, controlledIds) {
+    var isLesson = dimension === "lesson";
+    var limits = IDE_LAYOUT_LIMITS[dimension];
+    var value = ideLayoutPreferences[dimension];
+    var separator = el(
+      "div",
+      "ide-pane-resizer ide-pane-resizer--" + dimension
+    );
+    var grip = el("span", "ide-pane-resizer__grip");
+    separator.dataset.idePaneResizer = dimension;
+    separator.dataset.ideExercise = exerciseId;
+    separator.setAttribute("role", "separator");
+    separator.setAttribute("aria-label", isLesson
+      ? "Resize lesson and code panes"
+      : "Resize editor and feedback panes");
+    separator.setAttribute("aria-orientation", isLesson ? "vertical" : "horizontal");
+    separator.setAttribute("aria-controls", controlledIds);
+    separator.setAttribute("aria-valuemin", String(limits.min));
+    separator.setAttribute("aria-valuemax", String(limits.max));
+    separator.setAttribute("aria-valuenow", String(value));
+    separator.setAttribute("aria-valuetext", getIdeLayoutValueText(dimension, value));
+    separator.setAttribute(
+      "title",
+      (isLesson ? "Drag left or right" : "Drag up or down") +
+        "; use arrow, Home, or End keys; double-click to reset"
+    );
+    separator.tabIndex = 0;
+    grip.setAttribute("aria-hidden", "true");
+    separator.append(grip);
+    installIdePaneResizer(separator, dimension);
+    return separator;
+  }
+
+  function installIdePaneResizer(separator, dimension) {
+    var pointerId = null;
+
+    function finishPointerResize(event) {
+      if (pointerId === null || (event && event.pointerId !== pointerId)) {
+        return;
+      }
+      if (separator.hasPointerCapture && separator.hasPointerCapture(pointerId)) {
+        separator.releasePointerCapture(pointerId);
+      }
+      pointerId = null;
+      separator.classList.remove("is-dragging");
+      document.body.classList.remove("is-resizing-ide");
+      persistIdeLayoutPreferences();
+      requestActiveEditorResize(separator.dataset.ideExercise);
+    }
+
+    separator.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) {
+        return;
+      }
+      pointerId = event.pointerId;
+      separator.setPointerCapture(pointerId);
+      separator.classList.add("is-dragging");
+      document.body.classList.add("is-resizing-ide");
+      event.preventDefault();
+    });
+
+    separator.addEventListener("pointermove", function (event) {
+      if (pointerId === null || event.pointerId !== pointerId) {
+        return;
+      }
+      var container = dimension === "lesson"
+        ? separator.closest(".exercise-workbench")
+        : separator.closest(".ide-stack");
+      if (!container) {
+        return;
+      }
+      var bounds = container.getBoundingClientRect();
+      var value = dimension === "lesson"
+        ? ((event.clientX - bounds.left) / bounds.width) * 100
+        : ((event.clientY - bounds.top) / bounds.height) * 100;
+      setIdeLayoutValue(separator.dataset.ideExercise, dimension, value, false);
+      event.preventDefault();
+    });
+    separator.addEventListener("pointerup", finishPointerResize);
+    separator.addEventListener("pointercancel", finishPointerResize);
+
+    separator.addEventListener("dblclick", function (event) {
+      event.preventDefault();
+      resetIdeLayout(separator.dataset.ideExercise, dimension);
+    });
+
+    separator.addEventListener("keydown", function (event) {
+      var limits = IDE_LAYOUT_LIMITS[dimension];
+      var value = ideLayoutPreferences[dimension];
+      var delta = event.shiftKey ? 10 : 2;
+      var nextValue = null;
+      if (event.key === "Home") {
+        nextValue = limits.min;
+      } else if (event.key === "End") {
+        nextValue = limits.max;
+      } else if (
+        (dimension === "lesson" && event.key === "ArrowLeft") ||
+        (dimension === "editor" && event.key === "ArrowUp")
+      ) {
+        nextValue = value - delta;
+      } else if (
+        (dimension === "lesson" && event.key === "ArrowRight") ||
+        (dimension === "editor" && event.key === "ArrowDown")
+      ) {
+        nextValue = value + delta;
+      }
+      if (nextValue === null) {
+        return;
+      }
+      event.preventDefault();
+      setIdeLayoutValue(separator.dataset.ideExercise, dimension, nextValue, true);
+    });
+  }
+
+  function setIdeLayoutValue(exerciseId, dimension, nextValue, persist) {
+    var limits = IDE_LAYOUT_LIMITS[dimension];
+    var value = Math.round(clampNumber(nextValue, limits.min, limits.max));
+    ideLayoutPreferences[dimension] = value;
+    var workspace = elements.main.querySelector(
+      "[data-ide-workspace='" + cssEscape(exerciseId) + "']"
+    );
+    var container = dimension === "lesson"
+      ? workspace && workspace.closest(".exercise-workbench")
+      : workspace && workspace.querySelector(".ide-stack");
+    var separator = workspace && workspace.closest(".exercise-workbench").querySelector(
+      "[data-ide-pane-resizer='" + dimension + "']"
+    );
+    if (container) {
+      container.style.setProperty(
+        dimension === "lesson" ? "--ide-lesson-percent" : "--ide-editor-percent",
+        value + "%"
+      );
+    }
+    if (separator) {
+      separator.setAttribute("aria-valuenow", String(value));
+      separator.setAttribute("aria-valuetext", getIdeLayoutValueText(dimension, value));
+    }
+    if (persist) {
+      persistIdeLayoutPreferences();
+    }
+    requestActiveEditorResize(exerciseId);
+    return value;
+  }
+
+  function resetIdeLayout(exerciseId, dimension) {
+    var dimensions = dimension ? [dimension] : ["lesson", "editor"];
+    dimensions.forEach(function (name) {
+      setIdeLayoutValue(exerciseId, name, IDE_LAYOUT_DEFAULTS[name], false);
+    });
+    persistIdeLayoutPreferences();
+    announce(
+      dimension
+        ? (dimension === "lesson" ? "Lesson and code pane sizes reset." : "Editor and feedback pane sizes reset.")
+        : "Exercise workspace pane sizes reset."
+    );
+  }
+
+  function requestActiveEditorResize(exerciseId) {
+    if (activeEditorResizeFrame !== null) {
+      window.cancelAnimationFrame(activeEditorResizeFrame);
+    }
+    activeEditorResizeFrame = window.requestAnimationFrame(function () {
+      activeEditorResizeFrame = null;
+      if (
+        activeEditor &&
+        activeEditor.exerciseId === exerciseId &&
+        typeof activeEditor.resize === "function"
+      ) {
+        activeEditor.resize();
+      }
+      window.dispatchEvent(new Event("resize"));
+    });
+  }
+
+  function getIdeLayoutValueText(dimension, value) {
+    return (dimension === "lesson" ? "Lesson pane " : "Editor pane ") + value + " percent";
+  }
+
+  function readIdeLayoutPreferences() {
+    var stored = null;
+    try {
+      stored = JSON.parse(safeRead(STORAGE_KEYS.ideLayout) || "null");
+    } catch (error) {
+      stored = null;
+    }
+    return {
+      lesson: normalizeIdeLayoutValue(stored && stored.lesson, "lesson"),
+      editor: normalizeIdeLayoutValue(stored && stored.editor, "editor")
+    };
+  }
+
+  function normalizeIdeLayoutValue(value, dimension) {
+    if (value === null || value === undefined || value === "") {
+      return IDE_LAYOUT_DEFAULTS[dimension];
+    }
+    var numeric = Number(value);
+    var limits = IDE_LAYOUT_LIMITS[dimension];
+    return Number.isFinite(numeric)
+      ? Math.round(clampNumber(numeric, limits.min, limits.max))
+      : IDE_LAYOUT_DEFAULTS[dimension];
+  }
+
+  function persistIdeLayoutPreferences() {
+    safeWrite(STORAGE_KEYS.ideLayout, JSON.stringify(ideLayoutPreferences));
+  }
+
+  function clampNumber(value, minimum, maximum) {
+    return Math.min(maximum, Math.max(minimum, Number(value)));
+  }
+
+  function evaluateTechniqueResults(code, testSpec) {
+    var rules = testSpec && Array.isArray(testSpec.sourceRules)
+      ? testSpec.sourceRules
+      : [];
+    if (!rules.length) {
+      return [];
+    }
+    if (!solutionShape || typeof solutionShape.evaluate !== "function") {
+      return [{
+        id: "technique-engine-unavailable",
+        name: "Technique review",
+        hidden: false,
+        passed: false,
+        expected: "The requested implementation technique can be reviewed",
+        actual: "The technique checker could not load. Your output tests still ran, but this exercise cannot award stars yet."
+      }];
+    }
+    return solutionShape.evaluate(code, rules).results.map(function (result) {
+      return {
+        id: "technique-" + result.id,
+        name: result.label,
+        hidden: false,
+        passed: Boolean(result.passed),
+        expected: "Use the requested implementation technique",
+        actual: result.feedback
+      };
+    });
+  }
+
+  function isTechniqueResult(result) {
+    return Boolean(result && typeof result.id === "string" && result.id.indexOf("technique-") === 0);
+  }
+
+  function getIdeResultBadge(stored) {
+    var results = stored && Array.isArray(stored.results) ? stored.results : [];
+    if (!results.length) {
+      return "New";
+    }
+    return results.filter(function (result) { return result.passed; }).length + "/" + results.length;
+  }
+
+  function getIdeHistoryBadge(exerciseId) {
+    if (!currentUser || !authToken) {
+      return "Local";
+    }
+    var state = runHistoryByExercise.get(exerciseId);
+    if (!state || state.status === "loading") {
+      return "…";
+    }
+    if (state.status === "error") {
+      return "!";
+    }
+    return String(Array.isArray(state.runs) ? state.runs.length : 0);
+  }
+
+  function renderTestPlan(testSpec, exerciseId) {
+    var aside = el("section", "test-plan-panel");
     var header = el("header", "test-plan-panel__header");
+    var headerCopy = el("div");
     var tests = Array.isArray(testSpec.tests) ? testSpec.tests : [];
-    header.append(el("h3", null, "Test cases"), el("span", null, tests.length + " total"));
+    aside.setAttribute("aria-label", "Planned test cases");
+    headerCopy.append(el("h3", null, "Test cases"), el("p", null, "Inspect one contract example at a time."));
+    header.append(
+      headerCopy,
+      el("span", null, tests.length + " total")
+    );
     aside.append(header);
-    var list = el("ol", "test-plan-list");
+    var selector = el("div", "test-case-selector");
+    var details = el("div", "test-case-details");
+    selector.setAttribute("role", "tablist");
+    selector.setAttribute("aria-label", "Select a test case");
+    selector.setAttribute("aria-orientation", "horizontal");
     tests.forEach(function (test, index) {
-      var item = el("li", "test-plan-case" + (test.hidden ? " is-hidden" : ""));
+      var selected = index === 0;
+      var caseId = "test-case-" + domId(exerciseId) + "-" + index;
+      var panelId = "test-case-panel-" + domId(exerciseId) + "-" + index;
+      var button = el(
+        "button",
+        "test-case-chip" + (selected ? " is-active" : "") + (test.hidden ? " is-locked" : ""),
+        test.hidden ? "Locked " + (index + 1) : "Case " + (index + 1)
+      );
+      var item = el("article", "test-plan-case" + (test.hidden ? " is-hidden" : ""));
       var heading = el("div", "test-plan-case__heading");
       var number = el("span", "test-plan-case__number", String(index + 1));
       var copy = el("div");
+      button.type = "button";
+      button.id = caseId;
+      button.dataset.testCase = String(index);
+      button.dataset.testCaseExercise = exerciseId;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", String(selected));
+      button.setAttribute("aria-controls", panelId);
+      button.tabIndex = selected ? 0 : -1;
       copy.append(el("strong", null, test.hidden ? "Hidden test" : test.name), el("span", null, test.hidden ? "Unlocks after Run tests" : "Visible example"));
       heading.append(number, copy, el("span", "test-kind", test.hidden ? "Hidden" : "Visible"));
+      item.id = panelId;
+      item.dataset.testCasePanel = String(index);
+      item.setAttribute("role", "tabpanel");
+      item.setAttribute("aria-labelledby", caseId);
+      item.tabIndex = 0;
+      item.hidden = !selected;
       item.append(heading);
       if (test.hidden) {
-        item.append(el("p", "test-plan-case__masked", "Input and expectation stay masked until the suite returns."));
+        item.append(el("p", "test-plan-case__masked", "Locked case: its input and expectation stay masked. Run tests to receive pass or fail feedback without revealing the answer."));
       } else {
         item.append(
           renderPlanDatum("Input", formatTestInput(test, testSpec.mode)),
           renderPlanDatum("Expected", formatPlannedExpected(test, testSpec.mode))
         );
       }
-      list.append(item);
+      selector.append(button);
+      details.append(item);
     });
     if (!tests.length) {
-      list.append(el("li", "empty-state", "No tests are defined for this exercise."));
+      details.append(el("p", "empty-state", "No tests are defined for this exercise."));
     }
-    aside.append(list);
+    aside.append(selector, details);
     return aside;
   }
 
@@ -1635,10 +2596,302 @@
     return datum;
   }
 
+  function activateIdeTab(exerciseId, name, moveFocus) {
+    var workspace = elements.main.querySelector("[data-ide-workspace='" + cssEscape(exerciseId) + "']");
+    if (!workspace) {
+      return;
+    }
+    var selectedTab = null;
+    workspace.querySelectorAll("button[data-ide-tab]").forEach(function (tab) {
+      var selected = tab.dataset.ideTab === name;
+      tab.classList.toggle("is-active", selected);
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected) {
+        selectedTab = tab;
+      }
+    });
+    workspace.querySelectorAll("[data-ide-panel]").forEach(function (panel) {
+      panel.hidden = panel.dataset.idePanel !== name;
+    });
+    if (moveFocus && selectedTab) {
+      selectedTab.focus();
+    }
+  }
+
+  function activateTestCase(button, moveFocus) {
+    var testPlan = button && button.closest(".test-plan-panel");
+    if (!testPlan) {
+      return;
+    }
+    var name = button.dataset.testCase;
+    testPlan.querySelectorAll("button[data-test-case]").forEach(function (candidate) {
+      var selected = candidate.dataset.testCase === name;
+      candidate.classList.toggle("is-active", selected);
+      candidate.setAttribute("aria-selected", String(selected));
+      candidate.tabIndex = selected ? 0 : -1;
+    });
+    testPlan.querySelectorAll("[data-test-case-panel]").forEach(function (panel) {
+      panel.hidden = panel.dataset.testCasePanel !== name;
+    });
+    if (moveFocus) {
+      button.focus();
+    }
+  }
+
+  function toggleIdeFocus(exerciseId, force) {
+    var workspace = elements.main.querySelector("[data-ide-workspace='" + cssEscape(exerciseId) + "']");
+    var workbench = workspace && workspace.closest(".exercise-workbench");
+    var button = workspace && workspace.querySelector("button[data-ide-focus='" + cssEscape(exerciseId) + "']");
+    if (!workbench || !button) {
+      return false;
+    }
+    var focused = typeof force === "boolean"
+      ? force
+      : !workbench.classList.contains("is-editor-focused");
+    workbench.classList.toggle("is-editor-focused", focused);
+    button.classList.toggle("is-active", focused);
+    button.setAttribute("aria-pressed", String(focused));
+    button.setAttribute(
+      "aria-label",
+      focused ? "Exit focus and show the lesson panel" : "Focus editor and hide the lesson panel"
+    );
+    button.textContent = focused ? "Exit focus" : "Focus editor";
+    window.requestAnimationFrame(function () {
+      window.dispatchEvent(new Event("resize"));
+    });
+    announce(
+      focused
+        ? "Editor focus enabled. The lesson is hidden; press Escape to bring it back."
+        : "Editor focus closed. The lesson and code workspace are both visible."
+    );
+    return focused;
+  }
+
+  function updateIdeResultBadge(exerciseId, stored, status) {
+    var badge = elements.main.querySelector("[data-ide-result-badge='" + cssEscape(exerciseId) + "']");
+    if (!badge) {
+      return;
+    }
+    if (status === "running") {
+      badge.textContent = "…";
+      badge.className = "ide-dock__badge is-running";
+      return;
+    }
+    if (status === "error") {
+      badge.textContent = "!";
+      badge.className = "ide-dock__badge is-failing";
+      return;
+    }
+    var results = stored && Array.isArray(stored.results) ? stored.results : [];
+    badge.textContent = getIdeResultBadge(stored);
+    badge.className = "ide-dock__badge";
+    if (results.length) {
+      badge.classList.add(results.every(function (result) { return result.passed; }) ? "is-passing" : "is-failing");
+    }
+  }
+
+  function updateIdeHistoryBadge(exerciseId) {
+    var badge = elements.main.querySelector("[data-ide-history-badge='" + cssEscape(exerciseId) + "']");
+    if (!badge) {
+      return;
+    }
+    badge.textContent = getIdeHistoryBadge(exerciseId);
+    badge.className = "ide-dock__badge";
+    var state = runHistoryByExercise.get(exerciseId);
+    if (state && state.status === "error") {
+      badge.classList.add("is-failing");
+    }
+  }
+
   function renderResultsEmpty() {
     var empty = el("div", "results-empty");
     empty.append(el("span", "results-empty__icon", "▶"), el("strong", null, "No results yet"), el("p", null, "Run an example or the full suite to see expected output, actual output, errors, and tracebacks here."));
     return empty;
+  }
+
+  function renderRunHistory(exercise) {
+    var exerciseId = String(exercise.id);
+    var section = el("section", "run-history");
+    var headingId = "run-history-title-" + domId(exerciseId);
+    var heading = el("header", "run-history__header");
+    var headingCopy = el("div");
+    var title = el("h3", null, "Run history");
+    var evidence = el("span", "run-history__evidence", "Learner-device evidence");
+    title.id = headingId;
+    headingCopy.append(
+      title,
+      el("p", null, "Reopen the latest synced results for this exercise without exposing your submitted code.")
+    );
+    heading.append(headingCopy, evidence);
+    section.dataset.runHistory = exerciseId;
+    section.setAttribute("aria-labelledby", headingId);
+    section.append(heading);
+
+    if (!currentUser || !authToken) {
+      section.append(renderRunHistoryNotice(
+        "Sign in to keep run evidence",
+        "Local results remain available during this visit. Signed-in runs can be reopened after a reload or deployment."
+      ));
+      return section;
+    }
+
+    var state = runHistoryByExercise.get(exerciseId);
+    if (!state || state.status === "loading") {
+      var loading = renderRunHistoryNotice(
+        "Loading saved runs…",
+        "Fetching this account's newest results."
+      );
+      loading.setAttribute("role", "status");
+      section.append(loading);
+      return section;
+    }
+
+    if (state.status === "error") {
+      var error = renderRunHistoryNotice(
+        "Run history is temporarily unavailable",
+        state.message || "Your current local result is safe. Try the account request again."
+      );
+      var retry = el("button", "button button--quiet", "Retry history");
+      retry.type = "button";
+      retry.dataset.refreshRunHistory = exerciseId;
+      error.append(retry);
+      section.append(error);
+      return section;
+    }
+
+    if (!state.runs.length) {
+      section.append(renderRunHistoryNotice(
+        "No synced runs yet",
+        "Use Run or Run tests while signed in. The result evidence will appear here."
+      ));
+      return section;
+    }
+
+    var list = el("div", "run-history__list");
+    state.runs.forEach(function (run, index) {
+      list.append(renderRunHistoryItem(run, index));
+    });
+    section.append(list);
+    return section;
+  }
+
+  function renderRunHistoryNotice(title, message) {
+    var notice = el("div", "run-history__notice");
+    notice.append(el("strong", null, title), el("p", null, message));
+    return notice;
+  }
+
+  function renderRunHistoryItem(run, runIndex) {
+    var details = el(
+      "details",
+      "run-history__item " + (run.allPassed ? "run-history__item--pass" : "run-history__item--fail")
+    );
+    var summary = el("summary", "run-history__summary");
+    var outcome = el("span", "run-history__outcome", run.allPassed ? "✓" : "×");
+    var copy = el("span", "run-history__summary-copy");
+    var status = run.allPassed
+      ? "All " + run.totalCount + " tests passed"
+      : run.passedCount + " of " + run.totalCount + " tests passed";
+    var timestamp = el("time", null, formatRunHistoryDate(run.createdAt));
+    timestamp.dateTime = run.createdAt;
+    outcome.setAttribute("aria-hidden", "true");
+    copy.append(el("strong", null, status), timestamp);
+    summary.append(
+      outcome,
+      copy,
+      el("span", "run-history__scope", run.scope === "all" ? "Full suite" : "Visible examples")
+    );
+    details.dataset.runHistoryItem = run.id;
+    details.append(summary);
+
+    var body = el("div", "run-history__body");
+    body.append(el(
+      "p",
+      "run-history__warning",
+      "Saved as learner-device evidence. It is not server-verified grading and does not contain submitted code or original test inputs."
+    ));
+    if (!run.results.length) {
+      body.append(el("p", "run-history__empty", "This older run has summary counts but no saved result fields."));
+    } else {
+      var results = el("div", "run-history__results");
+      run.results.forEach(function (result, resultIndex) {
+        results.append(renderRunHistoryResult(result, run, runIndex, resultIndex));
+      });
+      body.append(results);
+    }
+    details.append(body);
+    return details;
+  }
+
+  function renderRunHistoryResult(result, run, runIndex, resultIndex) {
+    var card = el(
+      "section",
+      "run-history-result " + (result.passed ? "run-history-result--pass" : "run-history-result--fail")
+    );
+    var heading = el("header", "run-history-result__header");
+    heading.append(
+      el("span", "run-history-result__icon", result.passed ? "✓" : "×"),
+      el("strong", null, result.name || "Test " + (resultIndex + 1)),
+      el("span", "test-kind", result.hidden ? "Hidden" : "Visible")
+    );
+    card.append(heading);
+
+    var fields = el("div", "run-history-result__fields");
+    [
+      ["Expected", "expected", false],
+      ["Actual", "actual", false],
+      ["Captured stdout", "stdout", false],
+      ["Captured stderr", "stderr", false],
+      ["Traceback", "traceback", true]
+    ].forEach(function (definition) {
+      var value = result[definition[1]];
+      if (typeof value === "string") {
+        fields.append(renderRunHistoryField(
+          definition[0],
+          value,
+          definition[2],
+          run.id + "-" + runIndex + "-" + resultIndex + "-" + definition[1]
+        ));
+      }
+    });
+    if (!fields.childElementCount) {
+      fields.append(el("p", "run-history__empty", "No detailed fields were stored for this test."));
+    }
+    card.append(fields);
+    return card;
+  }
+
+  function renderRunHistoryField(label, value, traceback, identifier) {
+    var field = el("section", "result-field run-history-field" + (traceback ? " result-field--traceback" : ""));
+    var heading = el("header", "run-history-field__header");
+    var targetId = "run-history-field-" + domId(identifier);
+    var copy = el("button", "button button--quiet run-history-field__copy", "Copy");
+    var pre = el("pre");
+    copy.type = "button";
+    copy.dataset.copyResult = targetId;
+    copy.setAttribute("aria-label", "Copy " + label.toLowerCase() + " from saved run");
+    pre.id = targetId;
+    pre.tabIndex = 0;
+    pre.append(el("code", null, value === "" ? "<empty>" : value));
+    heading.append(el("h4", null, label), copy);
+    field.append(heading, pre);
+    return field;
+  }
+
+  function formatRunHistoryDate(value) {
+    var date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "Saved run";
+    }
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }).format(date);
+    } catch (error) {
+      return date.toISOString();
+    }
   }
 
   function renderExerciseBottomNavigation(exercises, index, chapter) {
@@ -1673,8 +2926,13 @@
       assessmentRooms.handleClick(event);
       return;
     }
+    var snakeLaunchButton = event.target.closest("button[data-snake-launch]");
+    var snakeCloseButton = event.target.closest("button[data-snake-close]");
     var hintButton = event.target.closest("button[data-reveal-hint]");
     var scrollButton = event.target.closest("button[data-scroll-target]");
+    var classLabRunButton = event.target.closest("button[data-class-lab-run]");
+    var classLabResetButton = event.target.closest("button[data-class-lab-reset]");
+    var classLabCopyButton = event.target.closest("button[data-class-lab-copy]");
     var runButton = event.target.closest("button[data-run-exercise]");
     var resetButton = event.target.closest("button[data-reset-code]");
     var copyCodeButton = event.target.closest("button[data-copy-code]");
@@ -1682,12 +2940,42 @@
     var saveFileButton = event.target.closest("button[data-save-file]");
     var downloadFileButton = event.target.closest("button[data-download-file]");
     var copySnippetButton = event.target.closest("button[data-copy-snippet]");
+    var copyResultButton = event.target.closest("button[data-copy-result]");
+    var refreshRunHistoryButton = event.target.closest("button[data-refresh-run-history]");
     var learningButton = event.target.closest("button[data-learning-toggle]");
     var practiceRevealButton = event.target.closest("button[data-reveal-practice]");
     var checkpointButton = event.target.closest("button[data-checkpoint-option]");
     var badgeButton = event.target.closest("button[data-open-badge]");
     var closeDialogButton = event.target.closest("button[data-close-badge-dialog]");
+    var ideTabButton = event.target.closest("button[data-ide-tab]");
+    var testCaseButton = event.target.closest("button[data-test-case]");
+    var ideFocusButton = event.target.closest("button[data-ide-focus]");
+    var ideLayoutResetButton = event.target.closest("button[data-ide-layout-reset]");
 
+    if (snakeLaunchButton) {
+      openLandingSnakeDialog(snakeLaunchButton);
+      return;
+    }
+    if (snakeCloseButton) {
+      closeLandingSnakeDialog();
+      return;
+    }
+    if (ideLayoutResetButton) {
+      resetIdeLayout(ideLayoutResetButton.dataset.ideLayoutReset);
+      return;
+    }
+    if (ideTabButton) {
+      activateIdeTab(ideTabButton.dataset.ideExercise, ideTabButton.dataset.ideTab, false);
+      return;
+    }
+    if (testCaseButton) {
+      activateTestCase(testCaseButton, false);
+      return;
+    }
+    if (ideFocusButton) {
+      toggleIdeFocus(ideFocusButton.dataset.ideFocus);
+      return;
+    }
     if (hintButton) {
       revealNextHint(hintButton.dataset.revealHint);
       return;
@@ -1696,7 +2984,20 @@
       var target = document.getElementById(scrollButton.dataset.scrollTarget);
       if (target) {
         target.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+        focusClassSection(target, scrollButton.dataset.scrollTarget);
       }
+      return;
+    }
+    if (classLabRunButton) {
+      runClassLab(classLabRunButton);
+      return;
+    }
+    if (classLabResetButton) {
+      resetClassLab(classLabResetButton);
+      return;
+    }
+    if (classLabCopyButton) {
+      copyClassLabCode(classLabCopyButton);
       return;
     }
     if (runButton) {
@@ -1721,6 +3022,14 @@
     }
     if (copySnippetButton) {
       copyTutorialSnippet(copySnippetButton);
+      return;
+    }
+    if (copyResultButton) {
+      copyRunHistoryField(copyResultButton);
+      return;
+    }
+    if (refreshRunHistoryButton) {
+      loadRunHistory(refreshRunHistoryButton.dataset.refreshRunHistory, true);
       return;
     }
     if (learningButton) {
@@ -1748,6 +3057,29 @@
     }
   }
 
+  function focusClassSection(section, targetId) {
+    elements.main.querySelectorAll("nav button[data-scroll-target]").forEach(function (button) {
+      if (button.dataset.scrollTarget === targetId) {
+        button.setAttribute("aria-current", "location");
+      } else {
+        button.removeAttribute("aria-current");
+      }
+    });
+    var heading = section.matches("h1, h2, h3, h4")
+      ? section
+      : section.querySelector("h1, h2, h3, h4");
+    if (!heading) {
+      return;
+    }
+    heading.tabIndex = -1;
+    try {
+      heading.focus({ preventScroll: true });
+    } catch (error) {
+      heading.focus();
+    }
+    announce("Opened " + heading.textContent.trim() + ".");
+  }
+
   function handleMainChange(event) {
     var assessmentControl = event.target.closest("input[data-assessment-answer], select[data-assessment-editor-mode]");
     if (assessmentControl && assessmentRooms) {
@@ -1767,6 +3099,39 @@
     }
     queueStateSync();
     announce((nextMode === "vim" ? "Vim" : "Sublime") + " keyboard mode enabled. Monokai remains active.");
+  }
+
+  function handleMainInput(event) {
+    var classLabControl = event.target.closest(
+      "textarea[data-class-lab-code], textarea[data-class-lab-stdin]"
+    );
+    if (!classLabControl) {
+      return;
+    }
+    var workspace = classLabControl.closest("[data-class-lab][data-class-chapter]");
+    if (!workspace) {
+      return;
+    }
+    var code = workspace.querySelector("textarea[data-class-lab-code]");
+    var stdin = workspace.querySelector("textarea[data-class-lab-stdin]");
+    if (!code || !stdin) {
+      return;
+    }
+    scheduleClassLabDraft(
+      workspace.dataset.classChapter,
+      workspace.dataset.classLab,
+      code.value,
+      stdin.value
+    );
+  }
+
+  function handleMainSubmit(event) {
+    var roomForm = event.target.closest("form[data-class-room-form][data-class-chapter]");
+    if (!roomForm) {
+      return;
+    }
+    event.preventDefault();
+    checkClassRoomAnswer(roomForm);
   }
 
   function revealNextHint(exerciseId) {
@@ -2005,9 +3370,29 @@
       await writeClipboardText(code.textContent);
       var restingLabel = button.dataset.copyRestingLabel || "Copy example";
       showControlFeedback(button, "Copied", restingLabel, 1400);
-      announce(restingLabel === "Copy starter" ? "Practice starter copied to the clipboard." : "Concept example copied to the clipboard.");
+      announce(
+        restingLabel === "Copy starter"
+          ? "Practice starter copied to the clipboard."
+          : restingLabel === "Copy demo"
+            ? "Lecture demonstration copied to the clipboard."
+            : "Concept example copied to the clipboard."
+      );
     } catch (error) {
       announce("Copy was blocked by the browser. Select the example and copy it manually.");
+    }
+  }
+
+  async function copyRunHistoryField(button) {
+    var target = document.getElementById(button.dataset.copyResult || "");
+    if (!target) {
+      return;
+    }
+    try {
+      await writeClipboardText(target.textContent);
+      showControlFeedback(button, "Copied", "Copy", 1400);
+      announce("Saved result field copied to the clipboard.");
+    } catch (error) {
+      announce("Copy was blocked by the browser. Select the saved result and copy it manually.");
     }
   }
 
@@ -2031,9 +3416,9 @@
     var stats = getChapterLearningProgress(chapter);
     if (!wasUnderstood && stats.done === stats.total) {
       audio.playAchievement();
-      announce(chapter.title + " learning guide complete. You can revisit any section at any time.");
+      announce(chapter.title + " class complete. You can revisit any lesson at any time.");
     } else {
-      announce(wasUnderstood ? "Section marked for review." : "Section marked understood. " + stats.done + " of " + stats.total + " guide sections complete.");
+      announce(wasUnderstood ? "Lesson marked for review." : "Lesson marked understood. " + stats.done + " of " + stats.total + " class sections complete.");
     }
   }
 
@@ -2052,6 +3437,43 @@
     elements.main.querySelectorAll("[data-learning-toc]").forEach(function (tocButton) {
       tocButton.classList.toggle("is-understood", isLearningUnderstood(chapter, tocButton.dataset.learningToc));
     });
+    var roomTasks = getClassRoomTasks(classMaterials[chapterId]);
+    var roomDone = 0;
+    roomTasks.forEach(function (task) {
+      var completed = isLearningUnderstood(chapter, getClassRoomProgressId(task.id));
+      if (completed) {
+        roomDone += 1;
+      }
+      var taskCard = elements.main.querySelector(
+        "[data-class-task='" + cssEscape(task.id) + "'][data-class-chapter='" + cssEscape(chapterId) + "']"
+      );
+      if (!taskCard) {
+        return;
+      }
+      taskCard.classList.toggle("is-complete", completed);
+      var taskState = taskCard.querySelector("[data-class-task-status='" + cssEscape(task.id) + "']");
+      if (taskState) {
+        taskState.textContent = completed ? "Completed ✓" : "Ready";
+      }
+    });
+    var roomProgress = elements.main.querySelector(
+      "[data-class-room-progress='" + cssEscape(chapterId) + "']"
+    );
+    if (roomProgress) {
+      var roomCount = roomProgress.querySelector("strong");
+      var roomBar = roomProgress.querySelector("progress");
+      if (roomCount) {
+        roomCount.textContent = roomDone + " / " + roomTasks.length + " room tasks complete";
+      }
+      if (roomBar) {
+        roomBar.max = Math.max(roomTasks.length, 1);
+        roomBar.value = roomDone;
+        roomBar.setAttribute(
+          "aria-label",
+          roomDone + " of " + roomTasks.length + " guided room tasks complete"
+        );
+      }
+    }
     var count = elements.main.querySelector("[data-learning-progress-count='" + cssEscape(chapterId) + "']");
     var bar = elements.main.querySelector("[data-learning-progress-bar='" + cssEscape(chapterId) + "']");
     var status = elements.main.querySelector("[data-learning-progress-status='" + cssEscape(chapterId) + "']");
@@ -2062,12 +3484,12 @@
     if (bar) {
       bar.max = Math.max(stats.total, 1);
       bar.value = stats.done;
-      bar.setAttribute("aria-label", chapter.title + " learning guide: " + stats.done + " of " + stats.total + " sections understood");
+      bar.setAttribute("aria-label", chapter.title + " class: " + stats.done + " of " + stats.total + " sections understood");
     }
     if (status) {
       status.textContent = stats.done === stats.total
-        ? "Guide complete — revisit any section whenever you need it."
-        : "Mark each concept after you can explain it in your own words.";
+        ? "Class complete — revisit any lesson whenever you need it."
+        : "Mark each lesson after you can explain it in your own words.";
     }
     if (panel) {
       panel.classList.toggle("is-complete", stats.done === stats.total);
@@ -2097,8 +3519,15 @@
     if (!checkpoint) {
       return;
     }
+    var checkpointChapter = chapterById.get(String(checkpoint.dataset.checkpoint || ""));
+    var checkpointContent = checkpointChapter ? getChapterLearning(checkpointChapter) : null;
+    var checkpointDefinition = checkpointContent &&
+      checkpointContent.deepDive &&
+      checkpointContent.deepDive.checkpoint
+      ? checkpointContent.deepDive.checkpoint
+      : null;
     var selectedIndex = Number(button.dataset.checkpointOption);
-    var answerIndex = Number(button.dataset.answerIndex);
+    var answerIndex = Number(checkpointDefinition && checkpointDefinition.answerIndex);
     var correct = Number.isInteger(answerIndex) && selectedIndex === answerIndex;
     checkpoint.querySelectorAll("button[data-checkpoint-option]").forEach(function (option) {
       option.classList.remove("is-correct", "is-incorrect");
@@ -2111,10 +3540,379 @@
       feedback.classList.toggle("is-correct", correct);
       feedback.classList.toggle("is-incorrect", !correct);
       feedback.textContent = correct
-        ? "Correct. " + checkpoint.dataset.checkpointExplanation
+        ? "Correct. " + (
+          checkpointDefinition && checkpointDefinition.explanation
+            ? checkpointDefinition.explanation
+            : "You matched the mental model to the example."
+        )
         : "Not quite. Trace the mental-model steps once more, then choose again.";
     }
     announce(correct ? "Checkpoint correct." : "Checkpoint answer is not correct yet. Try again.");
+  }
+
+  function getClassRoomTasks(material) {
+    return material && Array.isArray(material.roomTasks)
+      ? material.roomTasks.filter(function (task) {
+        return task && typeof task === "object" && typeof task.id === "string";
+      })
+      : [];
+  }
+
+  function getClassRoomProgressId(taskId) {
+    return "room:" + String(taskId || "");
+  }
+
+  function findClassRoomTask(chapterId, taskId) {
+    var material = classMaterials[String(chapterId)] || null;
+    return getClassRoomTasks(material).find(function (task) {
+      return String(task.id) === String(taskId);
+    }) || null;
+  }
+
+  function normalizeClassAnswer(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .trim()
+      .replace(/\s+/gu, " ")
+      .toLocaleLowerCase("en");
+  }
+
+  function checkClassRoomAnswer(form) {
+    var chapterId = String(form.dataset.classChapter || "");
+    var taskId = String(form.dataset.classRoomForm || "");
+    var chapter = chapterById.get(chapterId);
+    var task = findClassRoomTask(chapterId, taskId);
+    var input = form.querySelector("input[data-class-answer]");
+    var feedback = form.querySelector("[data-class-feedback]");
+    if (!chapter || !task || task.kind === "code" || !input || !feedback) {
+      return;
+    }
+    var answer = normalizeClassAnswer(input.value);
+    var accepted = Array.isArray(task.acceptedAnswers)
+      ? task.acceptedAnswers.map(normalizeClassAnswer).filter(Boolean)
+      : [];
+    var correct = Boolean(answer) && accepted.indexOf(answer) >= 0;
+    feedback.classList.toggle("is-correct", correct);
+    feedback.classList.toggle("is-incorrect", !correct);
+    if (correct) {
+      input.removeAttribute("aria-invalid");
+      feedback.textContent = task.success || "Correct. Continue when you can explain why.";
+      completeLearningItem(chapter, getClassRoomProgressId(taskId));
+      audio.playSuccess();
+      announce("Correct. Guided task completed.");
+    } else {
+      input.setAttribute("aria-invalid", "true");
+      feedback.textContent = answer
+        ? "Not yet. " + (task.hint || "Read the explanation once more and try again.")
+        : "Type an answer before checking. Nothing has been marked complete.";
+      audio.playFailure();
+      announce(answer ? "That answer is not correct yet. Use the hint and try again." : "Type an answer first.");
+    }
+  }
+
+  function completeLearningItem(chapter, itemId) {
+    if (!chapter || !itemId) {
+      return false;
+    }
+    var chapterId = String(chapter.id);
+    var items = learningProgress.get(chapterId) || new Set();
+    if (items.has(itemId)) {
+      syncLearningProgressUI(chapter);
+      return false;
+    }
+    items.add(itemId);
+    learningProgress.set(chapterId, items);
+    persistLearningProgress();
+    syncLearningProgressUI(chapter);
+    var stats = getChapterLearningProgress(chapter);
+    if (stats.done === stats.total) {
+      window.setTimeout(function () {
+        audio.playAchievement();
+      }, 380);
+    }
+    return true;
+  }
+
+  function getClassLabDefinition(chapterId, labId) {
+    var material = classMaterials[String(chapterId)] || null;
+    if (!material) {
+      return null;
+    }
+    if (labId === "lecture-demo" && material.lectureDemo) {
+      return {
+        task: null,
+        starterCode: String(material.lectureDemo.code || ""),
+        stdin: Array.isArray(material.lectureDemo.stdin) ? material.lectureDemo.stdin.map(String) : [],
+        expectedOutput: String(material.lectureDemo.expectedOutput || "")
+      };
+    }
+    if (labId.startsWith("lesson-")) {
+      var chapter = chapterById.get(String(chapterId));
+      var content = chapter ? getChapterLearning(chapter) : null;
+      var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
+      var tutorial = tutorials.find(function (candidate, index) {
+        return "lesson-" + domId(getTutorialItemId(candidate, index)) === labId;
+      });
+      if (tutorial) {
+        return {
+          task: null,
+          starterCode: String(tutorial.exampleCode || "# Try a small example here."),
+          stdin: Array.isArray(tutorial.sampleInput) ? tutorial.sampleInput.map(String) : [],
+          expectedOutput: ""
+        };
+      }
+    }
+    var task = getClassRoomTasks(material).find(function (candidate) {
+      return domId(candidate.id) === String(labId);
+    });
+    if (!task || task.kind !== "code") {
+      return null;
+    }
+    return {
+      task: task,
+      starterCode: String(task.starterCode || ""),
+      stdin: Array.isArray(task.stdin) ? task.stdin.map(String) : [],
+      expectedOutput: String(task.expectedOutput || "")
+    };
+  }
+
+  function normalizeClassOutput(value) {
+    return String(value || "").replace(/\r\n?/g, "\n").replace(/\n+$/g, "");
+  }
+
+  function formatClassLabInput(inputLines, mode) {
+    var source = mode === "check" ? "Checked input" : "Run input";
+    if (!inputLines.length) {
+      return source + ": <no input>";
+    }
+    return source + ": " + inputLines.map(function (line) {
+      return JSON.stringify(String(line));
+    }).join(", ");
+  }
+
+  function formatClassLabTranscript(result) {
+    var stdout = String(result && result.stdout || "");
+    var stderr = String(result && result.stderr || "");
+    var traceback = String(result && result.traceback || "");
+    if (!traceback) {
+      return [stdout, stderr].filter(Boolean).join("");
+    }
+    return [
+      stdout ? "Output before the error:\n" + normalizeClassOutput(stdout) : "",
+      stderr ? "Error output:\n" + normalizeClassOutput(stderr) : "",
+      "Traceback:\n" + normalizeClassOutput(traceback)
+    ].filter(Boolean).join("\n\n");
+  }
+
+  function evaluateClassLabTechnique(code, task) {
+    var rules = task && Array.isArray(task.sourceRules) ? task.sourceRules : [];
+    if (!rules.length) {
+      return { passed: true, feedback: "" };
+    }
+    if (!solutionShape || typeof solutionShape.evaluate !== "function") {
+      return {
+        passed: false,
+        feedback: "The implementation checker could not load, so this task cannot be marked complete yet."
+      };
+    }
+    var review = solutionShape.evaluate(code, rules);
+    var firstFailure = review.results.find(function (result) {
+      return !result.passed;
+    });
+    return {
+      passed: review.passed,
+      feedback: firstFailure
+        ? firstFailure.feedback || firstFailure.label
+        : ""
+    };
+  }
+
+  async function runClassLab(button) {
+    var workspace = button.closest("[data-class-lab][data-class-chapter]");
+    if (!workspace) {
+      return;
+    }
+    var chapterId = String(workspace.dataset.classChapter || "");
+    var labId = String(workspace.dataset.classLab || "");
+    var definition = getClassLabDefinition(chapterId, labId);
+    var code = workspace.querySelector("textarea[data-class-lab-code]");
+    var stdin = workspace.querySelector("textarea[data-class-lab-stdin]");
+    var output = workspace.querySelector("[data-class-lab-output]");
+    var status = workspace.querySelector("[data-class-lab-status]");
+    var terminalContext = workspace.querySelector("[data-class-lab-terminal-context]");
+    if (!definition || !code || !stdin || !output || !status || !terminalContext) {
+      return;
+    }
+    var focusTarget = document.activeElement === code || document.activeElement === stdin
+      ? document.activeElement
+      : null;
+    var runMode = button.dataset.classLabRunMode === "check" ? "check" : "run";
+    var inputLines = runMode === "check"
+      ? definition.stdin.slice()
+      : stdin.value === ""
+        ? []
+        : stdin.value.replace(/\r\n?/g, "\n").split("\n");
+    var runButtons = workspace.querySelectorAll("button");
+    workspace.classList.remove("is-success", "is-error");
+    workspace.classList.add("is-running");
+    workspace.setAttribute("aria-busy", "true");
+    runButtons.forEach(function (control) { control.disabled = true; });
+    code.disabled = true;
+    stdin.disabled = true;
+    output.textContent = runMode === "check"
+      ? "Checking the original task fixture…"
+      : "Starting the isolated Python runner…";
+    terminalContext.textContent = formatClassLabInput(inputLines, runMode);
+    status.textContent = (
+      runMode === "check" ? "Checking the task." : "Running your current experiment."
+    ) + " The editor will unlock when Python finishes.";
+    if (runMode === "check") {
+      audio.playCheck();
+    } else {
+      audio.playRun();
+    }
+    scheduleClassLabDraft(chapterId, labId, code.value, stdin.value, true);
+
+    try {
+      var results = await pythonRunner.run(code.value, "script", [{
+        id: "class-" + chapterId + "-" + labId,
+        name: "Classroom run",
+        hidden: false,
+        input: inputLines,
+        echoInputPrompts: true,
+        expectedOutput: runMode === "check" ? definition.expectedOutput : ""
+      }]);
+      if (!workspace.isConnected) {
+        return;
+      }
+      var result = results && results[0] ? results[0] : null;
+      if (!result) {
+        throw new Error("Python returned no result.");
+      }
+      var transcript = formatClassLabTranscript(result);
+      var matchesExpected = runMode === "check" && !result.traceback &&
+        normalizeClassOutput(result.stdout) === normalizeClassOutput(definition.expectedOutput);
+      var technique = runMode === "check"
+        ? evaluateClassLabTechnique(code.value, definition.task)
+        : { passed: true, feedback: "" };
+      var completedRun = runMode === "check" && matchesExpected && technique.passed;
+      output.textContent = transcript || "(The program finished without printing anything.)";
+      workspace.classList.toggle("is-success", !result.traceback && (
+        runMode === "run" || completedRun
+      ));
+      workspace.classList.toggle("is-error", Boolean(result.traceback) || (
+        runMode === "check" && !completedRun
+      ));
+
+      if (result.traceback) {
+        status.textContent = "Python stopped with an error. Read the final traceback line, edit the code or input, and run again.";
+        audio.playFailure();
+        announce("The classroom program stopped with an error. The full traceback is in the terminal.");
+      } else if (runMode === "run") {
+        status.textContent = definition.task
+          ? "Run complete. This was an experiment, so it did not change task progress. Inspect the terminal, then use Check task when ready."
+          : "Run complete. Inspect the terminal, change the code or sample input, and run another prediction whenever you are ready.";
+        audio.playRunComplete();
+        announce(
+          definition.task
+            ? "Classroom experiment finished. Use Check task when you are ready for completion feedback."
+            : "Classroom example finished. Inspect the terminal and keep experimenting."
+        );
+      } else if (matchesExpected && !technique.passed) {
+        status.textContent = "The output matches, but the taught Python idea is still missing. " + technique.feedback;
+        audio.playFailure();
+        announce("The output matches, but the required classroom technique is not present yet.");
+      } else if (completedRun) {
+        status.textContent = definition.task
+          ? definition.task.success
+          : "Check complete. The terminal matches the expected output.";
+        var newlyCompleted = false;
+        if (definition.task) {
+          var chapter = chapterById.get(chapterId);
+          newlyCompleted = completeLearningItem(
+            chapter,
+            getClassRoomProgressId(definition.task.id)
+          );
+        }
+        if (newlyCompleted) {
+          audio.playTaskComplete();
+        } else {
+          audio.playRunComplete();
+        }
+        announce(definition.task ? "Code task completed." : "Classroom check passed.");
+      } else {
+        status.textContent = "The program ran, but its output does not match the target yet. Compare each character and try again.";
+        audio.playFailure();
+        announce("The classroom output does not match the target yet.");
+      }
+    } catch (error) {
+      if (!workspace.isConnected) {
+        return;
+      }
+      output.textContent = getErrorMessage(error);
+      status.textContent = "The Python runner could not finish. Your edits are saved; try again when the runner is available.";
+      workspace.classList.add("is-error");
+      audio.playFailure();
+      announce("The Python runner could not finish this classroom run.");
+    } finally {
+      if (workspace.isConnected) {
+        workspace.classList.remove("is-running");
+        workspace.removeAttribute("aria-busy");
+        runButtons.forEach(function (control) { control.disabled = false; });
+        code.disabled = false;
+        stdin.disabled = false;
+        if (focusTarget && focusTarget.isConnected) {
+          try {
+            focusTarget.focus({ preventScroll: true });
+          } catch (error) {
+            focusTarget.focus();
+          }
+        }
+      }
+    }
+  }
+
+  function resetClassLab(button) {
+    var workspace = button.closest("[data-class-lab][data-class-chapter]");
+    if (!workspace) {
+      return;
+    }
+    var chapterId = String(workspace.dataset.classChapter || "");
+    var labId = String(workspace.dataset.classLab || "");
+    var definition = getClassLabDefinition(chapterId, labId);
+    var code = workspace.querySelector("textarea[data-class-lab-code]");
+    var stdin = workspace.querySelector("textarea[data-class-lab-stdin]");
+    var output = workspace.querySelector("[data-class-lab-output]");
+    var status = workspace.querySelector("[data-class-lab-status]");
+    var terminalContext = workspace.querySelector("[data-class-lab-terminal-context]");
+    if (!definition || !code || !stdin || !output || !status || !terminalContext) {
+      return;
+    }
+    code.value = definition.starterCode;
+    stdin.value = definition.stdin.join("\n");
+    output.textContent = "Run the code to see its output here.";
+    terminalContext.textContent = "Input source appears after each run";
+    status.textContent = "Reset to the classroom starter. Press Shift + Enter to run.";
+    workspace.classList.remove("is-success", "is-error", "is-running");
+    discardClassLabDraft(chapterId, labId);
+    code.focus();
+    announce("Classroom code and sample input reset.");
+  }
+
+  async function copyClassLabCode(button) {
+    var workspace = button.closest("[data-class-lab]");
+    var code = workspace && workspace.querySelector("textarea[data-class-lab-code]");
+    if (!code) {
+      return;
+    }
+    try {
+      await writeClipboardText(code.value);
+      showControlFeedback(button, "Copied", "Copy code", 1400);
+      announce("Classroom code copied to the clipboard.");
+    } catch (error) {
+      code.focus();
+      announce("Copy was blocked. The classroom editor is focused; select the code and copy it manually.");
+    }
   }
 
   function writeClipboardText(value) {
@@ -2211,6 +4009,7 @@
       activeEditor = createTextareaAdapter(exerciseId, textarea, state, modified, position);
       state.textContent = "Basic editor fallback";
       loadRemoteExerciseFile(exerciseId);
+      loadRunHistory(exerciseId);
       return;
     }
 
@@ -2308,6 +4107,7 @@
           syncPosition();
         },
         focus: function () { aceEditor.focus(); },
+        resize: function () { aceEditor.resize(true); },
         setKeyboardMode: function (mode) {
           aceEditor.setKeyboardHandler(getAceKeyboardHandler(mode));
         },
@@ -2321,6 +4121,7 @@
       };
       aceEditor.resize(true);
       loadRemoteExerciseFile(exerciseId);
+      loadRunHistory(exerciseId);
     } catch (error) {
       if (aceEditor && typeof aceEditor.destroy === "function") {
         aceEditor.destroy();
@@ -2331,6 +4132,7 @@
       activeEditor = createTextareaAdapter(exerciseId, textarea, state, modified, position);
       state.textContent = "Basic editor fallback";
       loadRemoteExerciseFile(exerciseId);
+      loadRunHistory(exerciseId);
     }
   }
 
@@ -2388,6 +4190,8 @@
     if (results) {
       results.replaceChildren(renderResultsEmpty());
     }
+    updateIdeResultBadge(exerciseId, null);
+    activateIdeTab(exerciseId, "tests", false);
     announce("Clean starter restored for " + exerciseById.get(exerciseId).title + ".");
   }
 
@@ -2452,9 +4256,15 @@
         );
       }
     }
-    audio.playSubmit();
+    if (scope === "visible") {
+      audio.playRun();
+    } else {
+      audio.playRunAll();
+    }
     setIdeControlsLocked(true);
     button.textContent = scope === "visible" ? "Running…" : "Running tests…";
+    updateIdeResultBadge(exerciseId, null, "running");
+    activateIdeTab(exerciseId, "results", false);
     resultsContainer.setAttribute("aria-busy", "true");
     renderRunStatus(
       resultsContainer,
@@ -2465,11 +4275,18 @@
     );
 
     try {
-      var results = await pythonRunner.run(code, testSpec.mode, selectedTests);
+      var outputResults = await pythonRunner.run(code, testSpec.mode, selectedTests);
       if (workspaceEpoch !== runWorkspaceEpoch) {
         return;
       }
-      var stored = { scope: scope, results: results, tests: selectedTests, completedAt: Date.now() };
+      var techniqueResults = evaluateTechniqueResults(code, testSpec);
+      var results = outputResults.concat(techniqueResults);
+      var stored = {
+        scope: scope,
+        results: results,
+        tests: selectedTests,
+        completedAt: Date.now()
+      };
       runResults.set(exerciseId, stored);
 
       if (isCurrentExercise(exerciseId)) {
@@ -2478,12 +4295,20 @@
           renderStoredResults(exercise, testSpec, stored, resultsContainer);
         }
       }
+      updateIdeResultBadge(exerciseId, stored);
 
-      var allPassed = results.length === selectedTests.length && results.every(function (result) {
+      var allPassed =
+        outputResults.length === selectedTests.length &&
+        results.length === selectedTests.length + techniqueResults.length &&
+        results.every(function (result) {
         return result.passed;
       });
       if (allPassed) {
-        audio.playSuccess();
+        if (scope === "visible") {
+          audio.playRunComplete();
+        } else {
+          audio.playTestComplete();
+        }
       } else {
         audio.playFailure();
       }
@@ -2496,6 +4321,13 @@
       if (runSessionToken) {
         try {
           await persistRunDetails(exerciseId, scope, results, allPassed, stored.completedAt, runSessionToken);
+          if (
+            workspaceEpoch === runWorkspaceEpoch &&
+            authToken === runSessionToken &&
+            currentUser
+          ) {
+            await loadRunHistory(exerciseId, true);
+          }
         } catch (syncError) {
           if (workspaceEpoch === runWorkspaceEpoch && authToken === runSessionToken && currentUser) {
             setSyncStatus("error", "Run finished locally, but its history could not sync.");
@@ -2514,6 +4346,7 @@
           renderRunStatus(resultsContainer, error instanceof Error ? error.message : String(error), true);
         }
       }
+      updateIdeResultBadge(exerciseId, null, "error");
     } finally {
       if (activeRun && activeRun.token === runToken) {
         activeRun = null;
@@ -2523,6 +4356,7 @@
         if (resultsContainer) {
           resultsContainer.removeAttribute("aria-busy");
         }
+        activateIdeTab(exerciseId, "results", false);
         setIdeControlsLocked(false);
       }
       if (button.isConnected) {
@@ -2577,19 +4411,31 @@
 
   function renderStoredResults(exercise, testSpec, stored, container) {
     var results = stored.results || [];
+    var behaviorResults = results.filter(function (result) { return !isTechniqueResult(result); });
+    var techniqueResults = results.filter(isTechniqueResult);
     var passedCount = results.filter(function (result) { return result.passed; }).length;
     var allPassed = results.length > 0 && passedCount === results.length;
+    var behaviorPassed = behaviorResults.length > 0 && behaviorResults.every(function (result) {
+      return result.passed;
+    });
+    var techniquePassed = techniqueResults.length === 0 || techniqueResults.every(function (result) {
+      return result.passed;
+    });
     var awardsProgress = stored.scope === "all";
     var summary = el("header", "results-summary " + (allPassed ? "results-summary--pass" : "results-summary--fail"));
     var icon = el("span", "results-summary__icon", allPassed ? "✓" : "×");
     var copy = el("div", "results-summary__copy");
     var title = allPassed
-      ? awardsProgress ? "All tests passed" : "All visible examples passed"
-      : passedCount + " of " + results.length + " tests passed";
+      ? techniqueResults.length
+        ? awardsProgress ? "Behavior and technique checks passed" : "Visible checks passed"
+        : awardsProgress ? "All tests passed" : "All visible examples passed"
+      : passedCount + " of " + results.length + " checks passed";
     var message = allPassed
       ? awardsProgress
         ? "Green result: this exercise now awards its difficulty stars."
         : "The examples are green. Run the full suite to check hidden cases and collect stars."
+      : behaviorPassed && !techniquePassed
+        ? "Your output is correct. Open the technique check to see which requested idea still needs to appear in the code."
       : "Open each failed case to compare the expected value, actual value, and traceback.";
     icon.setAttribute("aria-hidden", "true");
     copy.append(el("strong", null, title), el("span", null, message));
@@ -2598,14 +4444,20 @@
 
     var list = el("div", "result-list");
     results.forEach(function (result, index) {
-      var definition = (stored.tests || []).find(function (test) { return test.id === result.id; }) || (stored.tests || [])[index];
+      var definition = (stored.tests || []).find(function (test) { return test.id === result.id; });
+      if (!definition && !isTechniqueResult(result)) {
+        definition = (stored.tests || [])[index];
+      }
       list.append(renderTestResult(result, definition, testSpec.mode, index));
     });
     container.append(list);
-    announce(passedCount + " of " + results.length + " tests passed for " + exercise.title + ".");
+    announce(passedCount + " of " + results.length + " checks passed for " + exercise.title + ".");
   }
 
   function renderTestResult(result, definition, mode, index) {
+    if (isTechniqueResult(result)) {
+      return renderTechniqueResult(result);
+    }
     var details = el("details", "test-result " + (result.passed ? "test-result--pass" : "test-result--fail"));
     var summary = el("summary");
     var icon = el("span", "test-result__icon", result.passed ? "✓" : "×");
@@ -2639,9 +4491,32 @@
     return details;
   }
 
+  function renderTechniqueResult(result) {
+    var details = el(
+      "details",
+      "test-result test-result--technique " + (result.passed ? "test-result--pass" : "test-result--fail")
+    );
+    var summary = el("summary");
+    var icon = el("span", "test-result__icon", result.passed ? "✓" : "×");
+    var title = el("strong", null, result.name || "Technique review");
+    var kind = el("span", "test-kind test-kind--technique", "Technique");
+    var body = el("div", "test-result__body test-result__body--technique");
+    icon.setAttribute("aria-hidden", "true");
+    summary.append(icon, title, kind);
+    details.open = !result.passed;
+    details.append(summary);
+    body.append(
+      renderResultField("Technique goal", result.expected || "Use the requested implementation technique"),
+      renderResultField("Coach feedback", result.actual || "Review the exercise technique contract.")
+    );
+    details.append(body);
+    return details;
+  }
+
   function renderResultField(label, value, traceback) {
     var field = el("section", "result-field" + (traceback ? " result-field--traceback" : ""));
     var pre = el("pre");
+    pre.tabIndex = 0;
     pre.append(el("code", null, value === "" ? "<empty>" : value));
     field.append(el("h4", null, label), pre);
     return field;
@@ -2881,6 +4756,13 @@
     loginButton.dataset.authAction = "login";
     registerButton.type = "submit";
     registerButton.dataset.authAction = "register";
+    if (signOutInProgress) {
+      nameInput.disabled = true;
+      emailInput.disabled = true;
+      passwordInput.disabled = true;
+      loginButton.disabled = true;
+      registerButton.disabled = true;
+    }
     actions.append(loginButton, registerButton);
     form.append(nameLabel, emailLabel, passwordLabel, actions);
     section.append(form, status);
@@ -2977,25 +4859,44 @@
         body: body,
         authenticated: false
       });
-      var nextToken = String(response.token || "");
       var nextUser = response.user || null;
-      if (!nextToken || !nextUser || !nextUser.id) {
+      var nextClientCapability = typeof response.clientCapability === "string"
+        ? response.clientCapability
+        : "";
+      if (!nextUser || !nextUser.id || nextClientCapability.length < 32) {
         throw new Error("The server did not return a usable session.");
       }
+      var nextToken = COOKIE_SESSION_MARKER;
       // Anonymous work belongs to the person who signs in next. Move it once
       // into that account, then clear the shared anonymous copy so a later
       // account on this browser cannot inherit it.
       switchWorkspace(String(nextUser.id), workspaceScope === "", workspaceScope === "");
       authToken = nextToken;
+      clientCapability = nextClientCapability;
       authUserId = String(nextUser.id);
       currentUser = nextUser;
+      deliberateLocalSignOut = false;
       var authenticatedWorkspaceEpoch = workspaceEpoch;
       accountFileSaves.clear();
-      safeWrite(STORAGE_KEYS.authToken, authToken);
+      safeRemove(STORAGE_KEYS.authSignedOut);
+      safeSessionWrite(STORAGE_KEYS.authClientCapability, clientCapability);
+      safeWrite(STORAGE_KEYS.authSession, authToken);
+      safeRemove(STORAGE_KEYS.legacyAuthToken);
       safeWrite(STORAGE_KEYS.authUser, authUserId);
       try {
         await syncFromServerAndPush();
       } catch (syncError) {
+        if (
+          isSessionAuthorizationError(syncError) &&
+          authToken === nextToken &&
+          workspaceEpoch === authenticatedWorkspaceEpoch
+        ) {
+          expireAuthenticatedSession(
+            "The new session could not be authorized. Account work remains hidden; sign in again."
+          );
+          renderRoute(false);
+          return;
+        }
         if (authToken === nextToken && workspaceEpoch === authenticatedWorkspaceEpoch && currentUser) {
           setSyncStatus("error", "Signed in, but sync is temporarily unavailable. Local work is safe.");
         }
@@ -3009,54 +4910,81 @@
     } catch (error) {
       switchWorkspace("", false, false);
       authToken = "";
+      clientCapability = "";
       currentUser = null;
       authUserId = "";
       accountFileSaves.clear();
-      safeRemove(STORAGE_KEYS.authToken);
+      safeRemove(STORAGE_KEYS.authSession);
+      safeRemove(STORAGE_KEYS.legacyAuthToken);
       safeRemove(STORAGE_KEYS.authUser);
+      safeSessionRemove(STORAGE_KEYS.authClientCapability);
       setSyncStatus("error", getErrorMessage(error));
       buttons.forEach(function (button) { button.disabled = false; });
     }
   }
 
   async function restoreAuthenticatedSession() {
-    if (!authToken) {
+    if (deliberateLocalSignOut || !clientCapability) {
       return;
     }
+    var requestToken = authToken || COOKIE_SESSION_MARKER;
     var restoreToken = authToken;
+    var restoreClientCapability = clientCapability;
     var restoreWorkspaceEpoch = workspaceEpoch;
     try {
-      var response = await apiRequest("/api/me", { token: restoreToken });
-      if (authToken !== restoreToken || workspaceEpoch !== restoreWorkspaceEpoch) {
+      var response = await apiRequest("/api/me", {
+        token: requestToken,
+        clientCapability: restoreClientCapability
+      });
+      if (
+        authToken !== restoreToken ||
+        clientCapability !== restoreClientCapability ||
+        workspaceEpoch !== restoreWorkspaceEpoch
+      ) {
         return;
       }
       var restoredUser = response.user || null;
       if (!restoredUser || !restoredUser.id) {
         throw new Error("The saved session is no longer valid.");
       }
-      var isLegacyAnonymousSession = !authUserId && workspaceScope === "";
-      switchWorkspace(String(restoredUser.id), isLegacyAnonymousSession, isLegacyAnonymousSession);
-      // A legitimate legacy/mismatched-scope migration advances the epoch.
+      // Automatic restoration never consumes or merges the shared anonymous
+      // workspace. Only an explicit sign-in can assign anonymous work to an
+      // account selected by the learner.
+      switchWorkspace(String(restoredUser.id), false, false);
+      // Selecting the validated account workspace advances the epoch.
       // Treat the new account workspace as this restore request's current
       // target so a subsequent state-sync error is still handled correctly.
       restoreWorkspaceEpoch = workspaceEpoch;
+      authToken = COOKIE_SESSION_MARKER;
+      restoreToken = authToken;
       authUserId = String(restoredUser.id);
       currentUser = restoredUser;
+      safeWrite(STORAGE_KEYS.authSession, authToken);
+      safeRemove(STORAGE_KEYS.legacyAuthToken);
       safeWrite(STORAGE_KEYS.authUser, authUserId);
       await syncFromServerAndPush();
-      if (authToken !== restoreToken || !currentUser || String(currentUser.id) !== String(restoredUser.id)) {
+      if (
+        authToken !== restoreToken ||
+        clientCapability !== restoreClientCapability ||
+        !currentUser ||
+        String(currentUser.id) !== String(restoredUser.id)
+      ) {
         return;
       }
       renderRoute(false);
     } catch (error) {
-      if (authToken !== restoreToken || workspaceEpoch !== restoreWorkspaceEpoch) {
+      if (
+        authToken !== restoreToken ||
+        clientCapability !== restoreClientCapability ||
+        workspaceEpoch !== restoreWorkspaceEpoch
+      ) {
         return;
       }
-      if (error && error.status === 401) {
-        expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
-      } else {
-        setSyncStatus("error", "Cloud sync is unavailable. Local mode remains fully usable.");
-      }
+      expireAuthenticatedSession(
+        isSessionAuthorizationError(error)
+          ? "Your session expired. Account work remains hidden; sign in again to resume it."
+          : "Cloud session could not be verified. Account work remains hidden; sign in again when online."
+      );
       renderRoute(false);
     }
   }
@@ -3083,10 +5011,10 @@
         return;
       }
       if (
-        error && error.status === 401 &&
+        isSessionAuthorizationError(error) &&
         authToken === manualSyncToken && workspaceEpoch === manualSyncEpoch
       ) {
-        expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
+        expireAuthenticatedSession("Your session expired. Account work remains hidden; sign in again to resume it.");
         renderRoute(false);
       } else {
         setSyncStatus("error", "Sync failed. No local work was removed. " + getErrorMessage(error));
@@ -3098,34 +5026,59 @@
   }
 
   async function signOut() {
+    if (signOutInProgress) {
+      return;
+    }
     window.clearTimeout(stateSyncTimer);
     stateSyncTimer = null;
-    setSyncStatus("working", "Signing out…");
+    var shouldRevokeServerSession = Boolean(authToken || currentUser);
+    var revocationCapability = clientCapability;
+    signOutInProgress = true;
+    deliberateLocalSignOut = true;
+    safeWrite(STORAGE_KEYS.authSignedOut, "1");
+    switchWorkspace("", false, false);
+    authToken = "";
+    clientCapability = "";
+    currentUser = null;
+    authUserId = "";
+    remoteFilesLoaded.clear();
+    accountFileSaves.clear();
+    safeRemove(STORAGE_KEYS.authSession);
+    safeRemove(STORAGE_KEYS.legacyAuthToken);
+    safeRemove(STORAGE_KEYS.authUser);
+    safeSessionRemove(STORAGE_KEYS.authClientCapability);
+    if (currentRoute && currentRoute.name === "exercise") {
+      setSubmissionSaveStatus(
+        String(currentRoute.exercise.id),
+        "local",
+        "Local draft only. Sign in from your profile to create a durable chapter exNN.py file."
+      );
+    }
+    setSyncStatus(
+      "working",
+      shouldRevokeServerSession ? "Signed out locally. Revoking the server session…" : "Signed out on this device"
+    );
+    renderRoute(false);
     try {
-      if (authToken) {
-        await apiRequest("/api/auth/logout", { method: "POST", timeoutMs: 3000 });
+      if (shouldRevokeServerSession) {
+        await apiRequest("/api/auth/logout", {
+          method: "POST",
+          token: COOKIE_SESSION_MARKER,
+          clientCapability: revocationCapability,
+          timeoutMs: 3000
+        });
       }
+      setSyncStatus("idle", "Signed out on this device and server");
+      announce("Signed out. The server session was revoked and account work remains private.");
     } catch (error) {
-      // Local sign-out must still succeed if the API is offline.
+      setSyncStatus(
+        "error",
+        "Signed out on this device, but the server session could not be revoked. Reconnect before using this shared browser."
+      );
+      announce("Local sign-out is complete, but server sign-out failed. This browser will not restore the session automatically.");
     } finally {
-      switchWorkspace("", false, false);
-      authToken = "";
-      currentUser = null;
-      authUserId = "";
-      remoteFilesLoaded.clear();
-      accountFileSaves.clear();
-      safeRemove(STORAGE_KEYS.authToken);
-      safeRemove(STORAGE_KEYS.authUser);
-      if (currentRoute && currentRoute.name === "exercise") {
-        setSubmissionSaveStatus(
-          String(currentRoute.exercise.id),
-          "local",
-          "Local draft only. Sign in from your profile to create a durable chapter exNN.py file."
-        );
-      }
-      setSyncStatus("idle", "Local-only mode");
-      renderRoute(false);
-      announce("Signed out. Account work remains private and will return after you sign in again.");
+      signOutInProgress = false;
+      renderProfile();
     }
   }
 
@@ -3134,12 +5087,15 @@
     stateSyncTimer = null;
     switchWorkspace("", false, false);
     authToken = "";
+    clientCapability = "";
     authUserId = "";
     currentUser = null;
     remoteFilesLoaded.clear();
     accountFileSaves.clear();
-    safeRemove(STORAGE_KEYS.authToken);
+    safeRemove(STORAGE_KEYS.authSession);
+    safeRemove(STORAGE_KEYS.legacyAuthToken);
     safeRemove(STORAGE_KEYS.authUser);
+    safeSessionRemove(STORAGE_KEYS.authClientCapability);
     setSyncStatus("error", message);
   }
 
@@ -3178,6 +5134,36 @@
           var value = remoteState.drafts[exerciseId];
           if (!drafts.has(exerciseId) && typeof value === "string" && value !== starterCode[exerciseId]) {
             drafts.set(exerciseId, value);
+          }
+        });
+      }
+      if (
+        remoteState.classLabDrafts &&
+        typeof remoteState.classLabDrafts === "object" &&
+        !Array.isArray(remoteState.classLabDrafts)
+      ) {
+        Object.keys(remoteState.classLabDrafts).slice(0, 160).forEach(function (key) {
+          var entry = remoteState.classLabDrafts[key];
+          if (
+            !classLabDrafts.has(key) &&
+            /^[a-z0-9-]{2,128}\/[a-z0-9-]{2,160}$/u.test(key) &&
+            entry &&
+            typeof entry === "object" &&
+            !Array.isArray(entry) &&
+            typeof entry.code === "string" &&
+            typeof entry.stdin === "string"
+          ) {
+            var remoteClassLabDraft = {
+              code: entry.code.slice(0, CLASS_LAB_CODE_LIMIT),
+              stdin: entry.stdin.slice(0, CLASS_LAB_INPUT_LIMIT)
+            };
+            if (
+              classLabDraftMapBytes(classLabDrafts) +
+              classLabDraftBytes(remoteClassLabDraft) <=
+              CLASS_LAB_DRAFT_BUDGET
+            ) {
+              classLabDrafts.set(key, remoteClassLabDraft);
+            }
           }
         });
       }
@@ -3221,6 +5207,7 @@
       }
       persistPassed();
       flushDrafts();
+      flushClassLabDrafts();
       persistLearningProgress();
       persistAssessmentProgress();
     } finally {
@@ -3245,6 +5232,7 @@
 
   function serializeLocalState() {
     var serializedDrafts = {};
+    var serializedClassLabs = {};
     var serializedLearning = {};
     drafts.forEach(function (value, exerciseId) {
       serializedDrafts[exerciseId] = value;
@@ -3252,11 +5240,15 @@
     learningProgress.forEach(function (items, chapterId) {
       serializedLearning[chapterId] = Array.from(items).sort();
     });
+    classLabDrafts.forEach(function (entry, key) {
+      serializedClassLabs[key] = { code: entry.code, stdin: entry.stdin };
+    });
     return {
-      schemaVersion: 2,
-      contentVersion: "2026-07-assessments-v1",
+      schemaVersion: 3,
+      contentVersion: "2026-07-beginner-classrooms-v1",
       passedIds: Array.from(passed).sort(),
       drafts: serializedDrafts,
+      classLabDrafts: serializedClassLabs,
       learningProgress: serializedLearning,
       assessmentProgress: assessmentProgress,
       editorMode: editorMode
@@ -3301,10 +5293,10 @@
         }
       } catch (error) {
         if (
-          error && error.status === 401 &&
+          isSessionAuthorizationError(error) &&
           authToken === queuedToken && workspaceEpoch === queuedEpoch
         ) {
-          expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
+          expireAuthenticatedSession("Your session expired. Account work remains hidden; sign in again to resume it.");
           renderRoute(false);
         } else {
           setSyncStatus("error", "Cloud sync paused. Local changes are safe.");
@@ -3355,8 +5347,8 @@
       if (workspaceEpoch !== loadWorkspaceEpoch || authToken !== loadSessionToken) {
         return;
       }
-      if (error && error.status === 401) {
-        expireAuthenticatedSession("Your session expired. Account work remains safe; sign in again to resume it.");
+      if (isSessionAuthorizationError(error)) {
+        expireAuthenticatedSession("Your session expired. Account work remains hidden; sign in again to resume it.");
         renderRoute(false);
         return;
       }
@@ -3366,6 +5358,124 @@
       }
       setSyncStatus("error", "Could not load the account file. Your local draft is unchanged.");
     }
+  }
+
+  async function loadRunHistory(exerciseId, force) {
+    if (!authToken || !currentUser || !exerciseById.has(exerciseId)) {
+      runHistoryByExercise.delete(exerciseId);
+      replaceRunHistory(exerciseId);
+      return;
+    }
+    var existing = runHistoryByExercise.get(exerciseId);
+    if (!force && existing && (existing.status === "loading" || existing.status === "ready")) {
+      return;
+    }
+
+    var loadSessionToken = authToken;
+    var loadClientCapability = clientCapability;
+    var loadWorkspaceEpoch = workspaceEpoch;
+    var loadUserId = String(currentUser.id);
+    runHistoryByExercise.set(exerciseId, { status: "loading", runs: [] });
+    replaceRunHistory(exerciseId);
+
+    try {
+      var response = await apiRequest(
+        "/api/runs?exerciseId=" + encodeURIComponent(exerciseId) + "&limit=10",
+        { token: loadSessionToken, clientCapability: loadClientCapability }
+      );
+      if (!isCurrentRunHistoryRequest(loadSessionToken, loadClientCapability, loadWorkspaceEpoch, loadUserId)) {
+        return;
+      }
+      runHistoryByExercise.set(exerciseId, {
+        status: "ready",
+        runs: normalizeRunHistory(response && response.runs, exerciseId)
+      });
+      replaceRunHistory(exerciseId);
+    } catch (error) {
+      if (!isCurrentRunHistoryRequest(loadSessionToken, loadClientCapability, loadWorkspaceEpoch, loadUserId)) {
+        return;
+      }
+      if (isSessionAuthorizationError(error)) {
+        expireAuthenticatedSession("Your session expired. Account work remains hidden; sign in again to resume it.");
+        renderRoute(false);
+        return;
+      }
+      runHistoryByExercise.set(exerciseId, {
+        status: "error",
+        runs: [],
+        message: getErrorMessage(error)
+      });
+      replaceRunHistory(exerciseId);
+    }
+  }
+
+  function isCurrentRunHistoryRequest(sessionToken, capability, epoch, userId) {
+    return Boolean(
+      authToken === sessionToken &&
+      clientCapability === capability &&
+      workspaceEpoch === epoch &&
+      currentUser &&
+      String(currentUser.id) === userId
+    );
+  }
+
+  function normalizeRunHistory(value, exerciseId) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.slice(0, 10).filter(function (run) {
+      return run && typeof run === "object" && String(run.exerciseId) === exerciseId;
+    }).map(function (run, index) {
+      var totalCount = Number.isInteger(run.totalCount) && run.totalCount >= 0 ? run.totalCount : 0;
+      var passedCount = Number.isInteger(run.passedCount) && run.passedCount >= 0
+        ? Math.min(run.passedCount, totalCount)
+        : 0;
+      return {
+        id: typeof run.id === "string" && run.id ? run.id : "saved-" + index,
+        exerciseId: exerciseId,
+        scope: run.scope === "all" ? "all" : "visible",
+        passedCount: passedCount,
+        totalCount: totalCount,
+        allPassed: Boolean(run.allPassed && totalCount > 0 && passedCount === totalCount),
+        results: normalizeRunHistoryResults(run.results),
+        verification: run.verification === "learner-device" ? run.verification : "learner-device",
+        createdAt: typeof run.createdAt === "string" ? run.createdAt : ""
+      };
+    });
+  }
+
+  function normalizeRunHistoryResults(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.slice(0, 100).filter(function (result) {
+      return result && typeof result === "object";
+    }).map(function (result, index) {
+      var normalized = {
+        id: typeof result.id === "string" ? result.id : "case-" + (index + 1),
+        name: typeof result.name === "string" ? result.name : "Test " + (index + 1),
+        hidden: Boolean(result.hidden),
+        passed: Boolean(result.passed)
+      };
+      ["expected", "actual", "stdout", "stderr", "traceback"].forEach(function (field) {
+        if (typeof result[field] === "string") {
+          normalized[field] = result[field];
+        }
+      });
+      return normalized;
+    });
+  }
+
+  function replaceRunHistory(exerciseId) {
+    if (!isCurrentExercise(exerciseId)) {
+      return;
+    }
+    var exercise = exerciseById.get(exerciseId);
+    var current = elements.main.querySelector("[data-run-history='" + cssEscape(exerciseId) + "']");
+    if (exercise && current) {
+      current.replaceWith(renderRunHistory(exercise));
+    }
+    updateIdeHistoryBadge(exerciseId);
   }
 
   function persistRunDetails(exerciseId, scope, results, allPassed, completedAt, sessionToken) {
@@ -3406,14 +5516,25 @@
       headers["Content-Type"] = "application/json";
     }
     var requestToken = Object.prototype.hasOwnProperty.call(config, "token") ? config.token : authToken;
-    if (config.authenticated !== false && requestToken) {
+    var requestClientCapability = Object.prototype.hasOwnProperty.call(config, "clientCapability")
+      ? config.clientCapability
+      : clientCapability;
+    if (
+      config.authenticated !== false &&
+      requestToken &&
+      requestToken !== COOKIE_SESSION_MARKER
+    ) {
       headers.Authorization = "Bearer " + requestToken;
+    }
+    if (config.authenticated !== false && requestClientCapability) {
+      headers["X-EduGround-Client-Capability"] = requestClientCapability;
     }
     try {
       var response = await fetch(path, {
         method: config.method || "GET",
         headers: headers,
         body: config.body === undefined ? undefined : JSON.stringify(config.body),
+        credentials: "same-origin",
         signal: controller.signal
       });
       var payload = null;
@@ -3453,6 +5574,13 @@
 
   function getErrorMessage(error) {
     return error instanceof Error ? error.message : String(error || "Unknown error");
+  }
+
+  function isSessionAuthorizationError(error) {
+    return Boolean(
+      error &&
+      (error.status === 401 || error.code === "CLIENT_CAPABILITY_REQUIRED")
+    );
   }
 
   function getUserInitials(user) {
@@ -3564,22 +5692,183 @@
   }
 
   function handleDocumentClick(event) {
+    var semanticAudioAction = event.target.closest([
+      "button[data-run-exercise]",
+      "button[data-class-lab-run]",
+      "button[data-assessment-run]",
+      "button[data-assessment-submit]",
+      "button[data-snake-action]",
+      "button[data-snake-direction]",
+      "form[data-class-room-form] button[type='submit']"
+    ].join(","));
     if (event.target.closest("a, button, summary")) {
-      audio.playClick();
+      if (!semanticAudioAction) {
+        audio.playClick();
+      }
+      if (event.detail === 0) {
+        showGeometricPressFeedback(event);
+      }
     }
     if (!elements.profilePanel.hidden && !event.target.closest(".profile-menu")) {
       closeProfile();
     }
   }
 
+  function showGeometricPressFeedback(event) {
+    if (
+      !event ||
+      event.button > 0 ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    var source = event.target && event.target.closest
+      ? event.target.closest([
+        ".button",
+        ".topbar-home",
+        ".icon-button",
+        ".profile-button",
+        ".landing-stage-card__link",
+        ".path-chapter",
+        ".learning-stage__recap",
+        ".learning-stage__assessment",
+        ".stage-recap-answer summary",
+        ".stage-recap-recall-card summary",
+        ".stage-recap-reference",
+        ".stage-award"
+      ].join(","))
+      : null;
+    if (!source) {
+      return;
+    }
+    var existing = document.querySelector(".geo-click-pulse");
+    if (existing) {
+      existing.remove();
+    }
+    var rect = source.getBoundingClientRect();
+    var x = Number(event.clientX);
+    var y = Number(event.clientY);
+    if (!x && !y) {
+      x = rect.left + rect.width / 2;
+      y = rect.top + rect.height / 2;
+    }
+    var pulse = document.createElement("span");
+    pulse.className = "geo-click-pulse";
+    pulse.setAttribute("aria-hidden", "true");
+    pulse.style.setProperty("--geo-pulse-x", x + "px");
+    pulse.style.setProperty("--geo-pulse-y", y + "px");
+    document.body.append(pulse);
+    pulse.addEventListener("animationend", function () {
+      pulse.remove();
+    }, { once: true });
+  }
+
+  function syncGeospaceVisibility() {
+    document.documentElement.classList.toggle("geo-motion-paused", document.hidden);
+  }
+
+  function refreshGeospaceMotion() {
+    syncGeospaceVisibility();
+    var layers = Array.from(elements.main.querySelectorAll("[data-geo-motion]"));
+    if (geospaceMotionObserver) {
+      geospaceMotionObserver.disconnect();
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      layers.forEach(function (layer) {
+        layer.classList.remove("is-geo-visible");
+      });
+      return;
+    }
+    if (typeof window.IntersectionObserver !== "function") {
+      layers.forEach(function (layer) {
+        layer.classList.add("is-geo-visible");
+      });
+      return;
+    }
+    if (!geospaceMotionObserver) {
+      geospaceMotionObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          entry.target.classList.toggle("is-geo-visible", entry.isIntersecting);
+        });
+      }, { rootMargin: "120px 0px" });
+    }
+    layers.forEach(function (layer) {
+      geospaceMotionObserver.observe(layer);
+    });
+  }
+
   function handleDocumentKeydown(event) {
+    var classLabControl = event.target && event.target.closest
+      ? event.target.closest("textarea[data-class-lab-code], textarea[data-class-lab-stdin]")
+      : null;
+    if (classLabControl && event.shiftKey && event.key === "Enter") {
+      var classLab = classLabControl.closest("[data-class-lab]");
+      var classRunButton = classLab && classLab.querySelector("button[data-class-lab-run]");
+      if (classRunButton && !classRunButton.disabled) {
+        event.preventDefault();
+        runClassLab(classRunButton);
+      }
+      return;
+    }
+    var ideTab = event.target && event.target.closest
+      ? event.target.closest("button[data-ide-tab]")
+      : null;
+    if (ideTab && handleRovingTabKeydown(event, ideTab, "button[data-ide-tab]", function (nextTab) {
+      activateIdeTab(nextTab.dataset.ideExercise, nextTab.dataset.ideTab, true);
+    })) {
+      return;
+    }
+    var testCase = event.target && event.target.closest
+      ? event.target.closest("button[data-test-case]")
+      : null;
+    if (testCase && handleRovingTabKeydown(event, testCase, "button[data-test-case]", function (nextCase) {
+      activateTestCase(nextCase, true);
+    })) {
+      return;
+    }
     if (event.key !== "Escape") {
       return;
+    }
+    var focusedWorkbench = elements.main.querySelector(".exercise-workbench.is-editor-focused");
+    if (focusedWorkbench) {
+      var workspace = focusedWorkbench.querySelector("[data-ide-workspace]");
+      if (workspace) {
+        var focusToggle = workspace.querySelector("button[data-ide-focus]");
+        event.preventDefault();
+        toggleIdeFocus(workspace.dataset.ideWorkspace, false);
+        if (focusToggle) {
+          focusToggle.focus();
+        }
+        return;
+      }
     }
     if (!elements.profilePanel.hidden) {
       closeProfile();
       elements.profileButton.focus();
     }
+  }
+
+  function handleRovingTabKeydown(event, current, selector, activate) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return false;
+    }
+    var tablist = current.closest("[role='tablist']");
+    var tabs = tablist ? Array.from(tablist.querySelectorAll(selector)) : [];
+    if (!tabs.length) {
+      return false;
+    }
+    var currentIndex = Math.max(0, tabs.indexOf(current));
+    var nextIndex;
+    if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabs.length - 1;
+    } else {
+      nextIndex = (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    }
+    event.preventDefault();
+    activate(tabs[nextIndex]);
+    return true;
   }
 
   function toggleTheme() {
@@ -3659,16 +5948,29 @@
     var progressBlock = assessmentProgress && assessmentProgress.blocks
       ? assessmentProgress.blocks[String(block.id)]
       : null;
-    var passedModes = ["theory", "practical"].reduce(function (total, mode) {
+    var modes = ["theory", "practical"].map(function (mode) {
       var modeState = progressBlock && progressBlock[mode] ? progressBlock[mode] : null;
       var history = modeState && Array.isArray(modeState.history)
         ? modeState.history
         : [];
-      return total + (modeState && modeState.completed || history.some(function (attempt) {
+      var completed = Boolean(modeState && modeState.completed || history.some(function (attempt) {
         return Boolean(attempt.passed);
-      }) ? 1 : 0);
-    }, 0);
-    return { passedModes: passedModes };
+      }));
+      var bestHistoryScore = history.reduce(function (best, attempt) {
+        return Math.max(best, Number(attempt && attempt.score) || 0);
+      }, 0);
+      return {
+        id: mode,
+        completed: completed,
+        active: Boolean(modeState && modeState.active),
+        attempted: Boolean(modeState && (modeState.active || history.length)),
+        bestScore: Math.max(Number(modeState && modeState.bestScore) || 0, bestHistoryScore)
+      };
+    });
+    return {
+      passedModes: modes.filter(function (mode) { return mode.completed; }).length,
+      modes: modes
+    };
   }
 
   function getAssessmentEndingAtChapter(chapter) {
@@ -3701,6 +6003,10 @@
   }
 
   function getRanks() {
+    var fallbackMaxExercises = validExerciseIds.size;
+    var fallbackMaxStars = Array.from(exerciseById.values()).reduce(function (sum, exercise) {
+      return sum + getDifficulty(exercise);
+    }, 0);
     var fallback = [
       { level: 1, name: "PEP Explorer", minStars: 0, minExercises: 0, description: "Begin with precise traces and small programs." },
       { level: 2, name: "Indent Apprentice", minStars: 8, minExercises: 3, description: "Build dependable first programs." },
@@ -3709,7 +6015,7 @@
       { level: 5, name: "Collection Alchemist", minStars: 91, minExercises: 36, description: "Transform Python collections cleanly." },
       { level: 6, name: "Recursion Ranger", minStars: 132, minExercises: 52, description: "Navigate self-similar problems." },
       { level: 7, name: "Algorithm Architect", minStars: 181, minExercises: 72, description: "Design with invariants and complexity in mind." },
-      { level: 8, name: "Pythonic Grandmaster", minStars: 239, minExercises: 92, description: "Every challenge is green." }
+      { level: 8, name: "Pythonic Grandmaster", minStars: fallbackMaxStars, minExercises: fallbackMaxExercises, description: "Every challenge is green." }
     ];
     var source = Array.isArray(learning.ranks) && learning.ranks.length === 8 ? learning.ranks : fallback;
     return source.slice().sort(function (a, b) { return Number(a.level) - Number(b.level); }).map(function (rank, index) {
@@ -3781,17 +6087,6 @@
     return false;
   }
 
-  function getContinueChapter() {
-    var lastExerciseId = workspaceRead(STORAGE_KEYS.lastExercise);
-    if (lastExerciseId && chapterForExercise.has(lastExerciseId)) {
-      return chapterForExercise.get(lastExerciseId);
-    }
-    return chapters.find(function (chapter) {
-      var progress = getChapterProgress(chapter);
-      return progress.done < progress.total;
-    }) || chapters[0];
-  }
-
   function getChapterLearning(chapter) {
     return learning.chapters && learning.chapters[String(chapter.id)]
       ? learning.chapters[String(chapter.id)]
@@ -3804,6 +6099,17 @@
     var itemIds = tutorials.map(function (tutorial, index) {
       return getTutorialItemId(tutorial, index);
     });
+    var material = classMaterials[String(chapter.id)] || null;
+    getClassRoomTasks(material).forEach(function (task) {
+      itemIds.push(getClassRoomProgressId(task.id));
+    });
+    if (
+      conceptClinicView &&
+      typeof conceptClinicView.render === "function" &&
+      clinicsByChapter[String(chapter.id)]
+    ) {
+      itemIds.push("concept-clinic");
+    }
     itemIds.push("runbook");
     return itemIds;
   }
@@ -3926,13 +6232,16 @@
   }
 
   function renderChapterArt(chapter, className) {
-    var number = Math.max(1, Math.min(11, Number(chapter.number) || 1));
+    var number = Math.max(1, Math.min(12, Number(chapter.number) || 1));
     var index = number - 1;
     var column = index % 4;
     var row = Math.floor(index / 4);
     var art = el("div", className);
     var label = el("span", "chapter-art__label", "PY" + padChapter(number));
-    art.style.backgroundPosition = (column * 100 / 3) + "% " + (row * 100 / 2) + "%";
+    if (String(chapter.id) === "py12") {
+      art.classList.add("chapter-art--problem-solving");
+    }
+    art.style.backgroundPosition = "0 0, " + (column * 100 / 3) + "% " + (row * 100 / 2) + "%";
     art.setAttribute("role", "img");
     art.setAttribute("aria-label", "Illustration for " + chapter.title);
     art.append(label);
@@ -4119,6 +6428,129 @@
     queueStateSync();
   }
 
+  function classLabDraftKey(chapterId, labId) {
+    return String(chapterId || "") + "/" + String(labId || "");
+  }
+
+  function readClassLabDrafts() {
+    var result = new Map();
+    var raw = workspaceRead(STORAGE_KEYS.classLabs);
+    if (!raw) {
+      return result;
+    }
+    try {
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return result;
+      }
+      Object.keys(parsed).slice(0, 160).forEach(function (key) {
+        var entry = parsed[key];
+        if (
+          !/^[a-z0-9-]{2,128}\/[a-z0-9-]{2,160}$/u.test(key) ||
+          !entry ||
+          typeof entry !== "object" ||
+          Array.isArray(entry) ||
+          typeof entry.code !== "string" ||
+          typeof entry.stdin !== "string"
+        ) {
+          return;
+        }
+        result.set(key, {
+          code: entry.code.slice(0, CLASS_LAB_CODE_LIMIT),
+          stdin: entry.stdin.slice(0, CLASS_LAB_INPUT_LIMIT)
+        });
+      });
+      trimClassLabDraftMap(result);
+    } catch (error) {
+      return new Map();
+    }
+    return result;
+  }
+
+  function getClassLabDraftsForChapter(chapterId) {
+    var prefix = String(chapterId) + "/";
+    var draftsForChapter = {};
+    classLabDrafts.forEach(function (entry, key) {
+      if (key.startsWith(prefix)) {
+        draftsForChapter[key.slice(prefix.length)] = {
+          code: entry.code,
+          stdin: entry.stdin
+        };
+      }
+    });
+    return draftsForChapter;
+  }
+
+  function classLabDraftBytes(entry) {
+    var value = String(entry && entry.code || "") + String(entry && entry.stdin || "");
+    if (typeof TextEncoder === "function") {
+      return new TextEncoder().encode(value).length;
+    }
+    try {
+      return unescape(encodeURIComponent(value)).length;
+    } catch (error) {
+      return value.length * 2;
+    }
+  }
+
+  function trimClassLabDraftMap(map) {
+    var total = classLabDraftMapBytes(map);
+    while (total > CLASS_LAB_DRAFT_BUDGET && map.size) {
+      var oldestKey = map.keys().next().value;
+      var oldest = map.get(oldestKey);
+      total -= classLabDraftBytes(oldest);
+      map.delete(oldestKey);
+    }
+  }
+
+  function classLabDraftMapBytes(map) {
+    var total = 0;
+    map.forEach(function (entry) {
+      total += classLabDraftBytes(entry);
+    });
+    return total;
+  }
+
+  function scheduleClassLabDraft(chapterId, labId, code, stdin, flushImmediately) {
+    window.clearTimeout(classLabPersistTimer);
+    var key = classLabDraftKey(chapterId, labId);
+    var definition = getClassLabDefinition(chapterId, labId);
+    var defaultCode = definition ? definition.starterCode : "";
+    var defaultInput = definition ? definition.stdin.join("\n") : "";
+    if (String(code) === defaultCode && String(stdin) === defaultInput) {
+      classLabDrafts.delete(key);
+    } else {
+      classLabDrafts.delete(key);
+      classLabDrafts.set(key, {
+        code: String(code).slice(0, CLASS_LAB_CODE_LIMIT),
+        stdin: String(stdin).slice(0, CLASS_LAB_INPUT_LIMIT)
+      });
+      trimClassLabDraftMap(classLabDrafts);
+    }
+    if (flushImmediately) {
+      flushClassLabDrafts();
+      return;
+    }
+    classLabPersistTimer = window.setTimeout(flushClassLabDrafts, 250);
+  }
+
+  function discardClassLabDraft(chapterId, labId) {
+    classLabDrafts.delete(classLabDraftKey(chapterId, labId));
+    flushClassLabDrafts();
+  }
+
+  function flushClassLabDrafts() {
+    window.clearTimeout(classLabPersistTimer);
+    classLabPersistTimer = null;
+    trimClassLabDraftMap(classLabDrafts);
+    var serialized = {};
+    classLabDrafts.forEach(function (entry, key) {
+      serialized[key] = { code: entry.code, stdin: entry.stdin };
+    });
+    workspaceWrite(STORAGE_KEYS.classLabs, JSON.stringify(serialized));
+    queueStateSync();
+  }
+
   function workspaceKey(key) {
     return storageKeyForScope(key, workspaceScope);
   }
@@ -4153,6 +6585,9 @@
     return {
       passed: new Set(passed),
       drafts: new Map(drafts),
+      classLabs: new Map(Array.from(classLabDrafts.entries()).map(function (entry) {
+        return [entry[0], { code: entry[1].code, stdin: entry[1].stdin }];
+      })),
       learning: learningSnapshot,
       assessments: cloneAssessmentState(assessmentProgress),
       editorMode: editorMode,
@@ -4166,6 +6601,7 @@
     return {
       passed: new Set(readPassedIds()),
       drafts: readDrafts(),
+      classLabs: readClassLabDrafts(),
       learning: readLearningProgress(),
       assessments: readAssessmentProgress(),
       editorMode: storedMode === "vim" ? "vim" : "sublime",
@@ -4179,6 +6615,10 @@
     // Anonymous code was edited most recently in the active browser session,
     // so it wins only during its one-time transfer into the account workspace.
     source.drafts.forEach(function (value, exerciseId) { target.drafts.set(exerciseId, value); });
+    source.classLabs.forEach(function (value, key) {
+      target.classLabs.set(key, { code: value.code, stdin: value.stdin });
+    });
+    trimClassLabDraftMap(target.classLabs);
     source.learning.forEach(function (items, chapterId) {
       var mergedItems = target.learning.get(chapterId) || new Set();
       items.forEach(function (itemId) { mergedItems.add(itemId); });
@@ -4200,6 +6640,8 @@
   function applyWorkspaceSnapshot(snapshot) {
     passed = snapshot.passed;
     drafts = snapshot.drafts;
+    classLabDrafts = snapshot.classLabs;
+    trimClassLabDraftMap(classLabDrafts);
     learningProgress = snapshot.learning;
     assessmentProgress = snapshot.assessments;
     editorMode = snapshot.editorMode;
@@ -4207,15 +6649,21 @@
 
   function persistWorkspaceSnapshot(snapshot) {
     var serializedDrafts = {};
+    var serializedClassLabs = {};
     var serializedLearning = {};
+    trimClassLabDraftMap(snapshot.classLabs);
     snapshot.drafts.forEach(function (value, exerciseId) {
       serializedDrafts[exerciseId] = value;
     });
     snapshot.learning.forEach(function (items, chapterId) {
       serializedLearning[chapterId] = Array.from(items).sort();
     });
+    snapshot.classLabs.forEach(function (entry, key) {
+      serializedClassLabs[key] = { code: entry.code, stdin: entry.stdin };
+    });
     workspaceWrite(STORAGE_KEYS.passed, JSON.stringify(Array.from(snapshot.passed).sort()));
     workspaceWrite(STORAGE_KEYS.drafts, JSON.stringify(serializedDrafts));
+    workspaceWrite(STORAGE_KEYS.classLabs, JSON.stringify(serializedClassLabs));
     workspaceWrite(STORAGE_KEYS.learning, JSON.stringify(serializedLearning));
     workspaceWrite(STORAGE_KEYS.assessments, JSON.stringify(snapshot.assessments));
     if (snapshot.hasEditorMode) {
@@ -4234,6 +6682,7 @@
     [
       STORAGE_KEYS.passed,
       STORAGE_KEYS.drafts,
+      STORAGE_KEYS.classLabs,
       STORAGE_KEYS.learning,
       STORAGE_KEYS.assessments,
       STORAGE_KEYS.editorMode,
@@ -4274,6 +6723,7 @@
       }
       revealedHints.clear();
       runResults.clear();
+      runHistoryByExercise.clear();
       selectedBadgeId = null;
       activeRun = null;
       remoteFilesLoaded.clear();
@@ -4292,6 +6742,14 @@
     }
   }
 
+  function safeSessionRead(key) {
+    try {
+      return window.sessionStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
   function createSilentAudio() {
     return {
       enabled: function () { return false; },
@@ -4300,7 +6758,13 @@
       unlock: function () { return Promise.resolve(false); },
       playClick: function () { return false; },
       playSubmit: function () { return false; },
+      playRun: function () { return false; },
+      playRunAll: function () { return false; },
+      playCheck: function () { return false; },
       playFailure: function () { return false; },
+      playRunComplete: function () { return false; },
+      playTestComplete: function () { return false; },
+      playTaskComplete: function () { return false; },
       playSuccess: function () { return false; },
       playAchievement: function () { return false; }
     };
@@ -4314,11 +6778,27 @@
     }
   }
 
+  function safeSessionWrite(key, value) {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch (error) {
+      // A session without the page-only capability cannot enable cloud sync.
+    }
+  }
+
   function safeRemove(key) {
     try {
       window.localStorage.removeItem(key);
     } catch (error) {
       // Signing out still clears the in-memory token when storage is unavailable.
+    }
+  }
+
+  function safeSessionRemove(key) {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch (error) {
+      // In-memory authentication state is still cleared below every caller.
     }
   }
 
@@ -4397,7 +6877,7 @@
       },
       preparePython: function () { return pythonRunner.prepare(); },
       runPython: function (code, mode, tests) { return pythonRunner.run(code, mode, tests); },
-      requestRender: function () { renderRoute(false); },
+      requestRender: function (focusTarget) { renderRoute(false, focusTarget); },
       announce: announce,
       audio: audio
     });

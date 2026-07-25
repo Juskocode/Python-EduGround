@@ -9,7 +9,12 @@ const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../.."
 async function startServer(extraEnvironment = {}) {
   const child = spawn(process.execPath, ["scripts/serve.mjs", "--port", "0"], {
     cwd: REPOSITORY_ROOT,
-    env: { ...process.env, DATABASE_URL: "", ...extraEnvironment },
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      DATABASE_URL: "",
+      ...extraEnvironment,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
@@ -45,7 +50,16 @@ test("static learning remains available while cloud saving reports unavailable",
 
   const home = await fetch(`${url}/`);
   assert.equal(home.status, 200);
+  assert.match(home.headers.get("content-security-policy"), /frame-ancestors 'none'/u);
+  assert.equal(home.headers.get("x-frame-options"), "DENY");
+  assert.equal(home.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(home.headers.get("referrer-policy"), "no-referrer");
+  assert.match(home.headers.get("permissions-policy"), /camera=\(\)/u);
   assert.match(await home.text(), /Python EduGround/u);
+
+  const themeBootstrap = await fetch(`${url}/theme-bootstrap.js`);
+  assert.equal(themeBootstrap.status, 200);
+  assert.match(await themeBootstrap.text(), /prefers-color-scheme/u);
 
   const liveness = await fetch(`${url}/healthz`);
   assert.equal(liveness.status, 200);
