@@ -23,7 +23,7 @@ async function openRoadmap(page) {
   await expect(page.locator("#home-roadmap-title")).toBeVisible();
 }
 
-test("the curriculum is presented as four connected three-chapter routes", async ({
+test("the curriculum presents four assessed routes and a final game studio", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -31,8 +31,8 @@ test("the curriculum is presented as four connected three-chapter routes", async
   await openRoadmap(page);
 
   const stages = page.locator("[data-roadmap-stage]");
-  await expect(stages).toHaveCount(4);
-  await expect(page.locator("[data-chapter-node]")).toHaveCount(12);
+  await expect(stages).toHaveCount(5);
+  await expect(page.locator("[data-chapter-node]")).toHaveCount(13);
   await expect(page.locator("[data-stage-recap]")).toHaveCount(4);
   await expect(page.locator("[data-stage-checkpoint]")).toHaveCount(4);
   await expect(page.locator("[data-final-stage-badge]")).toHaveCount(1);
@@ -47,6 +47,14 @@ test("the curriculum is presented as four connected three-chapter routes", async
     await expect(stage.locator("[data-stage-checkpoint]")).toHaveCount(1);
   }
 
+  const gameStudio = page.locator(
+    '[data-roadmap-stage="game-project-studio"]'
+  );
+  await expect(gameStudio).toHaveCount(1);
+  await expect(gameStudio.locator("[data-chapter-node]")).toHaveCount(1);
+  await expect(gameStudio.locator("[data-stage-recap]")).toHaveCount(0);
+  await expect(gameStudio.locator("[data-stage-checkpoint]")).toHaveCount(0);
+
   await expect(stages.first()).toHaveAttribute("data-stage-state", "current");
   await expect(page.locator('[data-chapter-node][data-node-state="current"]')).toHaveCount(1);
   await expect(
@@ -54,7 +62,7 @@ test("the curriculum is presented as four connected three-chapter routes", async
   ).toHaveAttribute("aria-current", "step");
   await expect(
     page.locator('[data-chapter-node][data-node-state="upcoming"]')
-  ).toHaveCount(11);
+  ).toHaveCount(12);
 
   const geometry = await page.evaluate(() => {
     const firstStage = document.querySelector("[data-roadmap-stage]");

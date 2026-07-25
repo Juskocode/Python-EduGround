@@ -290,6 +290,56 @@ test("chapters outside assessment blocks remain discoverable as independent prac
   assert.equal(model.overview.chapters, 2);
 });
 
+test("the game project studio remains a final stage without displacing the course award", () => {
+  const masteredAlgorithms = makeChapter("py12", 12, {
+    exercises: { done: 2, total: 2, stars: 3, maxStars: 3 },
+    guide: { done: 5, total: 5 },
+  });
+  const project = makeChapter("py13", 13, {
+    title: "Pygame Game Lab",
+    topics: ["game loop", "snake", "platformer"],
+  });
+  const masteredProject = makeChapter("py13", 13, {
+    title: "Pygame Game Lab",
+    topics: ["game loop", "snake", "platformer"],
+    exercises: { done: 2, total: 2, stars: 3, maxStars: 3 },
+    guide: { done: 5, total: 5 },
+  });
+  const award = {
+    id: "python-pathforger",
+    name: "Python Pathforger",
+    monogram: "PY∞",
+    description: "Complete the whole path.",
+  };
+  const assessmentBlocks = [{
+    id: "algorithms",
+    number: 4,
+    title: "Algorithms",
+    chapters: ["py12"],
+    passedModes: 2,
+    totalModes: 2,
+    recap: { title: "Algorithms recap", award },
+  }];
+
+  const active = dashboard.build(makeInput([masteredAlgorithms, project], {
+    assessmentBlocks,
+    stats: { passedExercises: 2, totalExercises: 4, earnedStars: 3, maxStars: 6 },
+  }));
+  assert.equal(active.stages[1].id, "game-project-studio");
+  assert.equal(active.stages[1].title, "Game Project Studio");
+  assert.equal(active.completionAward.id, "python-pathforger");
+  assert.equal(active.completionAward.state.id, "locked");
+  assert.equal(active.pathComplete, false);
+
+  const complete = dashboard.build(makeInput([masteredAlgorithms, masteredProject], {
+    assessmentBlocks,
+    stats: { passedExercises: 4, totalExercises: 4, earnedStars: 6, maxStars: 6 },
+  }));
+  assert.equal(complete.stages[1].status.id, "complete");
+  assert.equal(complete.completionAward.state.id, "unlocked");
+  assert.equal(complete.pathComplete, true);
+});
+
 test("the final Python Pathforger badge follows whole-course completion", () => {
   const masteredOne = makeChapter("py01", 1, {
     exercises: { done: 2, total: 2, stars: 3, maxStars: 3 },

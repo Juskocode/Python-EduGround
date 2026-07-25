@@ -144,6 +144,36 @@
   content: "";
 }
 
+.home-resume__art--pygame {
+  background-color: #071528;
+  background-image:
+    radial-gradient(circle at 20% 18%, #66e4ab 0 2px, transparent 3px),
+    radial-gradient(circle at 78% 22%, #ffd369 0 2px, transparent 3px),
+    linear-gradient(rgba(92, 171, 231, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 171, 231, 0.08) 1px, transparent 1px),
+    linear-gradient(145deg, #071528, #102849 64%, #09172a);
+  background-position: 0 0;
+  background-size: auto, auto, 30px 30px, 30px 30px, 100% 100%;
+}
+
+.home-resume__art--pygame::before {
+  position: absolute;
+  z-index: 1;
+  right: 16%;
+  bottom: 34%;
+  width: 42px;
+  height: 52px;
+  border: 3px solid rgba(255, 255, 255, 0.48);
+  border-radius: 11px 11px 6px 6px;
+  background: #ffd369;
+  box-shadow:
+    -72px 34px 0 -12px #3bcf91,
+    -49px 34px 0 -12px #3bcf91,
+    -26px 34px 0 -12px #3bcf91,
+    0 56px 0 14px #245d91;
+  content: "";
+}
+
 .home-resume__art-code,
 .home-resume__art-label {
   position: absolute;
@@ -839,11 +869,16 @@
 
 .learning-stage__chapters ol {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--stage-chapter-columns, 3), minmax(0, 1fr));
   gap: 4px;
   padding: 0;
   margin: 0;
   list-style: none;
+}
+
+.learning-stage__chapters ol[data-chapter-count="1"] {
+  max-width: 560px;
+  margin-inline: auto;
 }
 
 .path-chapter-stop {

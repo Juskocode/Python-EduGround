@@ -54,5 +54,7 @@ if (errors.length) {
   console.error(errors.map((error) => `- ${error}`).join("\n"));
   process.exitCode = 1;
 } else {
-  console.log(`Checked ${resources.length} references across ${pageCache.size} official Python documentation pages.`);
+  console.log(
+    `Checked ${resources.length} references across ${pageCache.size} official Python or Pygame documentation pages.`,
+  );
 }

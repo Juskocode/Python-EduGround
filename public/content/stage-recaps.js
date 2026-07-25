@@ -105,7 +105,7 @@
         id: "python-pathforger",
         name: "Python Pathforger",
         monogram: "PY∞",
-        description: "Awarded after mastering all twelve chapter guides and exercise suites, then passing both rooms in the final timed checkpoint.",
+        description: "Awarded after mastering all thirteen chapter guides and exercise suites and passing every timed assessment room.",
       },
     },
   };

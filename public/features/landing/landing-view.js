@@ -41,6 +41,7 @@
     var section = el("section", "landing-hero landing-hero--calm");
     var copy = el("div", "landing-hero__copy");
     var demo = el("div", "landing-hero__demo");
+    var metrics = getHeroMetrics(model);
     var title = el("h1", null, "Learn Python by understanding what every line does.");
     var actions = el("div", "landing-hero__actions");
     var resume = model.resume || {};
@@ -50,21 +51,21 @@
 
     title.id = "landing-title";
     section.setAttribute("aria-labelledby", title.id);
-    section.append(renderHeroGeometry());
+    section.append(renderHeroGeometry(metrics));
     copy.append(
       el("p", "eyebrow", "A complete browser-based Python class"),
       title,
       el(
         "p",
         "landing-hero__lede",
-        "Begin with input(), variables, and exact output. Build through functions and collections, then finish with recursion, divide and conquer, knapsack, and dynamic programming."
+        "Begin with input(), variables, and exact output. Build through algorithms and dynamic programming, then turn those skills into a playable Snake and a 2D platformer."
       )
     );
     actions.append(
       link(resume.href || "#chapter/py01/tutorials", "button button--primary", primaryLabel),
       link("#home", "button button--quiet", "Explore the roadmap")
     );
-    copy.append(actions, renderHeroMetrics(model));
+    copy.append(actions, renderHeroMetrics(metrics));
     demo.append(renderTerminalPreview(), renderSnakeLauncher());
     section.append(copy, demo);
     if (progressSnakeView && typeof progressSnakeView.render === "function") {
@@ -78,7 +79,7 @@
     return section;
   }
 
-  function renderHeroGeometry() {
+  function renderHeroGeometry(metrics) {
     var geometry = el("div", "landing-hero__geometry");
     geometry.dataset.geoMotion = "hero-orbits";
     geometry.setAttribute("aria-hidden", "true");
@@ -91,13 +92,16 @@
       el("span", "landing-hero__node landing-hero__node--two"),
       el("span", "landing-hero__node landing-hero__node--three"),
       el("span", "landing-hero__node landing-hero__node--four"),
-      el("span", "landing-hero__coordinates", "PY / 12 · 04 · 102")
+      el(
+        "span",
+        "landing-hero__coordinates",
+        "PY / " + metrics.chapters + " · " + metrics.stages + " · " + metrics.exercises
+      )
     );
     return geometry;
   }
 
-  function renderHeroMetrics(model) {
-    var list = el("ul", "landing-hero__metrics");
+  function getHeroMetrics(model) {
     var stages = Array.isArray(model.stages) ? model.stages : [];
     var chapterCount = stages.reduce(function (total, stage) {
       return total + (Array.isArray(stage.chapters) ? stage.chapters.length : 0);
@@ -107,11 +111,20 @@
     });
     var exerciseTotal = exerciseMilestone
       ? String(exerciseMilestone.value).split("/").pop().trim()
-      : "102";
+      : "0";
+    return {
+      chapters: chapterCount,
+      stages: stages.length,
+      exercises: exerciseTotal
+    };
+  }
+
+  function renderHeroMetrics(metrics) {
+    var list = el("ul", "landing-hero__metrics");
     [
-      [chapterCount || 12, "chapters"],
-      [stages.length || 4, "learning stages"],
-      [exerciseTotal, "exercise suites"],
+      [metrics.chapters, "chapters"],
+      [metrics.stages, "learning stages"],
+      [metrics.exercises, "exercise suites"],
     ].forEach(function (metric) {
       var item = el("li");
       item.append(el("strong", null, metric[0]), el("span", null, metric[1]));
@@ -434,33 +447,67 @@
     var heading = el("header", "landing-section-heading landing-section-heading--row");
     var stageList = el("ol", "landing-stage-grid");
     var safeStages = Array.isArray(stages) ? stages : [];
+    var assessedStageCount = safeStages.filter(function (stage) {
+      return Boolean(stage && stage.assessment);
+    }).length;
+    var projectStageCount = Math.max(0, safeStages.length - assessedStageCount);
     section.setAttribute("aria-labelledby", "landing-stages-title");
     var headingCopy = el("div");
     headingCopy.append(
-      el("p", "eyebrow", "Four connected stages"),
-      el("h2", null, "A path with a recap after every three chapters."),
-      el("p", null, "Use each recap to reconnect the ideas before opening its timed checkpoint.")
+      el(
+        "p",
+        "eyebrow",
+        assessedStageCount + " assessed stages" +
+          (projectStageCount ? " · " + projectStageCount + " project studio" : "")
+      ),
+      el("h2", null, "Learn the path, then build something playable."),
+      el(
+        "p",
+        null,
+        "Reconnect each assessed stage in its recap, prove it in the timed rooms, then transfer the complete model into the final game studio."
+      )
     );
     headingCopy.querySelector("h2").id = "landing-stages-title";
     heading.append(headingCopy, link("#home", "landing-stages__roadmap-link", "Open full roadmap →"));
     safeStages.forEach(function (stage) {
       var item = el("li", "landing-stage-card landing-stage-card--" + stage.status.tone);
       var recap = stage.recap || {};
+      var hasRecap = Boolean(stage.recap && stage.recap.href);
+      var chapters = Array.isArray(stage.chapters) ? stage.chapters : [];
+      var firstChapter = chapters[0] || null;
       var stageLink = link(
-        "#stage/" + encodeURIComponent(stage.id) + "/recap",
+        hasRecap
+          ? stage.recap.href
+          : firstChapter
+            ? "#chapter/" + encodeURIComponent(firstChapter.id) + "/tutorials"
+            : "#home",
         "landing-stage-card__link"
       );
       stageLink.dataset.landingStage = String(stage.id);
-      var chapterNumbers = (Array.isArray(stage.chapters) ? stage.chapters : []).map(function (chapter) {
+      var chapterNumbers = chapters.map(function (chapter) {
         return pad(chapter.number);
       }).join(" · ");
       stageLink.append(
         el("span", "landing-stage-card__number", pad(stage.number)),
-        el("span", "landing-stage-card__chapters", "Chapters " + chapterNumbers),
+        el(
+          "span",
+          "landing-stage-card__chapters",
+          (chapters.length === 1 ? "Chapter " : "Chapters ") + chapterNumbers
+        ),
         el("h3", null, stage.title),
-        el("p", null, recap.title || "Stage recap"),
+        el(
+          "p",
+          null,
+          hasRecap
+            ? recap.title
+            : "Build Snake and platformer systems frame by frame."
+        ),
         el("span", "landing-stage-card__status", stage.status.label),
-        el("span", "landing-stage-card__action", "Open recap →")
+        el(
+          "span",
+          "landing-stage-card__action",
+          hasRecap ? "Open recap →" : "Open game studio →"
+        )
       );
       item.append(stageLink);
       stageList.append(item);

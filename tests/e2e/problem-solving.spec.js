@@ -21,7 +21,7 @@ test.afterEach(async () => {
 test("the roadmap leads into the complete problem-solving class", async ({ page }) => {
   await page.goto("/#home");
 
-  await expect(page.locator(".home-header__meta")).toContainText("12 chapters");
+  await expect(page.locator(".home-header__meta")).toContainText("13 chapters");
   await expect(page.locator('a.topbar-home[href="#home"]')).toHaveAttribute(
     "aria-current",
     "page"
@@ -52,7 +52,7 @@ test("the roadmap leads into the complete problem-solving class", async ({ page 
     images.every((image) => image.complete && image.naturalWidth > 0)
   )).toBe(true);
   await expect(page.getByRole("link", {
-    name: /functools\.cache.*official Python documentation/u,
+    name: /functools\.cache.*official documentation/u,
   })).toBeVisible();
 });
 
@@ -104,7 +104,7 @@ test("adding chapter 12 preserves earlier progress and drafts", async ({ page })
   });
 
   await page.goto("/#home");
-  await expect(page.locator(".home-milestones")).toContainText("1 / 102");
+  await expect(page.locator(".home-milestones")).toContainText("1 / 110");
   await expect(page.locator('a[href="#chapter/py12"]')).toHaveCount(1);
 
   await page.goto("/#exercise/py11-bubble-sort");

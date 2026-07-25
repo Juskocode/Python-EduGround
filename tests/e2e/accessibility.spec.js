@@ -10,6 +10,8 @@ const routes = [
   ["exercise editor", "/#exercise/py01-first-programs"],
   ["problem-solving class", "/#chapter/py12/tutorials"],
   ["dynamic-programming editor", "/#exercise/py12-knapsack"],
+  ["Pygame game studio", "/#chapter/py13/tutorials"],
+  ["Pygame exercise editor", "/#exercise/py13-direction-step"],
   ["assessment hub", "/#assessments"],
   ["theory room", "/#assessment/py01-py03/theory"],
 ];

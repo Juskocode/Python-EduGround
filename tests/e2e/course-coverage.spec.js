@@ -33,6 +33,12 @@ const STAGES = [
       ["py12", "Problem Solving & Dynamic Programming"],
     ],
   },
+  {
+    name: "Game Project Studio",
+    chapters: [
+      ["py13", "Pygame Game Lab"],
+    ],
+  },
 ];
 
 let unexpectedBrowserErrors;
@@ -98,6 +104,8 @@ test("the main learning surfaces remain free of horizontal overflow on mobile", 
     "/#chapter/py01",
     "/#chapter/py01/exercises",
     "/#exercise/py01-fixme",
+    "/#chapter/py13/tutorials",
+    "/#exercise/py13-direction-step",
     "/#assessments",
     "/#profile/badges",
   ];

@@ -186,11 +186,16 @@
       art.setAttribute("aria-hidden", "true");
       return art;
     }
-    var number = Math.max(1, Math.min(12, Number(chapter.number) || 1));
-    var index = number - 1;
+    var number = Math.max(1, Number(chapter.number) || 1);
+    var spriteNumber = Math.min(12, number);
+    var index = spriteNumber - 1;
     var column = index % 4;
     var row = Math.floor(index / 4);
-    art.style.backgroundPosition = "0 0, " + (column * 100 / 3) + "% " + (row * 100 / 2) + "%";
+    if (String(chapter.id) === "py13") {
+      art.classList.add("home-resume__art--pygame");
+    } else {
+      art.style.backgroundPosition = "0 0, " + (column * 100 / 3) + "% " + (row * 100 / 2) + "%";
+    }
     art.setAttribute("aria-hidden", "true");
     art.append(
       el("span", "home-resume__art-code", "PY" + pad(number)),
@@ -365,7 +370,7 @@
     heading.firstElementChild.append(
       el("p", "eyebrow", "Curriculum roadmap"),
       el("h2", null, "Choose a chapter by skill, then prove what you learned."),
-      el("p", null, "Follow each three-chapter route from class material to executable practice, then use the timed checkpoint to prove recall.")
+      el("p", null, "Move from class material to executable practice, use timed checkpoints for recall, then finish in the independent game studio.")
     );
     heading.querySelector("h2").id = "home-roadmap-title";
     var list = el("ol", "learning-stage-list");
@@ -440,6 +445,11 @@
     }
     var chapterNav = el("nav", "learning-stage__chapters");
     var chapterList = el("ol");
+    chapterList.dataset.chapterCount = String(stage.chapters.length);
+    chapterList.style.setProperty(
+      "--stage-chapter-columns",
+      String(Math.max(1, Math.min(stage.chapters.length, 3)))
+    );
     chapterNav.setAttribute("aria-label", stage.title + " chapters");
     stage.chapters.forEach(function (chapter, chapterIndex) {
       chapterList.append(
@@ -518,7 +528,7 @@
     copy.append(
       el("span", "eyebrow", "Stage recap"),
       el("strong", null, recap.title),
-      el("small", null, "Reconnect all three chapters")
+      el("small", null, "Reconnect the ideas in this stage")
     );
     recapLink.append(
       el("span", "learning-stage__recap-icon", "↻"),

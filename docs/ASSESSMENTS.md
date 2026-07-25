@@ -47,7 +47,7 @@ Assessment state includes the active attempt ID, start and deadline timestamps, 
 
 One anonymous workspace and one locally cached workspace per account prevent one signed-in learner's drafts and results from appearing to another learner on the same browser. The first sign-in merges anonymous work into that account and clears the transferred anonymous workspace. Signing out returns to a fresh or existing anonymous workspace without exposing account data. Future sign-ins merge the account's local cache with its server state.
 
-Assessment practical drafts are not written to `user_files` and do not create chapter `exNN.py` files. That canonical file workflow belongs only to the 102 normal exercises. Use **Download .py** in the assessment editor when a separate local copy of a practical answer is needed.
+Assessment practical drafts are not written to `user_files` and do not create chapter `exNN.py` files. That canonical file workflow belongs only to the 110 normal exercises. Use **Download .py** in the assessment editor when a separate local copy of a practical answer is needed.
 
 See [Persistence and PostgreSQL operations](PERSISTENCE.md) for deployment upgrades, merge behaviour, backups, and browser-origin limitations.
 

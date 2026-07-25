@@ -138,7 +138,7 @@ input draft.
 
 ## Canonical chapter files
 
-The server owns a stable mapping from all 102 exercise IDs to chapter directories
+The server owns a stable mapping from all 110 exercise IDs to chapter directories
 and zero-based filenames. The browser sends only an exercise ID and source text; it
 cannot choose a server path.
 

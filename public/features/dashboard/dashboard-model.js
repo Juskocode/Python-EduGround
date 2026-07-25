@@ -626,6 +626,8 @@
       return !assignedChapterIds.has(chapter.id);
     });
     if (independentChapters.length > 0) {
+      var isGameProjectStudio = independentChapters.length === 1 &&
+        independentChapters[0].id === "py13";
       var combinedDone = independentChapters.reduce(function (total, chapter) {
         return total + chapter.combined.done;
       }, 0);
@@ -633,9 +635,9 @@
         return total + chapter.combined.total;
       }, 0);
       stages.push({
-        id: "independent-practice",
+        id: isGameProjectStudio ? "game-project-studio" : "independent-practice",
         number: stages.length + 1,
-        title: "Independent Problem Solving",
+        title: isGameProjectStudio ? "Game Project Studio" : "Independent Problem Solving",
         chapters: independentChapters,
         assessment: null,
         status: deriveStageStatus(independentChapters, null),
@@ -668,13 +670,22 @@
       }
     });
     var finalStage = stages[stages.length - 1] || null;
-    var finalAwardSource = finalStage && finalStage.recap ? finalStage.recap.award : null;
+    var awardStage = stages.slice().reverse().find(function (stage) {
+      return Boolean(stage.recap && stage.recap.award);
+    }) || null;
+    var finalAwardSource = awardStage && awardStage.recap ? awardStage.recap.award : null;
+    var hasTrailingStages = Boolean(
+      awardStage && stages.indexOf(awardStage) < stages.length - 1
+    );
     var earlierStagesComplete = stages.length > 1 && stages.slice(0, -1).every(function (stage) {
       return stage.status.id === "complete";
     });
     var awardState = completed
       ? { id: "unlocked", label: "Unlocked", tone: "success" }
-      : earlierStagesComplete && finalStage && finalStage.status.id === "checkpoint"
+      : !hasTrailingStages &&
+          earlierStagesComplete &&
+          finalStage &&
+          finalStage.status.id === "checkpoint"
         ? { id: "ready", label: "Ready to earn", tone: "warning" }
         : { id: "locked", label: "Locked", tone: "muted" };
     var completionAward = finalAwardSource ? {
@@ -683,14 +694,14 @@
       monogram: finalAwardSource.monogram,
       description: finalAwardSource.description,
       state: awardState,
-      href: awardState.id === "ready" && finalStage.assessment
-        ? "#assessment/" + encodeURIComponent(finalStage.assessment.id)
+      href: awardState.id === "ready" && awardStage && awardStage.assessment
+        ? "#assessment/" + encodeURIComponent(awardStage.assessment.id)
         : awardState.id === "unlocked"
           ? "#profile/badges"
           : ""
     } : null;
-    if (finalStage && finalStage.recap && completionAward) {
-      finalStage.recap.award = completionAward;
+    if (awardStage && awardStage.recap && completionAward) {
+      awardStage.recap.award = completionAward;
     }
     var resume = attachResumeContext(
       deriveJourneyResume(chapters, stages, source.lastExerciseId),

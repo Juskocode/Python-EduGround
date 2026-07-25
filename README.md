@@ -1,6 +1,6 @@
 # Python EduGround
 
-Python EduGround turns the 12 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, and optionally sync their own work to PostgreSQL. The repository also ships a hardened container topology, secure-cookie account boundary, mandatory PostgreSQL and browser/accessibility gates, and a reviewable CI/release pipeline.
+Python EduGround turns the 13 exercise chapters in this repository into a local-first Python class. Learners can follow structured, solution-free class notes, join guided activities, work through practical runbooks, write code in a Monokai editor, run Python in the browser, enter four timed assessment blocks, build game systems in a final Pygame studio, and optionally sync their own work to PostgreSQL. The repository also ships a hardened container topology, secure-cookie account boundary, mandatory PostgreSQL and browser/accessibility gates, and a reviewable CI/release pipeline.
 
 ## Product tour
 
@@ -34,17 +34,17 @@ Python EduGround turns the 12 exercise chapters in this repository into a local-
 
 | Area | Included |
 | --- | --- |
-| Curriculum | 12 chapters, 102 exercises, 316 exercise tests, and 274 collectible difficulty stars |
-| Classroom material | Twelve distinct 90-minute classes: 1,080 planned minutes, 48 summary outcomes, 60 lesson-plan blocks, 12 editable lecture demonstrations with separate input and terminal output, 24 collaborative activities, 48 independent-practice prompts, 60 recap questions, and 12 transfer-focused homework briefs |
-| Guided learning | Eleven answer-or-code room tasks across Chapters 1–3, editable lesson-note examples, 48 lesson-note sections, 60 runbook phases, 60 mental-model steps, 24 guided practices, 12 concept clinics with 72 worked trace rows, 36 misconception probes, and 36 transfer prompts, plus one interactive number-line lab, 42 coaching exchanges, and 47 toolbox cards |
+| Curriculum | 13 chapters, 110 exercises, 341 exercise tests, and 294 collectible difficulty stars |
+| Classroom material | Thirteen distinct 90-minute classes: 1,170 planned minutes, 52 summary outcomes, 65 lesson-plan blocks, 13 editable lecture demonstrations with separate input and terminal output, 26 collaborative activities, 52 independent-practice prompts, 65 recap questions, and 13 transfer-focused homework briefs |
+| Guided learning | Eleven answer-or-code room tasks across Chapters 1–3, editable lesson-note examples, 52 lesson-note sections, 65 runbook phases, 65 mental-model steps, 26 guided practices, 13 concept clinics with 78 worked trace rows, 39 misconception probes, and 39 transfer prompts, plus one interactive number-line lab, two browser game-system labs, 46 coaching exchanges, and 51 toolbox cards |
 | Timed assessments | Four chapter blocks, each with 15 theory questions in 20 minutes and five practical tasks in 60 minutes; theory and practical pass independently at 60/100 |
-| Reference material | 77 glossary terms, 73 debugging checks, one checkpoint per chapter, and 67 curated official Python documentation links: 46 in chapter guides and 21 in assessments |
+| Reference material | 84 glossary terms, 80 debugging checks, one checkpoint per chapter, and 71 curated official Python or Pygame documentation links: 50 in chapter guides and 21 in assessments |
 | Exercise support | Rewritten teaching prompts, contracts, success criteria, visible examples, progressive hints, and selected technique contracts that coach the intended Python construct |
 | Editor | Vendored Ace with persistent Sublime or Vim keys, Monokai styling, Python highlighting, autocomplete, search, folding, line numbers, copy/paste controls, and resizable lesson, editor, and feedback panes |
 | Files | Automatic browser drafts, explicit **Save**, full-test submission snapshots, canonical chapter `exNN.py` files, and **Download .py** |
 | Runner | Pyodide in a dedicated browser worker; account APIs additionally require a tab-only capability never sent to that worker |
 | Feedback | Per-test pass/fail state, inputs, expected output, actual output, captured streams, and complete tracebacks |
-| Motivation | A focused welcome page with an optional Python Snake arcade, completion-driven green/blue/yellow snake fleets, chapter progress, four stage recaps, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, crisp action-specific coding cues, and a geometric space-navigation motion system |
+| Motivation | A focused welcome page with an optional Python Snake arcade, completion-driven green/blue/yellow snake fleets, chapter progress, four assessed-stage recaps, a final game-project studio, difficulty stars, eight Pythonic ranks, ten badges, the final animated Python Pathforger award, achievement toasts, crisp action-specific coding cues, and a geometric space-navigation motion system |
 | Persistence | Local browser storage by default; optional PostgreSQL sync with HttpOnly cookie sessions, bounded per-exercise run history, and a durable per-user submission-file volume |
 | Preferences | Responsive light/dark interface, reduced-motion support, persistent theme, mute state, and editor mode |
 
@@ -58,7 +58,7 @@ Every chapter is presented as a complete class:
 6. Collaborative class activities end with concrete evidence another learner or teacher can inspect.
 7. A visual mental model, concept clinic, guided prediction practice, glossary, debugging checklist, and knowledge checkpoint deepen the core notes.
 8. Independent practice, retrieval questions, and transfer-focused homework turn reading into active learning.
-9. A chapter-specific toolbox, five-phase runbook, official Python references, exercise handoff, and previous/next navigation support practice after class.
+9. A chapter-specific toolbox, five-phase runbook, official Python or Pygame references, exercise handoff, and previous/next navigation support practice after class.
 
 Chapter 1 assumes no previous programming experience and first names the editor,
 sample-input panel, **Run** control, and terminal. It then introduces the complete
@@ -83,16 +83,18 @@ Python Snake preview opens an optional dialog only when selected; the determinis
 arcade caps its score at 1,000, includes three collision-avoidance splits, slow
 asteroid drift, rare falling stars, and shield, boost, and stasis power-ups. The
 stable pooled SVG renderer updates existing nodes instead of rebuilding the board
-on every tick, preventing animation flicker. The dashboard
-presents the curriculum as four animated module paths. Each path connects three
+on every tick, preventing animation flicker. The dashboard presents the assessed
+curriculum as four animated module paths. Each path connects three
 chapter stops to a bookmarkable stage recap and its timed checkpoint, deriving
 preview, learning, ready, and complete states from existing saved progress.
 Recaps combine chapter progress, retrieval prompts, cross-chapter synthesis,
 checkpoint evidence, and official Python references without introducing another
 graded score. The final route shows the Python Pathforger award; it unlocks only
-after every chapter and all four checkpoints are complete. On narrow screens the
-same path becomes a vertical timeline, while reduced-motion preferences disable
-route and badge motion without hiding completion state.
+after every chapter and all four checkpoints are complete. A separate final
+project stage then applies the same state-and-feedback habits to Snake and
+platformer systems. On narrow screens each path becomes a vertical timeline,
+while reduced-motion preferences disable route and badge motion without hiding
+completion state.
 
 The code-native geospace layer makes those surfaces feel like one navigation
 console: orbit geometry and a scanning Python terminal introduce the welcome page,
@@ -114,6 +116,15 @@ Concepts that benefit from direct manipulation can also include a focused lab. C
 
 Chapter 12 adds a complete problem-solving track: decomposition and counterexamples, justified greedy selection, memoization, bottom-up tabulation, capacity and reachability states, and paired-sequence tables. Its ten exercises progress from Two Sum and interval scheduling through climbing stairs, grid paths, 0/1 knapsack, coin change, maximum non-adjacent sum, subset sum, longest common subsequence, and edit distance. Four original local SVG diagrams support the class and each exercise reuses a relevant visual reasoning cue without exposing its solution.
 
+Chapter 13 is a game-project studio motivated by the welcome-page Snake. Its class
+traces the Pygame event → update → draw loop, rectangle collisions, elapsed-time
+animation, Snake growth, platformer intent, gravity, landing, and camera state.
+Two accessible browser labs let learners step the same state transitions with a
+keyboard or pointer before attempting eight solution-free Python game-logic
+exercises. The browser labs intentionally model game rules without opening an SDL
+window; the class also explains how to install Pygame and run the graphical loop
+locally.
+
 Lesson notes, concept clinics, runbooks, and guided room tasks keep learning
 markers separately from graded exercise passes, so classroom completion never
 awards exercise stars. Editable classroom code and sample input use their own
@@ -121,7 +132,7 @@ bounded draft store and do not create canonical chapter `exNN.py` files. The
 desktop class view includes a course rail and an on-page contents rail; both
 collapse into keyboard-accessible disclosures on smaller screens.
 
-The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10–12 capstone. Each room keeps its own active deadline, drafts, recent attempts, and best score; assessment results do not award exercise stars. See [docs/ASSESSMENTS.md](docs/ASSESSMENTS.md) for the room rules, source transparency, scoring, official references, and client-side security limitations.
+The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10–12 capstone. Chapter 13 remains an untimed project studio rather than changing those four assessment contracts. Each room keeps its own active deadline, drafts, recent attempts, and best score; assessment results do not award exercise stars. See [docs/ASSESSMENTS.md](docs/ASSESSMENTS.md) for the room rules, source transparency, scoring, official references, and client-side security limitations.
 
 ## Run locally
 
@@ -281,13 +292,17 @@ submissions/<user UUID>/
 │   └── ...
 ├── Py02 Simple data/
 │   └── ...
-└── Py12 Problem Solving & Dynamic Programming/
+├── Py12 Problem Solving & Dynamic Programming/
+│   ├── ex00.py
+│   ├── ...
+│   └── ex09.py
+└── Py13 Pygame Game Lab/
     ├── ex00.py
     ├── ...
-    └── ex09.py
+    └── ex07.py
 ```
 
-The server owns this 102-file mapping. Learner input cannot select a path, and these files never share the repository's original `Py*/` solution directories. PostgreSQL remains authoritative; reading a saved account file recreates a missing mirror.
+The server owns this 110-file mapping. Learner input cannot select a path, and these files never share the repository's original `Py*/` solution directories. PostgreSQL remains authoritative; reading a saved account file recreates a missing mirror.
 
 ## What is saved
 
@@ -324,14 +339,14 @@ npm run clean
 ```
 
 `npm run validate` performs the deterministic offline checks for application and
-backend TypeScript, emitted JavaScript, unit tests, the security policy, all 12
-chapter definitions, all 102
-exercise definitions, all 316 exercise tests, every solution-free starter, every
+backend TypeScript, emitted JavaScript, unit tests, the security policy, all 13
+chapter definitions, all 110
+exercise definitions, all 341 exercise tests, every solution-free starter, every
 lesson section and runbook phase, all concept clinics, the rounding lab, toolbox
-cards, and the complete classroom/assessment schema. It also verifies cookie/origin
+cards, both Pygame game-system labs, and the complete classroom/assessment schema. It also verifies cookie/origin
 helpers, database TLS configuration, migration manifests, public-file isolation,
 and hardened container/workflow policy. `npm run validate:links` is the optional
-network check for curated Python documentation references.
+network check for curated official Python and Pygame documentation references.
 
 Database and release candidates must additionally use an isolated PostgreSQL
 database:
@@ -357,12 +372,13 @@ evidence only when the browser gate fails.
 
 Validation coverage includes:
 
-- All 12 dashboard → chapter → class and exercise routes, plus representative
+- All 13 dashboard → chapter → class and exercise routes, plus representative
   mobile overflow checks.
 - Four animated module paths, saved completed/current/upcoming states, keyboard
   access, vertical mobile layout, and reduced-motion behavior.
 - Persistent class-section understanding markers.
-- Worked concept clinics, guided-practice reveal, the Chapter 2 rounding lab, and chapter checkpoint feedback.
+- Worked concept clinics, guided-practice reveal, the Chapter 2 rounding lab, the
+  Chapter 13 Snake and platformer labs, and chapter checkpoint feedback.
 - Safe starter code with no repository answer loaded into the page.
 - Sublime/Vim switching, Monokai styling, editor keyboard shortcuts, pointer and
   keyboard pane resizing, layout persistence/reset, and responsive fallback.
@@ -400,7 +416,7 @@ conflict journeys remain explicit roadmap items.
 | `src/server/persistence/` | PostgreSQL configuration, migrations, and learner-state operations |
 | `src/server/rag/` | Chapter-scoped retrieval, guarded prompts, bounded Ollama adapter, and tutor admission |
 | `src/server/security/` | Credentials, cookies, origin checks, CSP, proxy policy, and runtime guards |
-| `curriculum/solutions/` | Private Python reference solutions, grouped by the original 12 chapters |
+| `curriculum/solutions/` | Private Python reference solutions, grouped by the 13 course chapters |
 | `curriculum/generated/` | Private generated solution bundle used only by build-time validation |
 | `database/` | Ordered migrations and the restricted application-role bootstrap |
 | `scripts/build/` | Starter/solution generation and vendored dependency refresh |

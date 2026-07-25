@@ -31,7 +31,16 @@ test("the bare URL opens a focused course welcome before the chapter dashboard",
       name: "Learn Python by understanding what every line does.",
     })
   ).toBeVisible();
-  await expect(page.locator("[data-landing-stage]")).toHaveCount(4);
+  await expect(page.locator("[data-landing-stage]")).toHaveCount(5);
+  const gameStudio = page.locator(
+    '[data-landing-stage="game-project-studio"]'
+  );
+  await expect(gameStudio).toContainText("Game Project Studio");
+  await expect(gameStudio).toContainText("Open game studio");
+  await expect(gameStudio).toHaveAttribute(
+    "href",
+    "#chapter/py13/tutorials"
+  );
   await expect(page.locator('.topbar-home[href="#welcome"]')).toHaveAttribute(
     "aria-current",
     "page"
