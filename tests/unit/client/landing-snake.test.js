@@ -65,6 +65,15 @@ function cell(x, y, width) {
   return y * width + x;
 }
 
+function wrappedDistance(first, second, width, height) {
+  const start = point(first, width);
+  const end = point(second, width);
+  const horizontal = Math.abs(start.x - end.x);
+  const vertical = Math.abs(start.y - end.y);
+  return Math.min(horizontal, width - horizontal) +
+    Math.min(vertical, height - vertical);
+}
+
 function findSafeHorizontalRun(state, length = 4) {
   const occupied = new Set(asteroidCells(state));
   const activePowerUp = powerUpCell(state);
@@ -156,6 +165,81 @@ test("the friendly opening line collects energy and grows the trail", () => {
   assert.equal(state.segments.length, initialLength + 1);
   assert.equal(state.lastEvent, "collected");
   assert.notEqual(state.energy, state.segments[0]);
+});
+
+test("quick core routes build a capped score chain with explicit awards", () => {
+  let state = running({ asteroids: [], seed: 1848 });
+  const snapshots = [];
+
+  for (let core = 0; core < 4; core += 1) {
+    state = snake.step(prepareSafeStep(state, true));
+    snapshots.push({
+      award: state.lastAward,
+      combo: state.comboMultiplier,
+      score: state.score,
+    });
+  }
+
+  assert.deepEqual(snapshots, [
+    { award: 10, combo: 1, score: 10 },
+    { award: 20, combo: 2, score: 30 },
+    { award: 30, combo: 3, score: 60 },
+    { award: 30, combo: 3, score: 90 },
+  ]);
+  assert.equal(state.comboCount, 4);
+  assert.equal(state.bestCombo, 4);
+  assert.ok(state.comboExpiresAt > state.ticks);
+});
+
+test("a score chain expires naturally and splitting trades it for safety", () => {
+  let state = running({ asteroids: [], seed: 2772 });
+  state = snake.step(prepareSafeStep(state, true));
+  state = snake.step(prepareSafeStep(state, true));
+  assert.equal(state.comboMultiplier, 2);
+
+  const split = splitTrail(state);
+  assert.equal(split.comboCount, 0);
+  assert.equal(split.comboMultiplier, 1);
+  assert.equal(split.comboExpiresAt, 0);
+  assert.equal(split.lastEvent, "split");
+
+  while (state.ticks < state.comboExpiresAt - 1) {
+    state = snake.step(prepareSafeStep(state));
+  }
+  assert.equal(state.comboMultiplier, 2, "the chain should survive until its final move");
+  state = snake.step(prepareSafeStep(state));
+  assert.equal(state.comboCount, 0);
+  assert.equal(state.comboMultiplier, 1);
+  assert.equal(state.comboExpiresAt, 0);
+  assert.equal(state.lastEvent, "combo-lost");
+});
+
+test("core boost compounds with the chain for exactly three core collections", () => {
+  let state = running({
+    width: 12,
+    height: 10,
+    asteroids: [],
+    segments: [[3, 4], [2, 4], [1, 4]],
+    direction: "right",
+    energy: [9, 9],
+    powerUp: {
+      type: "boost",
+      cell: [4, 4],
+      expiresAt: 20,
+    },
+  });
+
+  state = snake.step(state);
+  assert.equal(state.effects.boostCores, 3);
+
+  const awards = [];
+  for (let core = 0; core < 4; core += 1) {
+    state = snake.step(prepareSafeStep(state, true));
+    awards.push(state.lastAward);
+  }
+
+  assert.deepEqual(awards, [20, 40, 60, 30]);
+  assert.equal(state.effects.boostCores, 0);
 });
 
 test("crossing the orbital edge wraps to the opposite side", () => {
@@ -265,9 +349,26 @@ test("score is capped at 1000 and reaching the cap clears the sector", () => {
 
   const completed = snake.step(state);
   assert.equal(completed.score, 1000);
+  assert.equal(completed.lastAward, 5, "the final announcement should report the effective award");
   assert.equal(completed.phase, "won");
   assert.ok(["won", "score-cap", "completed"].includes(completed.lastEvent));
   assert.equal(snake.step(completed), completed, "a completed mission should not exceed the cap");
+});
+
+test("completed state cannot be revived with contradictory phase or combo options", () => {
+  const completed = snake.createState({
+    score: 1000,
+    phase: "running",
+    comboCount: 9,
+    comboExpiresAt: 100,
+  });
+
+  assert.equal(completed.phase, "won");
+  assert.equal(completed.energy, null);
+  assert.equal(completed.comboCount, 0);
+  assert.equal(completed.comboMultiplier, 1);
+  assert.equal(completed.comboExpiresAt, 0);
+  assert.equal(snake.start(completed), completed);
 });
 
 test("split sheds the rear trail, grants only three uses, and reset restores them", () => {
@@ -395,6 +496,8 @@ test("power-up spawning and placement remain deterministic and collectible", () 
   const first = runUntilPowerUp(4404);
   const second = runUntilPowerUp(4404);
   assert.deepEqual(plain(first.powerUp), plain(second.powerUp));
+  assert.ok(first.powerUp.spawnedAt <= first.ticks);
+  assert.ok(first.powerUp.expiresAt > first.ticks);
 
   const target = powerUpCell(first);
   assert.equal(first.segments.includes(target), false);
@@ -428,6 +531,47 @@ test("power-up spawning and placement remain deterministic and collectible", () 
     plain(collected.effects || {}),
     beforeEffects,
     "collection should activate a deterministic gameplay effect",
+  );
+});
+
+test("core and power-up spawns avoid asteroid-adjacent cells when room exists", () => {
+  for (let seed = 1; seed <= 24; seed += 1) {
+    const collected = snake.step(running({
+      width: 12,
+      height: 10,
+      seed,
+      segments: [[3, 4], [2, 4], [1, 4]],
+      direction: "right",
+      asteroids: [[8, 1], [9, 6], [2, 8]],
+      energy: [4, 4],
+    }));
+    assert.ok(
+      asteroidCells(collected).every((asteroid) =>
+        wrappedDistance(
+          collected.energy,
+          asteroid,
+          collected.width,
+          collected.height,
+        ) > 1
+      ),
+      `seed ${seed} should place the next core outside asteroid danger cells`,
+    );
+  }
+
+  let state = running({ seed: 9029 });
+  for (let move = 0; move < 80 && !state.powerUp; move += 1) {
+    state = snake.step(prepareSafeStep(state));
+  }
+  assert.ok(state.powerUp);
+  assert.ok(
+    asteroidCells(state).every((asteroid) =>
+      wrappedDistance(
+        powerUpCell(state),
+        asteroid,
+        state.width,
+        state.height,
+      ) > 1
+    ),
   );
 });
 

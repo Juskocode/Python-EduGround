@@ -99,6 +99,18 @@ test("Snake supports keyboard play, pausing, restart, and field narration", asyn
   await page.goto("/#welcome");
 
   const { arcade, playfield } = await openSnakeDialog(page);
+  const mission = arcade.getByRole("region", {
+    name: "Mission objective and power-up status",
+  });
+  await expect(mission).toContainText("Collect cores · reach 1000");
+  await expect(mission.locator("[data-snake-progress]")).toHaveAttribute(
+    "value",
+    "0"
+  );
+  await expect(arcade.locator("[data-snake-combo]")).toHaveText("Ready");
+  await expect(arcade.locator("[data-snake-powerup-status]")).toContainText(
+    /next pickup in \d+ moves/u
+  );
   await expect(
     arcade.getByRole("button", { name: "Start mission" })
   ).toBeFocused();
@@ -107,6 +119,11 @@ test("Snake supports keyboard play, pausing, restart, and field narration", asyn
   await expect(arcade).toHaveAttribute("data-snake-score", "10", {
     timeout: 2_500,
   });
+  await expect(arcade.locator("[data-snake-combo]")).toContainText("1×");
+  await expect(mission.locator("[data-snake-progress]")).toHaveAttribute(
+    "value",
+    "10"
+  );
 
   await expect(playfield).toBeFocused();
   await page.keyboard.press("Space");
@@ -324,7 +341,7 @@ test("the Snake dialog is touch-sized, motion-aware, and accessible on mobile", 
   const launcherBox = await launcher.boundingBox();
   expect(launcherBox.height).toBeGreaterThanOrEqual(44);
 
-  const { arcade, dialog } = await openSnakeDialog(page);
+  const { arcade, dialog, playfield } = await openSnakeDialog(page);
   const close = dialog.getByRole("button", { name: "Close Python Snake" });
   const closeBox = await close.boundingBox();
   expect(closeBox.width).toBeGreaterThanOrEqual(44);
@@ -368,8 +385,25 @@ test("the Snake dialog is touch-sized, motion-aware, and accessible on mobile", 
   });
   await expect(arcade).toHaveAttribute("data-snake-motion", "reduced");
 
-  await arcade.getByRole("button", { name: "Start mission" }).click();
+  const playfieldBox = await playfield.boundingBox();
+  await playfield.dispatchEvent("pointerdown", {
+    button: 0,
+    clientX: playfieldBox.x + playfieldBox.width / 2,
+    clientY: playfieldBox.y + playfieldBox.height * 0.7,
+    isPrimary: true,
+    pointerId: 7,
+    pointerType: "touch",
+  });
+  await playfield.dispatchEvent("pointerup", {
+    button: 0,
+    clientX: playfieldBox.x + playfieldBox.width / 2,
+    clientY: playfieldBox.y + playfieldBox.height * 0.25,
+    isPrimary: true,
+    pointerId: 7,
+    pointerType: "touch",
+  });
   await expect(arcade).toHaveAttribute("data-snake-phase", "running");
+  await expect(arcade).toHaveAttribute("data-snake-direction", "up");
 
   const geometry = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,

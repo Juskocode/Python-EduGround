@@ -293,8 +293,12 @@
     var heading = el("header", "landing-snake__heading");
     var headingCopy = el("div");
     var title = el("h2", null, "snake.py // orbital loop");
-    var description = el("p", null, "Collect data cores. Avoid asteroids and your own trail. Crossing an edge warps you to the opposite side.");
+    var description = el("p", null, "Reach 1000 by collecting cores. Fast routes build a score chain; splitting creates a safe escape but resets the chain.");
     var hud = el("dl", "landing-snake__hud");
+    var mission = el("section", "landing-snake__mission");
+    var missionCopy = el("div", "landing-snake__mission-copy");
+    var missionMeta = el("div", "landing-snake__mission-meta");
+    var missionProgress = el("progress", "landing-snake__progress");
     var playfield = el("div", "landing-snake__playfield");
     var overlay = el("p", "landing-snake__overlay", "Press Start, Enter, or a direction");
     var controls = el("div", "landing-snake__controls");
@@ -315,9 +319,9 @@
     );
     [
       ["Score", "0000 / 1000", "snakeScore"],
-      ["Best", "0000", "snakeBest"],
+      ["Chain", "Ready", "snakeCombo"],
       ["Splits", "3 / 3", "snakeSplits"],
-      ["Signal", "Ready", "snakePhaseLabel"],
+      ["Status", "Ready", "snakePhaseLabel"],
     ].forEach(function (metric) {
       var group = el("div");
       var value = el("dd", null, metric[1]);
@@ -327,17 +331,47 @@
     });
     heading.append(headingCopy, hud);
 
+    mission.setAttribute("aria-label", "Mission objective and power-up status");
+    missionProgress.max = 1000;
+    missionProgress.value = 0;
+    missionProgress.dataset.snakeProgress = "";
+    missionProgress.setAttribute("aria-label", "Mission progress");
+    var best = el("output", null, "0000");
+    best.dataset.snakeBest = "";
+    var pickup = el("span", null, "next pickup in 24 moves");
+    pickup.dataset.snakePowerupStatus = "";
+    var effect = el("span", null, "No active effect");
+    effect.dataset.snakeEffectStatus = "";
+    missionCopy.append(
+      el("span", "landing-snake__mission-kicker", "Mission 01"),
+      el("strong", null, "Collect cores · reach 1000")
+    );
+    missionMeta.append(
+      el("span", null, "Best "),
+      best,
+      pickup,
+      effect
+    );
+    mission.append(missionCopy, missionProgress, missionMeta);
+
     playfield.tabIndex = 0;
     playfield.dataset.snakePlayfield = "";
     playfield.setAttribute("role", "group");
     playfield.setAttribute("aria-describedby", "landing-snake-instructions");
+    playfield.setAttribute(
+      "aria-keyshortcuts",
+      "ArrowUp ArrowRight ArrowDown ArrowLeft W A S D Space P X R"
+    );
     playfield.append(renderSnakeBoard(), overlay);
     overlay.dataset.snakeOverlay = "";
 
     var toggle = snakeControl("Start mission", "button button--primary", "snakeAction", "toggle");
     toggle.setAttribute("aria-pressed", "false");
+    toggle.setAttribute("aria-keyshortcuts", "Space P");
     var split = snakeControl("Split trail · 3", "button button--quiet", "snakeAction", "split");
+    split.setAttribute("aria-keyshortcuts", "X");
     var restart = snakeControl("Restart", "button button--quiet", "snakeAction", "restart");
+    restart.setAttribute("aria-keyshortcuts", "R");
     var describe = snakeControl("Describe field", "button button--quiet", "snakeAction", "describe");
     actions.append(toggle, split, restart, describe);
 
@@ -357,8 +391,8 @@
     instructions.id = "landing-snake-instructions";
     instructions.append(
       el("strong", null, "Arrow keys / WASD"),
-      document.createTextNode(" steer · "),
-      el("strong", null, "Space"),
+      document.createTextNode(" or swipe steer · "),
+      el("strong", null, "Space / P"),
       document.createTextNode(" pauses · "),
       el("strong", null, "X"),
       document.createTextNode(" splits · "),
@@ -370,7 +404,7 @@
     liveStatus.setAttribute("aria-live", "polite");
     liveStatus.setAttribute("aria-atomic", "true");
     controls.append(actions, dpad);
-    arcade.append(heading, playfield, controls, instructions, liveStatus);
+    arcade.append(heading, mission, playfield, controls, instructions, liveStatus);
     return arcade;
   }
 

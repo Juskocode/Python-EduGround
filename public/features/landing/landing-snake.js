@@ -38,6 +38,8 @@
   var DEFAULT_ASTEROID_CADENCE = 18;
   var POWER_UP_LIFETIME = 72;
   var FALLING_STAR_LIFETIME = 14;
+  var COMBO_WINDOW_TICKS = 36;
+  var MAX_COMBO_MULTIPLIER = 3;
   var SEGMENT_POOL_SIZE = 3 + MAX_SCORE / BASE_CORE_POINTS;
 
   function clampInteger(value, fallback, minimum, maximum) {
@@ -87,6 +89,33 @@
     return "power-up";
   }
 
+  function toroidalDistance(first, second, width, height) {
+    var firstPoint = coordinates(first, width);
+    var secondPoint = coordinates(second, width);
+    var horizontal = Math.abs(firstPoint.x - secondPoint.x);
+    var vertical = Math.abs(firstPoint.y - secondPoint.y);
+    return Math.min(horizontal, width - horizontal) +
+      Math.min(vertical, height - vertical);
+  }
+
+  function fairSpawnCells(state, candidates, segments) {
+    var trail = Array.isArray(segments) && segments.length
+      ? segments
+      : state.segments;
+    var head = trail[0];
+    var asteroidSafe = candidates.filter(function (cell) {
+      return state.asteroids.every(function (asteroid) {
+        return toroidalDistance(cell, asteroid, state.width, state.height) > 1;
+      });
+    });
+    var routeSafe = asteroidSafe.filter(function (cell) {
+      return toroidalDistance(cell, head, state.width, state.height) > 1;
+    });
+    if (routeSafe.length) return routeSafe;
+    if (asteroidSafe.length) return asteroidSafe;
+    return candidates;
+  }
+
   function availableCells(state, segments, energy, excludedCell) {
     var occupied = new Set(segments || state.segments);
     state.asteroids.forEach(function (cell) {
@@ -118,6 +147,7 @@
         seed: state.seed,
       };
     }
+    candidates = fairSpawnCells(state, candidates, segments);
     var seed = nextSeed(state.seed);
     return {
       energy: candidates[seed % candidates.length],
@@ -197,6 +227,22 @@
     var ticks = clampInteger(settings.ticks, 0, 0, Number.MAX_SAFE_INTEGER);
     var splitUses = clampInteger(settings.splitUses, 0, 0, MAX_SPLITS);
     var score = clampInteger(settings.score, 0, 0, MAX_SCORE);
+    var comboCount = clampInteger(
+      settings.comboCount,
+      0,
+      0,
+      Number.MAX_SAFE_INTEGER
+    );
+    var comboExpiresAt = clampInteger(
+      settings.comboExpiresAt,
+      0,
+      0,
+      Number.MAX_SAFE_INTEGER
+    );
+    if (!comboCount || comboExpiresAt <= ticks || score >= MAX_SCORE) {
+      comboCount = 0;
+      comboExpiresAt = 0;
+    }
     var state = {
       width: width,
       height: height,
@@ -222,6 +268,16 @@
       ),
       score: score,
       maxScore: MAX_SCORE,
+      comboCount: comboCount,
+      comboMultiplier: comboCount
+        ? Math.min(MAX_COMBO_MULTIPLIER, comboCount)
+        : 1,
+      comboExpiresAt: comboExpiresAt,
+      bestCombo: Math.max(
+        comboCount,
+        clampInteger(settings.bestCombo, 0, 0, Number.MAX_SAFE_INTEGER)
+      ),
+      lastAward: 0,
       ticks: ticks,
       lastEvent: score >= MAX_SCORE ? "won" : "ready",
       collision: null,
@@ -280,6 +336,12 @@
         state.powerUp = {
           type: powerType,
           cell: powerCell,
+          spawnedAt: clampInteger(
+            settings.powerUp.spawnedAt,
+            ticks,
+            0,
+            ticks
+          ),
           expiresAt: clampInteger(
             settings.powerUp.expiresAt,
             ticks + POWER_UP_LIFETIME,
@@ -321,11 +383,18 @@
       state.fallingStars = [state.fallingStar];
     }
 
+    if (score >= MAX_SCORE) {
+      state.energy = null;
+    }
     if (state.energy === null || score >= MAX_SCORE) {
       state.phase = "won";
       state.lastEvent = "won";
     }
-    if (settings.phase && ["idle", "running", "paused", "lost", "won"].includes(settings.phase)) {
+    if (
+      state.phase !== "won" &&
+      settings.phase &&
+      ["idle", "running", "paused", "lost"].includes(settings.phase)
+    ) {
       state.phase = settings.phase;
     }
     return state;
@@ -399,6 +468,10 @@
       splitEchoes: removed.map(function (cell) {
         return { cell: cell, expiresAt: expiresAt };
       }),
+      comboCount: 0,
+      comboMultiplier: 1,
+      comboExpiresAt: 0,
+      lastAward: 0,
       lastEvent: "split",
       collision: null,
     });
@@ -470,6 +543,7 @@
         nextPowerUpTick: tick + 48,
       });
     }
+    candidates = fairSpawnCells(next, candidates, next.segments);
     var cell = candidates[seed % candidates.length];
     var type = POWER_UP_TYPES[next.powerUpCount % POWER_UP_TYPES.length];
     return Object.assign({}, next, {
@@ -477,6 +551,7 @@
       powerUp: {
         type: type,
         cell: cell,
+        spawnedAt: tick,
         expiresAt: tick + POWER_UP_LIFETIME,
       },
       powerUpCount: next.powerUpCount + 1,
@@ -528,6 +603,7 @@
       turnQueued: false,
       ticks: tick,
       lastEvent: "lost",
+      lastAward: 0,
       collision: collision,
       splitEchoes: state.splitEchoes.filter(function (echo) {
         return echo.expiresAt > tick;
@@ -608,14 +684,25 @@
     var energy = state.energy;
     var seed = state.seed;
     var phase = "running";
+    var comboCount = state.comboCount;
+    var comboMultiplier = state.comboMultiplier;
+    var comboExpiresAt = state.comboExpiresAt;
+    var bestCombo = state.bestCombo;
+    var lastAward = 0;
     if (collectedEnergy) {
-      var awardedPoints = effects.boostCores > 0
-        ? BASE_CORE_POINTS * 2
-        : BASE_CORE_POINTS;
+      var continuedCombo = comboCount > 0 && tick < comboExpiresAt;
+      comboCount = continuedCombo ? comboCount + 1 : 1;
+      comboMultiplier = Math.min(MAX_COMBO_MULTIPLIER, comboCount);
+      comboExpiresAt = tick + COMBO_WINDOW_TICKS;
+      bestCombo = Math.max(bestCombo, comboCount);
+      var boostMultiplier = effects.boostCores > 0 ? 2 : 1;
+      var awardedPoints =
+        BASE_CORE_POINTS * comboMultiplier * boostMultiplier;
       if (effects.boostCores > 0) {
         effects.boostCores -= 1;
       }
-      score = Math.min(MAX_SCORE, score + awardedPoints);
+      lastAward = Math.min(awardedPoints, MAX_SCORE - score);
+      score += lastAward;
       event = score >= MAX_SCORE ? "won" : "collected";
       var selectionState = Object.assign({}, state, {
         asteroids: asteroidList,
@@ -630,6 +717,13 @@
         energy = null;
         event = "won";
       }
+    } else if (comboCount > 0 && tick >= comboExpiresAt) {
+      comboCount = 0;
+      comboMultiplier = 1;
+      comboExpiresAt = 0;
+      if (event === "moved") {
+        event = "combo-lost";
+      }
     }
 
     var next = Object.assign({}, state, {
@@ -642,6 +736,11 @@
       energy: energy,
       seed: seed,
       score: score,
+      comboCount: comboCount,
+      comboMultiplier: comboMultiplier,
+      comboExpiresAt: comboExpiresAt,
+      bestCombo: bestCombo,
+      lastAward: lastAward,
       ticks: tick,
       lastEvent: event,
       collision: null,
@@ -710,14 +809,19 @@
       : "No asteroids are within five grid moves.";
     var powerCopy = state.powerUp
       ? " A " + powerUpLabel(state.powerUp.type) + " power-up is at " +
-        cellLabel(state.powerUp.cell, state.width) + "."
+        cellLabel(state.powerUp.cell, state.width) + " for " +
+        Math.max(0, state.powerUp.expiresAt - state.ticks) + " more moves."
       : "";
     var effectCopy = state.phaseTicks > 0
       ? " Split phase is active for " + state.phaseTicks + " more moves."
       : "";
+    var comboCopy = state.comboCount > 0
+      ? " The core chain is " + state.comboMultiplier + " times with " +
+        Math.max(0, state.comboExpiresAt - state.ticks) + " moves left."
+      : " Collect the next core to start a score chain.";
     return "Python Snake is at " + head + ", facing " + state.direction + "; " +
       energy + ". " + asteroidCopy + powerCopy + effectCopy + " " +
-      state.splitsRemaining + " of " + MAX_SPLITS + " splits remain.";
+      state.splitsRemaining + " of " + MAX_SPLITS + " splits remain." + comboCopy;
   }
 
   function svgElement(name, className) {
@@ -800,6 +904,13 @@
         cx: 0.5,
         cy: 0.5,
         r: 0.43,
+      }),
+      setAttributes(svgElement("circle", "landing-snake__powerup-timer"), {
+        cx: 0.5,
+        cy: 0.5,
+        r: 0.46,
+        "stroke-dasharray": 2.89,
+        "stroke-dashoffset": 0,
       }),
       setAttributes(svgElement("circle", "landing-snake__powerup-core"), {
         cx: 0.5,
@@ -1001,6 +1112,21 @@
         "class",
         "landing-snake__powerup landing-snake__powerup--" + state.powerUp.type
       );
+      var powerUpRemaining = Math.max(
+        0,
+        state.powerUp.expiresAt - state.ticks
+      );
+      var powerUpDuration = Math.max(
+        1,
+        state.powerUp.expiresAt - state.powerUp.spawnedAt
+      );
+      var timer = renderer.powerUpNode.querySelector(
+        ".landing-snake__powerup-timer"
+      );
+      timer.setAttribute(
+        "stroke-dashoffset",
+        (2.89 * (1 - powerUpRemaining / powerUpDuration)).toFixed(2)
+      );
       renderer.powerUpNode.querySelector("text").textContent =
         state.powerUp.type === "shield"
           ? "S"
@@ -1065,11 +1191,21 @@
 
     root.dataset.snakePhase = state.phase;
     root.dataset.snakeScore = String(state.score);
+    root.dataset.snakeCombo = String(state.comboMultiplier);
+    root.dataset.snakeComboMoves = String(
+      Math.max(0, state.comboExpiresAt - state.ticks)
+    );
+    root.dataset.snakeLastAward = String(state.lastAward);
     root.dataset.snakeTicks = String(state.ticks);
     root.dataset.snakeHead = String(state.segments[0]);
+    root.dataset.snakeDirection = state.queuedDirection;
     root.dataset.snakeSplits = String(state.splitsRemaining);
     root.dataset.snakeRenderer = "stable";
     root.dataset.snakePowerup = state.powerUp ? state.powerUp.type : "none";
+    root.dataset.snakePowerupUrgency = state.powerUp &&
+      state.powerUp.expiresAt - state.ticks <= 16
+      ? "expiring"
+      : "steady";
     root.dataset.snakeEffect = state.phaseTicks > 0
       ? "split-phase"
       : state.effects.shield
@@ -1136,8 +1272,12 @@
     var splitButton = root.querySelector("[data-snake-action='split']");
     var scoreOutput = root.querySelector("[data-snake-score]");
     var bestOutput = root.querySelector("[data-snake-best]");
+    var comboOutput = root.querySelector("[data-snake-combo]");
     var splitOutput = root.querySelector("[data-snake-splits]");
     var phaseOutput = root.querySelector("[data-snake-phase-label]");
+    var progressOutput = root.querySelector("[data-snake-progress]");
+    var powerUpOutput = root.querySelector("[data-snake-powerup-status]");
+    var effectOutput = root.querySelector("[data-snake-effect-status]");
     var overlay = root.querySelector("[data-snake-overlay]");
     var announcement = root.querySelector("[data-snake-announcement]");
     var reducedMotionQuery = typeof global.matchMedia === "function"
@@ -1148,6 +1288,7 @@
       : null;
     var listenerOptions = abortController ? { signal: abortController.signal } : undefined;
     var observer = null;
+    var pointerStart = null;
 
     function callAudio(name) {
       if (audio && typeof audio[name] === "function") {
@@ -1197,6 +1338,35 @@
       return "Start mission";
     }
 
+    function comboCopy() {
+      if (state.comboCount <= 0) return "Ready";
+      return state.comboMultiplier + "× · " +
+        Math.max(0, state.comboExpiresAt - state.ticks) + " moves";
+    }
+
+    function powerUpCopy() {
+      if (state.powerUp) {
+        return powerUpLabel(state.powerUp.type) + " · " +
+          Math.max(0, state.powerUp.expiresAt - state.ticks) + " moves";
+      }
+      return "next pickup in " +
+        Math.max(0, state.nextPowerUpTick - state.ticks) + " moves";
+    }
+
+    function effectCopy() {
+      if (state.phaseTicks > 0) {
+        return "Phase protection · " + state.phaseTicks + " moves";
+      }
+      if (state.effects.shield > 0) return "Shield armed · absorbs 1 asteroid";
+      if (state.effects.boostCores > 0) {
+        return "Core boost · " + state.effects.boostCores + " double cores";
+      }
+      if (state.effects.stasisTicks > 0) {
+        return "Stasis · " + state.effects.stasisTicks + " moves";
+      }
+      return "No active effect";
+    }
+
     function syncView(message) {
       if (state.score > bestScore) {
         bestScore = state.score;
@@ -1208,10 +1378,17 @@
           String(state.score).padStart(4, "0") + " / " + MAX_SCORE;
       }
       if (bestOutput) bestOutput.textContent = String(bestScore).padStart(4, "0");
+      if (comboOutput) comboOutput.textContent = comboCopy();
       if (splitOutput) {
         splitOutput.textContent = state.splitsRemaining + " / " + MAX_SPLITS;
       }
       if (phaseOutput) phaseOutput.textContent = phaseCopy();
+      if (progressOutput) {
+        progressOutput.value = state.score;
+        progressOutput.setAttribute("aria-valuetext", state.score + " of " + MAX_SCORE);
+      }
+      if (powerUpOutput) powerUpOutput.textContent = powerUpCopy();
+      if (effectOutput) effectOutput.textContent = effectCopy();
       if (toggleButton) {
         toggleButton.textContent = buttonCopy();
         toggleButton.setAttribute("aria-pressed", String(state.phase === "running"));
@@ -1232,7 +1409,8 @@
           "aria-label",
           "Python Snake orbital grid. " + phaseCopy() + ". Score " +
           state.score + " of " + MAX_SCORE + ". " +
-          state.splitsRemaining + " splits remain."
+          state.splitsRemaining + " splits remain. Chain " +
+          comboCopy() + "."
         );
       }
       if (message) {
@@ -1265,7 +1443,21 @@
         );
       } else if (state.lastEvent === "collected" && state.score > previousScore) {
         callAudio("playRunComplete");
-        syncView("Energy collected. Score " + state.score + " of " + MAX_SCORE + ".");
+        syncView(
+          "Energy collected. " + state.comboMultiplier + " times chain. Plus " +
+          state.lastAward + " points. Score " + state.score + " of " +
+          MAX_SCORE + "."
+        );
+      } else if (
+        state.lastEvent === "powerup-spawned" &&
+        !previousPowerUp &&
+        state.powerUp
+      ) {
+        callAudio("playCheck");
+        syncView(
+          powerUpLabel(state.powerUp.type) + " available for " +
+          (state.powerUp.expiresAt - state.ticks) + " moves."
+        );
       } else if (state.lastEvent === "lost") {
         callAudio("playFailure");
         syncView(
@@ -1374,8 +1566,44 @@
       state = next;
       callAudio("playCheck");
       syncView(
-        "Trail split. Phase protection active. " +
+        "Trail split. Phase protection active; the score chain reset. " +
         state.splitsRemaining + " splits remain."
+      );
+    }
+
+    function handlePointerDown(event) {
+      if (!event.isPrimary || event.button > 0) {
+        return;
+      }
+      pointerStart = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+      };
+      if (playfield && typeof playfield.setPointerCapture === "function") {
+        try {
+          playfield.setPointerCapture(event.pointerId);
+        } catch (_error) {
+          // Synthetic pointer events may not have an active browser pointer.
+        }
+      }
+    }
+
+    function handlePointerUp(event) {
+      if (!pointerStart || pointerStart.id !== event.pointerId) {
+        return;
+      }
+      var horizontal = event.clientX - pointerStart.x;
+      var vertical = event.clientY - pointerStart.y;
+      pointerStart = null;
+      if (Math.max(Math.abs(horizontal), Math.abs(vertical)) < 18) {
+        return;
+      }
+      event.preventDefault();
+      steer(
+        Math.abs(horizontal) > Math.abs(vertical)
+          ? horizontal > 0 ? "right" : "left"
+          : vertical > 0 ? "down" : "up"
       );
     }
 
@@ -1396,7 +1624,7 @@
         steer(directionByKey[key]);
         return;
       }
-      if (key === " " || key === "enter") {
+      if (key === " " || key === "enter" || key === "p") {
         event.preventDefault();
         toggleGame();
         return;
@@ -1414,6 +1642,11 @@
 
     if (playfield) {
       playfield.addEventListener("keydown", handleKeydown, listenerOptions);
+      playfield.addEventListener("pointerdown", handlePointerDown, listenerOptions);
+      playfield.addEventListener("pointerup", handlePointerUp, listenerOptions);
+      playfield.addEventListener("pointercancel", function () {
+        pointerStart = null;
+      }, listenerOptions);
     }
     if (toggleButton) {
       toggleButton.addEventListener("click", toggleGame, listenerOptions);
