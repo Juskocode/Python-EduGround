@@ -28,7 +28,7 @@ test("the bare URL opens a focused course welcome before the chapter dashboard",
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "Play the logic. Then build it in Python.",
+      name: "Learn Python by understanding what every line does.",
     })
   ).toBeVisible();
   await expect(page.locator("[data-landing-stage]")).toHaveCount(4);

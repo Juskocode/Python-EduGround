@@ -114,14 +114,47 @@ test("reduced motion disables the new ambient and reward animations", async ({
     [".site-topbar", "::after"],
     [".landing-hero__orbit--outer", null],
     [".landing-hero__node--one", null],
-    [".landing-snake", null],
-    [".landing-snake", "::before"],
-    [".landing-snake__asteroid polygon", null],
-    [".landing-snake__energy", null],
+    [".landing-terminal", null],
+    [".landing-snake-launcher", null],
     [".landing-stage-card", null],
   ]) {
     expectAnimationDisabled(await animationState(page.locator(selector).first(), pseudo));
   }
+
+  await page.getByRole("button", { name: /Launch Python Snake/u }).click();
+  const snakeDialog = page.getByRole("dialog", {
+    name: /snake\.py \/\/ orbital loop/u,
+  });
+  const snake = snakeDialog.locator("[data-landing-snake]");
+  await expect(snakeDialog).toBeVisible();
+  await expect(snake).toHaveAttribute("data-snake-motion", "reduced");
+  for (const [selector, pseudo] of [
+    ["[data-snake-dialog]", null],
+    [".landing-snake", null],
+    [".landing-snake", "::before"],
+    [".landing-snake__asteroid polygon", null],
+    [".landing-snake__energy", null],
+    [".landing-snake__powerup", null],
+    [".landing-snake__echo rect", null],
+    [".landing-snake__falling-star", null],
+  ]) {
+    expectAnimationDisabled(await animationState(page.locator(selector).first(), pseudo));
+  }
+  const fallingStarMotion = await page
+    .locator(".landing-snake__falling-star")
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        display: style.display,
+        transitionDuration: style.transitionDuration,
+      };
+    });
+  expect(fallingStarMotion.display).toBe("none");
+  expect(
+    fallingStarMotion.transitionDuration
+      .split(",")
+      .every((duration) => Number.parseFloat(duration) <= 0.001)
+  ).toBe(true);
 
   await page.goto("/#home");
   for (const [selector, pseudo] of [
