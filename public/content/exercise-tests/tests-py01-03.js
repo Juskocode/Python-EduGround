@@ -3,16 +3,16 @@
 
   Object.assign(window.EXERCISE_TESTS, {
     "py01-first-programs": {
-      description: "Create a complete Python script whose only visible effect is one exact greeting. This exercise establishes how string literals, capitalization, punctuation, and print's newline all form part of an output contract.",
+      description: "Make the result area show exactly one line: `Hello world!` Use `print()` once and do not request input. The result area receives Python's standard output, often shortened to stdout; capitalization, spaces, punctuation, and the final line ending are all checked.",
       success: [
-        "Prints exactly `Hello world!` with matching capitalization and punctuation.",
-        "Produces one line and does not request input or add extra text.",
+        "The result area shows exactly `Hello world!` once.",
+        "The program finishes without asking for input or adding another line.",
       ],
       visual: "io",
       mode: "script",
       tests: [
-        { id: "py01-first-programs-public-exact", name: "Exact greeting", hidden: false, input: [], expectedOutput: "Hello world!\n" },
-        { id: "py01-first-programs-public-repeat", name: "Deterministic rerun", hidden: false, input: [], expectedOutput: "Hello world!\n" },
+        { id: "py01-first-programs-public-exact", name: "One exact result line", hidden: false, input: [], expectedOutput: "Hello world!\n" },
+        { id: "py01-first-programs-public-unused-input", name: "No input is needed", hidden: false, input: ["unused practice text"], expectedOutput: "Hello world!\n" },
         { id: "py01-first-programs-hidden-basic", name: "Hidden output case", hidden: true, input: [], expectedOutput: "Hello world!\n" },
       ],
     },

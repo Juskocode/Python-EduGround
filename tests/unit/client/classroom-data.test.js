@@ -33,12 +33,19 @@ const solutionShape = context.SOLUTION_SHAPE;
 const roomChapterIds = ["py01", "py02", "py03", "py13"];
 const requiredPy01Concepts = [
   "computer-basics",
+  "program-file-terminal",
+  "print-exact-line",
+  "variable-assignment",
   "input-returns-str",
   "int-conversion",
   "float-conversion",
   "conversion-failure",
 ];
 const passingCodeByTaskId = {
+  "py01-print-exact-line": [
+    "message = \"Launch ready.\"",
+    "print(message)",
+  ].join("\n"),
   "py01-int-conversion": [
     "raw_badge_count = input()",
     "badge_count = int(raw_badge_count)",
@@ -279,6 +286,55 @@ test("chapter one room-task IDs cover the complete beginner input and conversion
       taskIds.has(concept),
       true,
       `py01: expected a stable py01-${concept} room task`,
+    );
+  }
+});
+
+test("chapter one gives zero-assumption orientation before its learning missions", () => {
+  const startHere = materials.py01?.startHere;
+  assert.ok(startHere && typeof startHere === "object");
+  assert.ok(nonEmpty(startHere.title));
+  assert.ok(nonEmpty(startHere.description));
+  assert.ok(nonEmpty(startHere.reassurance));
+  assert.equal(Array.isArray(startHere.steps), true);
+  assert.ok(startHere.steps.length >= 3 && startHere.steps.length <= 4);
+  startHere.steps.forEach((step, index) => {
+    assert.ok(nonEmpty(step?.label), `py01/startHere-${index + 1}: label is missing`);
+    assert.ok(nonEmpty(step?.detail), `py01/startHere-${index + 1}: detail is missing`);
+  });
+
+  const taskIds = Array.from(roomTasksFor("py01"), (task) => String(task.id));
+  assert.deepEqual(taskIds, [
+    "py01-computer-basics",
+    "py01-program-file-terminal",
+    "py01-print-exact-line",
+    "py01-variable-assignment",
+    "py01-input-returns-str",
+    "py01-int-conversion",
+    "py01-float-conversion",
+    "py01-conversion-failure",
+  ]);
+
+  const beginnerText = JSON.stringify(materials.py01).toLocaleLowerCase("en");
+  for (const concept of [
+    "source file",
+    "python interpreter",
+    "terminal",
+    "exact output",
+    "input function",
+    "returns a str",
+    "assignment",
+    "syntaxerror",
+    "nameerror",
+    "typeerror",
+    "valueerror",
+    "predict",
+    "transfer",
+  ]) {
+    assert.match(
+      beginnerText,
+      new RegExp(concept.replace(/\s+/gu, "\\s+"), "u"),
+      `py01: expected zero-assumption material to teach ${concept}`,
     );
   }
 });

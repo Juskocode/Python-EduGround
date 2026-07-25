@@ -6,9 +6,13 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const [engineSource, earlyTestData, recursionTestData] = await Promise.all([
+const [engineSource, courseDataSource, earlyTestData, recursionTestData] = await Promise.all([
   readFile(
     resolve(REPOSITORY_ROOT, "public/features/exercise/solution-shape.js"),
+    "utf8",
+  ),
+  readFile(
+    resolve(REPOSITORY_ROOT, "public/content/exercise-data.js"),
     "utf8",
   ),
   readFile(
@@ -23,11 +27,40 @@ const [engineSource, earlyTestData, recursionTestData] = await Promise.all([
 
 const context = vm.createContext({ window: {} });
 vm.runInContext(engineSource, context, { filename: "solution-shape.js" });
+vm.runInContext(courseDataSource, context, { filename: "exercise-data.js" });
 vm.runInContext(earlyTestData, context, { filename: "tests-py01-03.js" });
 vm.runInContext(recursionTestData, context, { filename: "tests-py08-11.js" });
 
 const engine = context.SOLUTION_SHAPE;
+const course = context.window.COURSE_DATA;
 const specs = context.window.EXERCISE_TESTS;
+
+test("the first graded action leads with a plain goal and distinct visible evidence", () => {
+  const firstExercise = course.chapters
+    .flatMap((chapter) => Array.from(chapter.exercises))
+    .find((exercise) => exercise.id === "py01-first-programs");
+  assert.ok(firstExercise);
+  assert.equal(firstExercise.title, "Say Hello to Python");
+  assert.match(firstExercise.prompt, /^Make the result area show exactly this one line:/u);
+  assert.ok(
+    firstExercise.prompt.indexOf("standard output") > firstExercise.prompt.indexOf("Hello world!"),
+    "the plain-language goal should precede unfamiliar output terminology",
+  );
+
+  const tests = Array.from(specs["py01-first-programs"].tests);
+  const visibleTests = tests.filter((candidate) => !candidate.hidden);
+  const hiddenTests = tests.filter((candidate) => candidate.hidden);
+  assert.equal(visibleTests.length, 2);
+  assert.notDeepEqual(
+    Array.from(visibleTests[0].input),
+    Array.from(visibleTests[1].input),
+    "visible tests should exercise distinct input conditions",
+  );
+  assert.equal(hiddenTests.some((candidate) => (
+    candidate.id === "py01-first-programs-hidden-basic"
+    && candidate.expectedOutput === "Hello world!\n"
+  )), true);
+});
 
 test("the browser API is small, immutable, and returns structured coaching", () => {
   assert.equal(typeof engine.evaluate, "function");

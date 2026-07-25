@@ -4,8 +4,8 @@
   const clinics = {
     py01: {
       id: "py01-input-boundary-clinic",
-      title: "Trace the input boundary before doing arithmetic",
-      description: "A reliable first program separates raw text, typed values, domain calculations, and final presentation. This makes three different mistakes visible: parsing the wrong type, combining incompatible units, and printing a representation that does not match the output contract. Follow the value through every boundary instead of treating the script as one opaque formula.",
+      title: "Trace one first program from source file to exact output",
+      description: "A reliable first program separates the saved source, one top-to-bottom execution, raw text, converted values, domain calculations, and final presentation. This exposes workspace confusion, the line where input would wait, parsing the wrong type, incompatible units, and output that misses its exact contract. Predict each stage, observe once, explain the first difference, and transfer the pattern instead of treating the script as one opaque formula.",
       exampleCode: [
         "raw_boxes = \"4\"",
         "raw_kg_each = \"2.5\"",
@@ -17,9 +17,14 @@
       ].join("\n"),
       trace: [
         {
-          step: "Read",
+          step: "Orient and predict",
+          state: "The editor holds source text; a new interpreter run is expected to publish exactly one line",
+          reasoning: "Saving the file, executing its instructions, and printing output are separate actions. Naming them first prevents terminal output from being mistaken for stored source or private state.",
+        },
+        {
+          step: "Preserve raw text",
           state: "raw_boxes == \"4\"; raw_kg_each == \"2.5\"",
-          reasoning: "External text is preserved first. Quotation marks in the trace remind us that neither value is numeric yet.",
+          reasoning: "These values model text that input would return after waiting for two lines. Quotation marks in the trace remind us that neither value is numeric yet.",
         },
         {
           step: "Convert the count",
@@ -44,10 +49,20 @@
         {
           step: "Publish",
           state: "stdout receives exactly one line: 10.0 kg",
-          reasoning: "Only the promised result crosses the output boundary; temporary labels and debugging lines stay out of stdout.",
+          reasoning: "Only the promised result crosses the output boundary; temporary labels and debugging lines stay out of stdout. The observation can now be compared character by character with the prediction.",
         },
       ],
       misconceptions: [
+        {
+          belief: "The editor, source file, interpreter, and terminal are different names for the same place.",
+          correction: "The editor changes saved source text, the interpreter executes that source during a run, and the terminal carries input, output, and error communication.",
+          probe: "If you print a value in the terminal, which part changed: the saved source file, the running process state, or the output stream?",
+        },
+        {
+          belief: "The equals sign in Python says both sides will remain mathematically equal.",
+          correction: "In an assignment, Python evaluates the right side now and binds the result to the name on the left. A later assignment can bind the same name to a different value.",
+          probe: "Trace score = 2 followed by score = score + 1; which value is read and which value becomes newly bound?",
+        },
         {
           belief: "If the user types digits, input already returns a number.",
           correction: "Keyboard input returns str. Arithmetic only becomes numeric after an explicit conversion such as int or float.",
@@ -63,11 +78,17 @@
           correction: "Prompts and labels are output too. Exact-output tests observe every character sent to stdout.",
           probe: "List every character printed by input(\"Boxes: \") before the learner enters a value.",
         },
+        {
+          belief: "Any red error text means the same thing and should be removed by changing several lines.",
+          correction: "SyntaxError, NameError, TypeError, and ValueError identify different broken rules. Preserve the first failure, classify it, and change one cause before running again.",
+          probe: "Which first question differs between an unavailable variable name and int receiving decimal text?",
+        },
       ],
       transferPrompts: [
-        "Read a whole number of seats and a decimal ticket price, then trace the type and unit after every line before calculating revenue.",
-        "Design a three-room data flow for converting minutes and seconds into total seconds without writing the final program.",
-        "Given an exact-output contract, mark which values should remain numeric and identify the single point where presentation text should be created.",
+        "Predict the wait points and exact output for a whole number of seats and a decimal ticket price, then trace type and unit after every line before calculating revenue.",
+        "Design a labelled workspace plus three-room data flow for converting minutes and seconds into total seconds without writing the final program.",
+        "Given an exact-output contract, mark which values should remain numeric, identify the single presentation boundary, and explain the first mismatch after one run.",
+        "Transfer a corrected count example to a decimal measurement and justify why the boundary conversion changes from int to float.",
       ],
     },
 
