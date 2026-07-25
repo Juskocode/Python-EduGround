@@ -140,9 +140,9 @@ npm run serve
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000). A different host or port can be selected when needed:
 
 ```bash
-node scripts/serve.mjs --port 4173
-PORT=4173 node scripts/serve.mjs
-node scripts/serve.mjs --help
+node src/server/main.js --port 4173
+PORT=4173 node src/server/main.js
+node src/server/main.js --help
 ```
 
 HTTP serving is required for the module-based Python worker. Ace is checked into the repository. The first Python run downloads a pinned Pyodide runtime from jsDelivr, with a separately pinned UNPKG fallback, so the initial run needs an internet connection.
@@ -311,7 +311,7 @@ Local storage is scoped to the exact browser origin. For example, `127.0.0.1:800
 npm run validate
 npm run validate:browser
 npm run validate:links
-node --check python-runner-worker.mjs
+npm run validate:syntax
 git diff --check
 ```
 
@@ -385,51 +385,32 @@ conflict journeys remain explicit roadmap items.
 
 | Path | Responsibility |
 | --- | --- |
-| `index.html` | Stable application shell and vendored asset loading order |
-| `course-ui.css` | Shared responsive light/dark UI, account panel, runbook, and IDE layout |
-| `course-app.js` | Router and application orchestration for persistence, profile, editor, runner controls, and shared result rendering |
-| `workbench-mode.css` | Exercise-route-only compact application chrome that gives the lesson and IDE more viewport space |
-| `dashboard-model.js` | Pure resume-target, stage-status, and milestone derivation for the home learning path |
-| `dashboard-view.js` / `dashboard-ui.css` | Focused stage-based home renderer and responsive presentation |
-| `landing-view.js` / `landing-ui.css` | Course welcome page, learning-loop preview, and progress-aware entry action |
-| `landing-snake.js` / `landing-snake.css` | Deterministic, keyboard/touch-accessible Python Snake arcade with a stable renderer, slow asteroid drift, power-ups, three splits, a 1,000-point cap, and local best-score persistence |
-| `progress-snake-view.js` / `progress-snake.css` | Pointer-inert green, blue, and yellow snake rewards derived from mastered chapters, completed stages, and passed timed rooms |
-| `stage-recaps.js` | Solution-free synthesis content for the four stable three-chapter stages |
-| `stage-recap-view.js` / `stage-recap-ui.css` | Stage recap pages and the accessible animated final-course award |
-| `class-materials.js` | Twelve deeply frozen 90-minute class syllabi plus the Chapters 1–3 beginner-room explanations, answer tasks, code tasks, canonical inputs, and technique rules |
-| `class-page.js` / `class-page.css` | Reusable documentation renderer with course navigation, contents rail, editable lecture/lesson labs, guided room tasks, terminal feedback, and mobile disclosures |
-| `learning-content.js` | Ranks, badges, tutorials, deep dives, checkpoints, and runbooks |
-| `learning-toolbox.js` | Per-chapter Python functionality guide with conversions, imports, results, cautions, and copyable examples |
-| `learning-clinics.js` | Twelve immutable, solution-free worked traces, misconception probes, and transfer sets |
-| `concept-clinic.js` / `learning-clinic.css` | Accessible clinic component and its isolated responsive styling |
-| `rounding-model.js` | Tested Python-compatible floor, ceiling, truncation, and ties-to-even comparisons for the Chapter 2 lab |
-| `rounding-lab.js` / `rounding-lab.css` | Self-contained interactive number-line controller, derived view state, listeners, and styling |
-| `assessment-data.js` | Four assessment blocks, theory questions, practical contracts/tests, source notes, and official references |
-| `assessment-engine.js` | Assessment scoring, deadline, sanitization, history, and conflict-merge rules |
-| `assessment-room.js` | Assessment routes, timed-room controller, practical editor, submission flow, and results |
-| `assessment-ui.css` | Responsive light/dark assessment hub, room, editor, and result styling |
-| `exercise-data.js` | Chapters, prompts, topics, source paths, and hints |
-| `test-data/` | 206 visible and 110 hidden learning checks |
-| `starter-code.js` | Generated solution-free starters and public function signatures |
-| `solution-code.js` | Build-time repository artifact that is deliberately not loaded by the learner page |
-| `audio-feedback.js` | Synthesized click, run, full-suite, task-completion, failure, and achievement cues |
-| `python-runner-worker.mjs` | Dedicated-worker Python execution, output capture, timeout handling, and traceback capture |
-| `assets/vendor/ace/` | Pinned Ace 1.44.0 runtime, Monokai theme, Sublime/Vim keymaps, and license |
-| `assets/illustrations/problem-solving/` | Original accessible SVG field guide for decomposition, state tables, knapsack choices, and strategy recognition |
-| `server/` | Same-origin HTTP API, authentication, PostgreSQL access, security helpers, and static serving |
-| `server/exercise-manifest.mjs` | Stable 102-exercise mapping to chapter directories and zero-based `exNN.py` names |
-| `server/submission-files.mjs` | Atomic, private per-user filesystem mirror with traversal and symlink protection |
-| `server/runtime-security.mjs` | Cookie, origin, trusted-proxy, browser-header, and HTTP resource policy |
-| `server/database-config.mjs` | Bounded `PG*`/URL configuration and verified PostgreSQL TLS |
-| `db/migrations/` | Ordered, checksum-protected PostgreSQL schema migrations |
-| `scripts/migrate.mjs` | Migration command used locally and during deployment |
-| `docker-compose.yml` / `docker/` | Private database, split owner/runtime roles, one-shot migration, and restricted app runtime |
+| `public/` | The complete and only HTTP-served browser application |
+| `public/app/` | Router, application orchestration, audio, theme bootstrap, and shared source-shape helpers |
+| `public/content/` | Solution-free curriculum data, generated starters, and visible/hidden learning checks |
+| `public/features/` | Vertical UI features with their controller/view and local styles together |
+| `public/styles/` | Shared responsive visual system and exercise-workbench chrome |
+| `public/workers/` | Dedicated browser-Python worker and execution boundary |
+| `public/assets/` | Vendored Ace runtime, original illustrations, sprites, and other static media |
+| `src/server/` | Node entrypoint plus explicit API, curriculum, HTTP, persistence, and security modules |
+| `src/server/api/` | Same-origin account, state, file, run-history, and health routes |
+| `src/server/curriculum/` | Stable exercise manifest and private submission-file mirror |
+| `src/server/http/` | Static-file and HTTP response helpers |
+| `src/server/persistence/` | PostgreSQL configuration, migrations, and learner-state operations |
+| `src/server/security/` | Credentials, cookies, origin checks, CSP, proxy policy, and runtime guards |
+| `curriculum/solutions/` | Private Python reference solutions, grouped by the original 12 chapters |
+| `curriculum/generated/` | Private generated solution bundle used only by build-time validation |
+| `database/` | Ordered migrations and the restricted application-role bootstrap |
+| `scripts/build/` | Starter/solution generation and vendored dependency refresh |
+| `scripts/database/` | Migration, backup, restore, and secret-initialization commands |
+| `scripts/maintenance/` | Safe cleanup utilities |
+| `scripts/validation/` | Structure, syntax, content, security, integration, and link gates |
+| `tests/unit/` | Fast client and server unit tests |
+| `tests/integration/` | PostgreSQL-backed persistence and account integration tests |
+| `tests/e2e/` | Chromium learner journeys, responsive behavior, and accessibility checks |
 | `.github/workflows/` | CI, PostgreSQL integration, CodeQL, supply-chain, container, documentation, and release workflows |
-| `scripts/validate-assessment-data.mjs` | Assessment structure, timing, stable-ID, syntax, test, solution-leak, and official-link validation |
-| `server/tests/class-materials.test.mjs` | Classroom coverage, timing, executable demos with supplied input, immutability, and solution/prompt leakage validation |
-| `server/tests/class-room-data.test.mjs` | Guided-room schema, beginner-topic coverage, runnable fixtures, source-rule enforcement, and prompt-echo isolation |
-| `e2e/class-room.spec.mjs` | Answer feedback, room progress, editable labs, Run/Check separation, draft restore, keyboard use, and responsive classroom checks |
-| `server/tests/class-page.test.mjs` | Deterministic class-page hierarchy, navigation, accessibility, and fallback rendering validation |
+| `artifacts/` | Git-ignored browser results and generated validation evidence |
+| `docs/ARCHITECTURE.md` | Detailed boundaries, runtime flow, change map, and extension rules |
 | `docs/CLASSROOM.md` | Learner-facing class sequence, authoring contract, solution boundary, rendering integration, and validation guide |
 | `docs/ASSESSMENTS.md` | Timed-room rules, chapter/PDF mapping, scoring, references, persistence, and security boundaries |
 | `docs/PERSISTENCE.md` | Account sync, data model, storage bounds, migrations, and deletion behavior |
@@ -444,7 +425,13 @@ Hidden cases stay masked in the interface until a complete run returns. Their Ja
 
 The assessment practical prompts are independently paraphrased from four PDFs supplied by the project owner. PDF wording, screenshots, and reference solutions are excluded; the public examples and tests are independently authored. Theory questions and explanations are original course material. Assessment question data, answer indexes, hidden tests, scores, and timers are client-side and therefore inspectable or modifiable. These rooms are educational practice, not proctored or tamper-resistant examinations.
 
-`solution-code.js` supports local generation and validation only. It is not requested by `index.html`, `window.SOLUTION_CODE` is not created in the learner page, and editor resets restore a safe starter rather than an answer. The server uses a public-file allowlist, so the solution bundle, original `Py*/` sources, migrations, backend modules, and deployment secrets are not downloadable from the web application.
+`curriculum/generated/solution-code.js` supports local generation and validation
+only. It is not requested by `public/index.html`,
+`window.SOLUTION_CODE` is not created in the learner page, and editor resets
+restore a safe starter rather than an answer. The server exposes exactly the
+`public/` tree, so the solution bundle, `curriculum/solutions/` sources,
+migrations, backend modules, and deployment secrets are not downloadable from the
+web application.
 
 Unsigned use sends no learner code or progress to the application API. Creating an account opts into syncing drafts, saved files, progress, editor mode, and detailed test results to PostgreSQL, plus the configured private submission-file mirror. Python code still executes in a browser worker, not on the Node server. The worker is not a safe sandbox for untrusted pasted code; it has a JavaScript bridge and network access to the CSP-allowed runtime origins. Account APIs require a separate tab capability that is never sent to the worker. Persisted run claims are explicitly labelled as learner-device evidence. The history view can reopen and copy recorded expected output, actual output, streams, and tracebacks, but the history API does not return source code or original test inputs. See the [secure-SDLC trust boundaries](docs/SECURE_SDLC.md#security-objective) before exposing account sync publicly.
 
@@ -453,7 +440,7 @@ Unsigned use sends no learner code or progress to the application API. Creating 
 After intentionally changing a Python solution:
 
 ```bash
-node scripts/build-solution-bundle.mjs
+npm run build:solutions
 npm run build:starters
 ```
 

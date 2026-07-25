@@ -173,8 +173,10 @@ rename and permission semantics, or disable the mirror. Never mount
 
 ## Stored PostgreSQL data
 
-Migration [`001_initial.sql`](../db/migrations/001_initial.sql) creates the data
-model; [`002_session_client_capability.sql`](../db/migrations/002_session_client_capability.sql)
+Migration
+[`001_initial.sql`](../database/migrations/001_initial.sql) creates the data
+model;
+[`002_session_client_capability.sql`](../database/migrations/002_session_client_capability.sql)
 adds the worker-resistant session capability:
 
 | Table | Purpose | User-deletion behavior |

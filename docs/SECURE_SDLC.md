@@ -90,7 +90,7 @@ Run the deterministic local gate before every commit:
 ```bash
 npm run validate
 npm run validate:browser
-node --check python-runner-worker.mjs
+npm run validate:syntax
 git diff --check
 ```
 
@@ -121,7 +121,7 @@ and a high-severity dependency audit:
 ```bash
 export TEST_DATABASE_URL='postgresql://eduground_release:release-only@127.0.0.1:5432/eduground_release'
 npm run validate:release
-node --check python-runner-worker.mjs
+npm run validate:syntax
 git diff --check
 ```
 

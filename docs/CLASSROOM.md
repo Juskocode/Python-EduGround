@@ -123,8 +123,9 @@ lesson-note experiments are ungraded and do not show a **Check task** control.
 
 ## Classroom data contract
 
-`class-materials.js` exports one deeply frozen entry for each course chapter
-through `window.CLASS_MATERIALS`.
+[`public/content/class-materials.js`](../public/content/class-materials.js)
+exports one deeply frozen entry for each course chapter through
+`window.CLASS_MATERIALS`.
 
 ```js
 {
@@ -185,9 +186,10 @@ through `window.CLASS_MATERIALS`.
 }
 ```
 
-`learning-content.js` lesson-note sections can additionally provide
-`exampleCode` and `sampleInput`. The renderer derives stable `lesson-<item id>`
-workspace IDs so code and sample-input drafts return to the correct example.
+[`public/content/learning-content.js`](../public/content/learning-content.js)
+lesson-note sections can additionally provide `exampleCode` and `sampleInput`.
+The renderer derives stable `lesson-<item id>` workspace IDs so code and
+sample-input drafts return to the correct example.
 
 Authoring requirements:
 
@@ -212,9 +214,11 @@ Authoring requirements:
 
 ## Progress and draft persistence
 
-`class-page.js` owns the documentation shell and embedded workspace markup.
-`course-app.js` supplies the runner, answer checks, draft storage, progress, deep
-dives, runbooks, official references, and navigation.
+[`public/features/classroom/class-page.js`](../public/features/classroom/class-page.js)
+owns the documentation shell and embedded workspace markup.
+[`public/app/course-app.js`](../public/app/course-app.js) supplies the runner,
+answer checks, draft storage, progress, deep dives, runbooks, official references,
+and navigation.
 
 Room completions are stored in the existing per-chapter learning-progress set as
 `room:<task id>`. They are idempotent and separate from passed exercise IDs, stars,

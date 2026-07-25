@@ -121,7 +121,7 @@ below:
 ```bash
 current_owner_file="$(pwd)/secrets/postgres_password"
 rotation_dir="$(mktemp -d "$(pwd)/.credential-rotation.XXXXXX")"
-SECRET_DIR="$rotation_dir" sh scripts/init-secrets.sh
+SECRET_DIR="$rotation_dir" sh scripts/database/init-secrets.sh
 new_owner_file="$rotation_dir/postgres_password"
 new_app_file="$rotation_dir/app_database_password"
 
@@ -193,8 +193,8 @@ npm run serve
 Have the database administrator create `eduground_app` as `NOSUPERUSER`,
 `NOCREATEDB`, `NOCREATEROLE`, run migrations first, and then apply only the reviewed
 per-table and sequence operations. Do not grant future tables by default.
-[`docker/bootstrap-app-role.sql`](../docker/bootstrap-app-role.sql) is the executable
-Compose implementation and a reference for managed-database grants.
+[`database/bootstrap/app-role.sql`](../database/bootstrap/app-role.sql) is the
+executable Compose implementation and a reference for managed-database grants.
 
 `DATABASE_SSL=true` and `DATABASE_SSL=require` both enable certificate verification.
 Set `DATABASE_SSL_CA_FILE` when the provider CA is not in the host trust store.
@@ -310,7 +310,7 @@ export TRUST_PROXY_HOPS='0'
 export SECRET_DIR="$(mktemp -d "$(pwd)/.restore-drill-secrets.XXXXXX")"
 export POSTGRES_PASSWORD_FILE="$SECRET_DIR/postgres_password"
 export APP_DATABASE_PASSWORD_FILE="$SECRET_DIR/app_database_password"
-sh scripts/init-secrets.sh
+sh scripts/database/init-secrets.sh
 
 docker compose up -d postgres
 docker compose exec -T postgres sh -ec \

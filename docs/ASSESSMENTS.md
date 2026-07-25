@@ -99,7 +99,7 @@ The complete assessment data, theory answer indexes, practical hidden tests, sco
 Run the deterministic assessment and application checks before release:
 
 ```bash
-node scripts/validate-assessment-data.mjs
+npm run validate:content
 npm run validate
 ```
 
