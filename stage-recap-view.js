@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  var progressSnakeView = window.PROGRESS_SNAKE_VIEW || null;
+
   function el(tagName, className, textContent) {
     var element = document.createElement(tagName);
     if (className) {
@@ -211,6 +213,15 @@
         safeObject(recap.nextAction)
       )
     );
+    if (progressSnakeView && typeof progressSnakeView.render === "function") {
+      var ambience = progressSnakeView.render(
+        model.snakeAmbience || recap.snakeAmbience,
+        { variant: "stage" }
+      );
+      if (ambience) {
+        section.append(ambience);
+      }
+    }
     return section;
   }
 

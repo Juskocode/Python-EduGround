@@ -19,6 +19,8 @@ test("required playground assets remain public", async () => {
     "/geospace-ui.css",
     "/landing-snake.css",
     "/landing-snake.js",
+    "/progress-snake.css",
+    "/progress-snake-view.js",
     "/workbench-mode.css",
     "/landing-view.js",
     "/landing-ui.css",
@@ -70,6 +72,7 @@ test("the toolbox data loads before the application reads it", async () => {
   const roundingModelPosition = index.indexOf('src="rounding-model.js"');
   const roundingLabPosition = index.indexOf('src="rounding-lab.js"');
   const dashboardModelPosition = index.indexOf('src="dashboard-model.js"');
+  const progressSnakePosition = index.indexOf('src="progress-snake-view.js"');
   const stageRecapsPosition = index.indexOf('src="stage-recaps.js"');
   const landingSnakePosition = index.indexOf('src="landing-snake.js"');
   const landingViewPosition = index.indexOf('src="landing-view.js"');
@@ -88,7 +91,9 @@ test("the toolbox data loads before the application reads it", async () => {
   assert.ok(roundingLabPosition > roundingModelPosition, "the rounding lab should load after its arithmetic model");
   assert.ok(stageRecapsPosition > roundingLabPosition, "stage recap content should load after course data");
   assert.ok(dashboardModelPosition > roundingLabPosition, "the dashboard model should load after course data");
+  assert.ok(progressSnakePosition > dashboardModelPosition, "progress Snake visuals should load after their dashboard model");
   assert.ok(landingSnakePosition > dashboardModelPosition, "the landing game should load after course data");
+  assert.ok(landingSnakePosition > progressSnakePosition, "the playable Snake should load after decorative progress visuals");
   assert.ok(landingViewPosition > landingSnakePosition, "the landing view should load after its game model");
   assert.ok(landingViewPosition > dashboardModelPosition, "the landing view should load after the dashboard model");
   assert.ok(stageRecapViewPosition > landingViewPosition, "the recap view should load after landing dependencies");
@@ -107,6 +112,7 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
   const classPagePosition = index.indexOf('href="class-page.css"');
   const assessmentUiPosition = index.indexOf('href="assessment-ui.css"');
   const geospaceUiPosition = index.indexOf('href="geospace-ui.css"');
+  const progressSnakePosition = index.indexOf('href="progress-snake.css"');
   const landingSnakePosition = index.indexOf('href="landing-snake.css"');
   const workbenchModePosition = index.indexOf('href="workbench-mode.css"');
 
@@ -117,7 +123,9 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
   assert.ok(classPagePosition > roundingLabPosition, "class-page styles should be able to refine embedded learning components");
   assert.ok(assessmentUiPosition > classPagePosition, "assessment UI should remain the final feature stylesheet");
   assert.ok(geospaceUiPosition > assessmentUiPosition, "the shared geospace layer should refine every feature stylesheet");
+  assert.ok(progressSnakePosition > geospaceUiPosition, "progress Snake styles should refine the shared geospace layer");
   assert.ok(landingSnakePosition > geospaceUiPosition, "the playable landing game should refine the shared geospace layer");
+  assert.ok(landingSnakePosition > progressSnakePosition, "the playable game should remain above decorative progress styles");
   assert.ok(workbenchModePosition > landingSnakePosition, "the route-specific workbench shell should remain the final layout refinement");
 });
 

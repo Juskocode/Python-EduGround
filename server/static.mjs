@@ -13,6 +13,8 @@ export const PUBLIC_ROOT_FILES = new Set([
   "landing-snake.js",
   "landing-ui.css",
   "landing-view.js",
+  "progress-snake.css",
+  "progress-snake-view.js",
   "dashboard-model.js",
   "dashboard-ui.css",
   "dashboard-view.js",

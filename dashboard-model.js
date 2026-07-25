@@ -509,6 +509,62 @@
     };
   }
 
+  function deriveSnakeAmbience(chapters, stages) {
+    var safeChapters = Array.isArray(chapters) ? chapters : [];
+    var safeStages = Array.isArray(stages) ? stages : [];
+    var masteredChapters = safeChapters.filter(function (chapter) {
+      return chapter && chapter.state && chapter.state.id === "mastered";
+    }).length;
+    var completedStages = safeStages.filter(function (stage) {
+      return stage && stage.status && stage.status.id === "complete";
+    }).length;
+    var assessmentTotals = safeStages.reduce(function (result, stage) {
+      var assessment = stage && stage.assessment;
+      if (!assessment) {
+        return result;
+      }
+      var totalModes = asCount(assessment.totalModes);
+      result.total += totalModes;
+      result.passed += Math.min(asCount(assessment.passedModes), totalModes);
+      return result;
+    }, { passed: 0, total: 0 });
+    var groups = [
+      Object.freeze({
+        id: "chapters",
+        tone: "green",
+        label: "Mastered chapters",
+        count: masteredChapters,
+        total: safeChapters.length
+      }),
+      Object.freeze({
+        id: "stages",
+        tone: "blue",
+        label: "Completed stages",
+        count: completedStages,
+        total: safeStages.length
+      }),
+      Object.freeze({
+        id: "tests",
+        tone: "yellow",
+        label: "Passed timed rooms",
+        count: assessmentTotals.passed,
+        total: assessmentTotals.total
+      })
+    ];
+    var totalEarned = groups.reduce(function (total, group) {
+      return total + group.count;
+    }, 0);
+    var totalAvailable = groups.reduce(function (total, group) {
+      return total + group.total;
+    }, 0);
+    return Object.freeze({
+      groups: Object.freeze(groups),
+      totalEarned: totalEarned,
+      totalAvailable: totalAvailable,
+      percent: totalAvailable ? Math.round(totalEarned / totalAvailable * 100) : 0
+    });
+  }
+
   function build(input) {
     var source = input && typeof input === "object" ? input : {};
     var chapters = Array.isArray(source.chapters)
@@ -522,11 +578,12 @@
       var stageChapters = Array.isArray(block.chapters)
         ? block.chapters.map(function (chapterId) { return chapterById.get(String(chapterId)); }).filter(Boolean)
         : [];
+      var totalModes = asCount(block.totalModes) || 2;
       var assessment = {
         id: String(block.id || ""),
         title: String(block.title || "Stage assessment"),
-        passedModes: asCount(block.passedModes),
-        totalModes: asCount(block.totalModes) || 2,
+        passedModes: Math.min(asCount(block.passedModes), totalModes),
+        totalModes: totalModes,
         references: normalizeReferences(block.references),
         modes: normalizeAssessmentModes(block.modes, String(block.id || ""))
       };
@@ -605,6 +662,10 @@
       if (stage.recap) {
         stage.recap.nextAction = deriveRecapNextAction(stage, stages[index + 1] || null);
       }
+      stage.snakeAmbience = deriveSnakeAmbience(stage.chapters, [stage]);
+      if (stage.recap) {
+        stage.recap.snakeAmbience = stage.snakeAmbience;
+      }
     });
     var finalStage = stages[stages.length - 1] || null;
     var finalAwardSource = finalStage && finalStage.recap ? finalStage.recap.award : null;
@@ -667,6 +728,7 @@
         { label: "Assessments", value: asCount(source.passedAssessmentModes) + " / " + asCount(source.totalAssessmentModes), detail: "timed rooms passed" }
       ],
       stages: stages,
+      snakeAmbience: deriveSnakeAmbience(chapters, stages),
       pathComplete: completed,
       completionAward: completionAward,
       overview: deriveOverview(chapters, stages, resume),
@@ -679,6 +741,7 @@
     deriveChapterState: deriveChapterState,
     deriveJourneyResume: deriveJourneyResume,
     deriveResume: deriveResume,
-    deriveStageStatus: deriveStageStatus
+    deriveStageStatus: deriveStageStatus,
+    deriveSnakeAmbience: deriveSnakeAmbience
   });
 })();

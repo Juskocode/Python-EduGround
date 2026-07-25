@@ -2,6 +2,7 @@
   "use strict";
 
   var stageRecapView = window.STAGE_RECAP_VIEW || null;
+  var progressSnakeView = window.PROGRESS_SNAKE_VIEW || null;
 
   function el(tagName, className, textContent) {
     var element = document.createElement(tagName);
@@ -72,6 +73,14 @@
     );
     rank.append(rankLevel, rankCopy);
     header.append(copy, rank);
+    if (progressSnakeView && typeof progressSnakeView.render === "function") {
+      var ambience = progressSnakeView.render(model.snakeAmbience, {
+        variant: "dashboard",
+      });
+      if (ambience) {
+        header.append(ambience);
+      }
+    }
     return header;
   }
 

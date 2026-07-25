@@ -58,6 +58,8 @@ COPY --chown=node:node \
   learning-clinics.js \
   learning-content.js \
   learning-toolbox.js \
+  progress-snake.css \
+  progress-snake-view.js \
   python-runner-worker.mjs \
   rounding-lab.css \
   rounding-lab.js \

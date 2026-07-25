@@ -188,6 +188,56 @@ test("passing both assessment rooms completes a mastered stage", () => {
   assert.equal(model.stages[0].progress.percent, 100);
   assert.equal(model.stages[0].recap.state.id, "complete");
   assert.equal(model.resume.href, "#profile/badges");
+  assert.deepEqual(
+    Array.from(model.snakeAmbience.groups, (group) => [group.tone, group.count]),
+    [
+      ["green", 1],
+      ["blue", 1],
+      ["yellow", 2],
+    ]
+  );
+  assert.equal(model.snakeAmbience.totalEarned, 4);
+  assert.equal(Object.isFrozen(model.snakeAmbience), true);
+  assert.equal(Object.isFrozen(model.snakeAmbience.groups), true);
+  assert.equal(Object.isFrozen(model.snakeAmbience.groups[0]), true);
+  assert.deepEqual(
+    Array.from(model.stages[0].snakeAmbience.groups, (group) => [group.tone, group.count]),
+    [
+      ["green", 1],
+      ["blue", 1],
+      ["yellow", 2],
+    ]
+  );
+});
+
+test("progress Snake colors come only from mastered chapters, stages, and passed rooms", () => {
+  const fresh = dashboard.build(makeInput([
+    makeChapter("py01", 1),
+    makeChapter("py02", 2),
+  ]));
+  assert.deepEqual(
+    Array.from(fresh.snakeAmbience.groups, (group) => group.count),
+    [0, 0, 0]
+  );
+
+  const mastered = makeChapter("py01", 1, {
+    exercises: { done: 2, total: 2, stars: 3, maxStars: 3 },
+    guide: { done: 5, total: 5 },
+  });
+  const input = makeInput([mastered, makeChapter("py02", 2)]);
+  input.assessmentBlocks[0].passedModes = 9;
+  input.assessmentBlocks[0].totalModes = 2;
+  const partial = dashboard.build(input);
+
+  assert.equal(partial.stages[0].assessment.passedModes, 2);
+  assert.deepEqual(
+    Array.from(partial.snakeAmbience.groups, (group) => [group.id, group.count, group.total]),
+    [
+      ["chapters", 1, 2],
+      ["stages", 0, 1],
+      ["tests", 2, 2],
+    ]
+  );
 });
 
 test("a fully mastered and assessed path routes the learner to achievements", () => {
