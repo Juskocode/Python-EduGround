@@ -854,6 +854,86 @@
         "Explain why descending capacity updates represent one copy per item while ascending updates represent reusable copies.",
       ],
     },
+
+    py13: {
+      id: "py13-frame-state-clinic",
+      title: "Trace one frame without mixing yesterday, now, and next",
+      description: "A game frame is a state transition with an effectful boundary. Events and current controls describe intent, pure rules calculate candidate state, collisions repair invalid motion, and rendering presents the finished snapshot. Trace one platformer jump frame carefully so every read comes from the intended side of the transition.",
+      exampleCode: [
+        "player_y = 72",
+        "vertical_speed = -4",
+        "gravity = 1",
+        "platform_top = 120",
+        "player_height = 32",
+        "",
+        "next_speed = vertical_speed + gravity",
+        "candidate_y = player_y + next_speed",
+        "crossed_top = player_y + player_height <= platform_top <= candidate_y + player_height",
+        "",
+        "if next_speed >= 0 and crossed_top:",
+        "    player_y = platform_top - player_height",
+        "    vertical_speed = 0",
+        "else:",
+        "    player_y = candidate_y",
+        "    vertical_speed = next_speed",
+        "",
+        "print(player_y, vertical_speed)",
+      ].join("\n"),
+      trace: [
+        {
+          step: "Read the previous snapshot",
+          state: "player_y == 72; vertical_speed == -4; current bottom == 104",
+          reasoning: "Negative screen-y velocity means the player is still rising. These values belong to the completed previous frame and must remain available while candidate state is calculated.",
+        },
+        {
+          step: "Integrate gravity",
+          state: "next_speed == -3",
+          reasoning: "Gravity adds one downward unit. The velocity remains negative, so the player continues moving upward but more slowly.",
+        },
+        {
+          step: "Calculate candidate position",
+          state: "candidate_y == 69; candidate bottom == 101",
+          reasoning: "Candidate state answers where the player would move before collision repair. It does not overwrite the trusted previous position yet.",
+        },
+        {
+          step: "Check crossed boundary",
+          state: "crossed_top is False because 104 <= 120 <= 101 is False",
+          reasoning: "The player is moving away from this platform top, and the ordered boundary comparison correctly reports no downward crossing.",
+        },
+        {
+          step: "Choose the transition branch",
+          state: "next_speed >= 0 is False; landing branch is skipped",
+          reasoning: "A player can land only while moving downward in this simplified model, even if another rectangle test might report nearby contact.",
+        },
+        {
+          step: "Commit and present",
+          state: "player_y == 69; vertical_speed == -3; stdout receives: 69 -3",
+          reasoning: "Only after the complete decision is known does candidate state replace the previous snapshot. A renderer would now draw this committed position.",
+        },
+      ],
+      misconceptions: [
+        {
+          belief: "Drawing the player at a new coordinate automatically changes game state.",
+          correction: "Drawing affects a surface only. The state variables or sprite rectangle must be updated explicitly before the renderer can consistently present the next snapshot.",
+          probe: "If player_y stays 72 but draw uses 69 once, which coordinate will physics read on the following frame?",
+        },
+        {
+          belief: "A frame-rate cap makes movement automatically frame-rate independent.",
+          correction: "A cap limits maximum loop frequency. Consistent real-time speed additionally requires fixed updates or scaling motion by measured elapsed time.",
+          probe: "Compare adding five pixels per frame at 30 FPS and 120 FPS; what real-world distances result after one second?",
+        },
+        {
+          belief: "Any rectangle overlap means the player should be placed on top of a platform.",
+          correction: "Resolution depends on movement direction and crossed boundary. Side or underside contact must not be repaired as a landing.",
+          probe: "Which previous and candidate edges distinguish falling onto a top surface from rising into a platform underside?",
+        },
+      ],
+      transferPrompts: [
+        "Trace one Snake frame from held direction through new head, food decision, tail decision, self-collision, score update, and drawing order.",
+        "Design a fixed-step accumulator and explain what state advances when one rendered frame takes longer than the simulation step.",
+        "Specify a pause-state transition that consumes quit events while preventing physics, timers, and score from advancing.",
+      ],
+    },
   };
 
   function deepFreeze(value) {

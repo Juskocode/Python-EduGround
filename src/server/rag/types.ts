@@ -11,6 +11,7 @@ export const CHAPTER_IDS = [
   "py10",
   "py11",
   "py12",
+  "py13",
 ] as const;
 
 export type ChapterId = (typeof CHAPTER_IDS)[number];

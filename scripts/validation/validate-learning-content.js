@@ -210,8 +210,19 @@ for (const chapter of window.COURSE_DATA.chapters) {
       } else {
         try {
           const url = new URL(resource.url.trim());
-          if (url.origin !== "https://docs.python.org" || !url.pathname.startsWith("/3/") || url.username || url.password) {
-            errors.push(`${chapter.id}/documentation-${index + 1}: link must use the official HTTPS Python 3 documentation.`);
+          const isOfficialPythonDocs =
+            url.origin === "https://docs.python.org" && url.pathname.startsWith("/3/");
+          const isOfficialPygameDocs =
+            String(chapter.id) === "py13" && (
+              (url.origin === "https://www.pygame.org" && url.pathname.startsWith("/docs/")) ||
+              (url.origin === "https://pyga.me" && url.pathname.startsWith("/docs/"))
+            );
+          if (
+            (!isOfficialPythonDocs && !isOfficialPygameDocs) ||
+            url.username ||
+            url.password
+          ) {
+            errors.push(`${chapter.id}/documentation-${index + 1}: link must use an allowlisted official HTTPS Python or Pygame documentation origin.`);
           }
           if (chapterDocumentationUrls.has(url.href)) {
             errors.push(`${chapter.id}/documentation-${index + 1}: duplicate documentation URL.`);
@@ -310,6 +321,124 @@ for (const chapter of window.COURSE_DATA.chapters) {
           });
         }
         if (!Array.isArray(interactiveLab.invariants) || interactiveLab.invariants.length < 3 || interactiveLab.invariants.some((item) => !isNonEmptyString(item))) {
+          errors.push(`${chapter.id}/interactive-lab: expected at least three non-empty invariants.`);
+        }
+      }
+    } else if (String(chapter.id) === "py13") {
+      if (!interactiveLab || interactiveLab.kind !== "pygame-frame-tracer") {
+        errors.push(`${chapter.id}: expected the Pygame frame-tracer interactive lab.`);
+      } else {
+        interactiveLabCount += 1;
+        for (const field of ["title", "description", "defaultScenario"]) {
+          if (!isNonEmptyString(interactiveLab[field])) {
+            errors.push(`${chapter.id}/interactive-lab: missing ${field}.`);
+          }
+        }
+
+        const expectedPhaseIds = ["receive", "interpret", "advance", "resolve", "present"];
+        const phaseIds = Array.isArray(interactiveLab.phases)
+          ? interactiveLab.phases.map((phase) => String(phase?.id || ""))
+          : [];
+        if (
+          phaseIds.length !== expectedPhaseIds.length ||
+          !expectedPhaseIds.every((id, index) => phaseIds[index] === id)
+        ) {
+          errors.push(
+            `${chapter.id}/interactive-lab: phases must follow receive, interpret, advance, resolve, present order.`,
+          );
+        } else {
+          interactiveLab.phases.forEach((phase, index) => {
+            if (!isNonEmptyString(phase?.label) || !isNonEmptyString(phase?.prompt)) {
+              errors.push(
+                `${chapter.id}/interactive-lab/phase-${index + 1}: missing label or prompt.`,
+              );
+            }
+          });
+        }
+
+        const controls = Array.isArray(interactiveLab.controls)
+          ? interactiveLab.controls
+          : [];
+        const controlIds = new Set();
+        if (controls.length < 4) {
+          errors.push(`${chapter.id}/interactive-lab: expected at least four controls.`);
+        }
+        controls.forEach((control, index) => {
+          const label = `${chapter.id}/interactive-lab/control-${index + 1}`;
+          if (
+            !isNonEmptyString(control?.id) ||
+            !isNonEmptyString(control?.label) ||
+            !["select", "range", "toggle"].includes(String(control?.type || ""))
+          ) {
+            errors.push(`${label}: expected an id, label, and supported control type.`);
+          }
+          if (controlIds.has(control?.id)) {
+            errors.push(`${label}: duplicate control id.`);
+          }
+          controlIds.add(control?.id);
+          if (
+            control?.type === "select" &&
+            (!Array.isArray(control.values) ||
+              control.values.length < 2 ||
+              !control.values.includes(control.defaultValue))
+          ) {
+            errors.push(`${label}: select values must include the default value.`);
+          }
+          if (control?.type === "range") {
+            const min = Number(control.min);
+            const max = Number(control.max);
+            const step = Number(control.step);
+            const defaultValue = Number(control.defaultValue);
+            if (
+              ![min, max, step, defaultValue].every(Number.isFinite) ||
+              min >= max ||
+              step <= 0 ||
+              defaultValue < min ||
+              defaultValue > max
+            ) {
+              errors.push(`${label}: expected finite ordered range values and an in-range default.`);
+            }
+          }
+          if (control?.type === "toggle" && typeof control.defaultValue !== "boolean") {
+            errors.push(`${label}: toggle defaultValue must be Boolean.`);
+          }
+        });
+
+        const scenarios = Array.isArray(interactiveLab.scenarios)
+          ? interactiveLab.scenarios
+          : [];
+        const scenarioIds = new Set();
+        if (scenarios.length < 4) {
+          errors.push(`${chapter.id}/interactive-lab: expected at least four game scenarios.`);
+        }
+        scenarios.forEach((scenario, index) => {
+          const label = `${chapter.id}/interactive-lab/scenario-${index + 1}`;
+          for (const field of [
+            "id",
+            "label",
+            "previous",
+            "intent",
+            "candidate",
+            "committed",
+            "teachingNote",
+          ]) {
+            if (!isNonEmptyString(scenario?.[field])) {
+              errors.push(`${label}: missing ${field}.`);
+            }
+          }
+          if (scenarioIds.has(scenario?.id)) {
+            errors.push(`${label}: duplicate scenario id.`);
+          }
+          scenarioIds.add(scenario?.id);
+        });
+        if (!scenarioIds.has(interactiveLab.defaultScenario)) {
+          errors.push(`${chapter.id}/interactive-lab: defaultScenario must name a scenario.`);
+        }
+        if (
+          !Array.isArray(interactiveLab.invariants) ||
+          interactiveLab.invariants.length < 3 ||
+          interactiveLab.invariants.some((item) => !isNonEmptyString(item))
+        ) {
           errors.push(`${chapter.id}/interactive-lab: expected at least three non-empty invariants.`);
         }
       }

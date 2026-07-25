@@ -183,6 +183,20 @@ const CHAPTERS = [
       "py12-edit-distance",
     ],
   },
+  {
+    id: "py13",
+    submissionDirectory: "Py13 Pygame Game Lab",
+    exercises: [
+      "py13-direction-step",
+      "py13-screen-wrap",
+      "py13-snake-advance",
+      "py13-rect-collisions",
+      "py13-player-intent",
+      "py13-gravity-landing",
+      "py13-animation-frame",
+      "py13-level-status",
+    ],
+  },
 ] as const satisfies readonly ChapterDefinition[];
 
 function createManifest(): ReadonlyMap<string, ExerciseFile> {

@@ -14,6 +14,7 @@ const dataFiles = [
   path.join(PUBLIC_ROOT, "content/exercise-tests/tests-py04-07.js"),
   path.join(PUBLIC_ROOT, "content/exercise-tests/tests-py08-11.js"),
   path.join(PUBLIC_ROOT, "content/exercise-tests/tests-py12.js"),
+  path.join(PUBLIC_ROOT, "content/exercise-tests/tests-py13.js"),
 ];
 
 globalThis.window = {};
@@ -42,7 +43,11 @@ for (const chapter of course.chapters) {
 
     const source = solutions[id] || "";
     const calls = spec.tests.map((test) => test.call || "").join("\n");
-    const signatures = [...source.matchAll(/^def\s+([A-Za-z_]\w*)\s*\(([^\n]*)\)\s*:/gm)]
+    const signatures = [
+      ...source.matchAll(
+        /^def\s+([A-Za-z_]\w*)\s*\(([\s\S]*?)\)\s*(?:->\s*[^:\n]+)?\s*:/gm,
+      ),
+    ]
       .filter((match) => new RegExp(`\\b${match[1]}\\s*\\(`).test(calls))
       .map((match) => match[0]);
 

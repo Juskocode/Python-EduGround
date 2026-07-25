@@ -1866,6 +1866,134 @@
       },
       nextSteps: "Apply the modelling workflow to graphs, shortest paths, interval dynamic programming, and reconstruction tasks that return an optimal witness rather than only its value.",
     },
+
+    py13: {
+      id: "py13-pygame-game-lab-class",
+      audience: "Learners who can write tested Python functions and want to connect those skills to responsive visual games without hiding logic inside drawing code.",
+      prerequisites: [
+        "Use functions, tuples, lists, dictionaries, conditions, and loops to represent and transform small pieces of program state.",
+        "Explain coordinates, velocity, modulo, Boolean conditions, and function contracts using at least one hand-worked example.",
+        "Run Python from a terminal and create an isolated virtual environment before installing a third-party package.",
+      ],
+      estimatedMinutes: 90,
+      preparation: [
+        "Play the landing-page Snake deliberately and list which state must change after direction input, food collection, wrapping, and a collision.",
+        "Draw a small platformer screen on squared paper with an origin, positive axis directions, player rectangle, platform rectangles, and goal.",
+        "Create a disposable virtual environment and confirm which Python interpreter and package installer the activated terminal uses.",
+      ],
+      pageSummary: [
+        "Pygame supplies a window, surfaces, events, keyboard state, rectangles, timing, drawing, images, and sound, while the learner still owns the game rules and update order.",
+        "A dependable game loop handles events, reads intent, advances state, resolves collisions, draws the new scene, presents the frame, and limits speed on every iteration.",
+        "Snake and platformers share coordinate transforms, collision questions, explicit modes, and time-based feedback, although Snake advances on a grid while platformers integrate velocity continuously.",
+        "Pure rule functions make real-time programs educational and testable because movement, growth, gravity, landing, animation, and win conditions can be verified without opening a graphical window.",
+      ],
+      lessonPlan: [
+        {
+          label: "Playable-system inventory",
+          minutes: 10,
+          purpose: "Learners play one Snake round and classify observed behaviour as input, persistent state, update rule, collision, rendering, audio, or timing.",
+        },
+        {
+          label: "One-frame loop lecture",
+          minutes: 20,
+          purpose: "Trace initialization and one complete Pygame frame while explaining why events, state updates, drawing, display presentation, and clock control have distinct responsibilities.",
+        },
+        {
+          label: "Snake rule extraction",
+          minutes: 20,
+          purpose: "Turn grid movement, wrapping, food growth, and self-collision into plain-data transformations that can be predicted and tested independently.",
+        },
+        {
+          label: "Platformer physics studio",
+          minutes: 25,
+          purpose: "Model horizontal intent, jump gating, gravity, terminal speed, swept platform landing, goal overlap, and fall recovery across annotated frames.",
+        },
+        {
+          label: "Game-loop defense",
+          minutes: 15,
+          purpose: "Teams present an update-order diagram, run boundary examples, and justify which functions remain independent from Pygame and which belong at the display boundary.",
+        },
+      ],
+      lectureDemo: {
+        title: "Advance a wrapping space drone one frame at a time",
+        setup: "A tiny console simulation uses the same input-to-state reasoning as a graphical loop, but prints coordinates so every update remains visible and testable during the demonstration.",
+        code: [
+          "def step_drone(position, intent, speed, bounds):",
+          "    vectors = {",
+          "        \"north\": (0, -1),",
+          "        \"south\": (0, 1),",
+          "        \"west\": (-1, 0),",
+          "        \"east\": (1, 0),",
+          "    }",
+          "    x, y = position",
+          "    dx, dy = vectors.get(intent, (0, 0))",
+          "    width, height = bounds",
+          "    return ((x + dx * speed) % width, (y + dy * speed) % height)",
+          "",
+          "drone = (12, 4)",
+          "for command in (\"east\", \"east\", \"south\"):",
+          "    drone = step_drone(drone, command, 5, (20, 15))",
+          "    print(drone)",
+        ].join("\n"),
+        expectedOutput: "(17, 4)\n(2, 4)\n(2, 9)",
+        teachingPoints: [
+          "The loop retains exactly one current position and replaces it with the returned next position after each discrete command.",
+          "Direction labels become unit vectors before speed changes distance, which keeps control interpretation separate from coordinate arithmetic.",
+          "Modulo implements opposite-edge re-entry symmetrically for both axes and works for movement beyond either the minimum or maximum boundary.",
+          "Replacing print with Pygame drawing would change the presentation boundary but would not need to change the deterministic movement rule.",
+        ],
+        questions: [
+          "Which value in the demonstration represents persistent game state, and at what exact line does one frame replace it?",
+          "How would holding east for three frames differ from processing one KEYDOWN event if the frame rate changed?",
+          "Which parts could be unit-tested on a machine with no display, and which Pygame boundary still needs an integration check?",
+        ],
+      },
+      classActivities: [
+        {
+          title: "Human game-loop relay",
+          format: "Teams assign event queue, controller, physics, collision, renderer, and clock roles to different learners around one shared state board.",
+          minutes: 20,
+          prompt: "Process six scripted frames in order, passing a state card between roles and refusing any update that reads data from a later phase.",
+          evidence: "Six numbered state snapshots plus a corrected phase diagram showing where one intentional ordering bug first changed the outcome.",
+        },
+        {
+          title: "Platform landing investigation",
+          format: "Pairs use graph paper to compare endpoint-only collision with a crossed-boundary test at several downward speeds.",
+          minutes: 20,
+          prompt: "Trace player top and bottom coordinates before and after movement, identify every crossed platform, and choose the earliest valid landing surface.",
+          evidence: "An annotated coordinate table containing horizontal overlap, previous bottom, next bottom, chosen top, snapped y, velocity, and grounded state.",
+        },
+      ],
+      independentPractice: [
+        "Write pseudocode for initialization, event handling, input sampling, updating, collision resolution, drawing, presenting, and limiting one complete frame.",
+        "Trace a four-segment Snake through ordinary movement, food growth, screen wrapping, and a self-collision without drawing any pixels.",
+        "Design test cases for two rectangles that overlap, miss, share one edge, meet at one corner, and completely contain one another.",
+        "Create a platformer tuning table that changes gravity, jump strength, and terminal speed one at a time while recording an observable consequence.",
+      ],
+      recapQuestions: [
+        "Why must a Pygame program keep consuming events even when the game currently ignores most event types?",
+        "What is the difference between an event such as KEYDOWN and the currently held keyboard state?",
+        "Why does an edge-touching rectangle normally not count as an overlap in collision logic?",
+        "How does comparing both previous and next player bottoms prevent tunnelling through a thin platform?",
+        "Which game rules should remain pure functions, and what makes display or sound work a boundary effect?",
+      ],
+      homework: {
+        brief: "Design a two-room micro-platformer in an original theme, using rectangles and colours first so gameplay rules are demonstrably correct before decorative assets are introduced.",
+        deliverables: [
+          "A frame-order diagram and state dictionary documenting position, velocity, grounded flag, animation mode, score, and current level status.",
+          "A runnable Pygame prototype containing horizontal movement, one grounded jump, at least three platforms, a goal, and fall recovery.",
+          "Pure-function tests for input intent, gravity integration, landing, goal overlap, and one deliberately awkward boundary contact.",
+          "A short tuning log with three controlled experiments and an explanation of why clock-limited elapsed time matters for consistent play.",
+        ],
+        selfReview: [
+          "The event loop remains responsive and always offers a clear quit path.",
+          "Game rules operate on plain data and do not require a window for unit testing.",
+          "Collision order and boundary conventions are written down and supported by edge-focused tests.",
+          "Every image, sound, font, and package is credited and loaded through a predictable project-relative path.",
+        ],
+      },
+      nextSteps: "Package the prototype with pinned dependencies, add sprite animation and sound behind stable state transitions, then profile and tune responsiveness without coupling game speed to drawing frequency.",
+    },
   };
 
   function deepFreeze(value) {

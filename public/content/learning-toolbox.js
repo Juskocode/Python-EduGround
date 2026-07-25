@@ -476,5 +476,48 @@
         example: "candidates = [12, 7, 19]\nbest = float(\"inf\")\nfor candidate in candidates:\n    best = min(best, candidate)\nprint(best)\nprint(float(\"inf\") + 1)",
       },
     ],
+
+    py13: [
+      {
+        kind: "Pygame module · events",
+        syntax: "pygame.event.get()",
+        description: "Removes and returns pending input, window, and user events so the application can respond and the operating system can keep the window healthy.",
+        useWhen: "Handling one-time actions such as quitting, key presses, mouse clicks, or custom timers during every frame.",
+        result: "A list of Event objects currently waiting in the event queue.",
+        caution: "Consume the queue every frame. KEYDOWN is a transition event, not proof that a key remains held during later frames.",
+        importCode: "import pygame",
+        example: "running = True\nfor event in pygame.event.get():\n    if event.type == pygame.QUIT:\n        running = False\nprint(running)",
+      },
+      {
+        kind: "Pygame module · keyboard",
+        syntax: "pygame.key.get_pressed()",
+        description: "Returns the current Boolean state of keyboard keys, which is useful for smooth movement while a key remains held.",
+        useWhen: "Deriving horizontal or vertical movement intent on every frame rather than only when a key first changes state.",
+        result: "A sequence-like ScancodeWrapper indexed by Pygame key constants.",
+        caution: "Call it after Pygame has processed events, and resolve conflicting keys deliberately instead of letting assignment order choose the winner.",
+        importCode: "import pygame",
+        example: "pressed = pygame.key.get_pressed()\nleft_held = bool(pressed[pygame.K_LEFT])\nright_held = bool(pressed[pygame.K_RIGHT])\nprint(left_held, right_held)",
+      },
+      {
+        kind: "Pygame class · geometry",
+        syntax: "pygame.Rect(x, y, width, height)",
+        description: "Stores integer rectangle position and size while exposing named edges, movement helpers, and collision queries.",
+        useWhen: "Representing players, goals, platforms, pickups, and other axis-aligned gameplay regions.",
+        result: "A mutable Rect whose left, right, top, bottom, center, and other attributes stay synchronized.",
+        caution: "Rect collision excludes zero-area overlap, so rectangles sharing only an edge do not collide. Keep visual sprites aligned with their gameplay rectangles.",
+        importCode: "import pygame",
+        example: "player = pygame.Rect(12, 20, 24, 32)\ngoal = pygame.Rect(30, 20, 16, 32)\nprint(player.colliderect(goal))\nplayer.right = goal.left\nprint(player.colliderect(goal))",
+      },
+      {
+        kind: "Pygame class · timing",
+        syntax: "clock.tick(max_fps)",
+        description: "Measures milliseconds since the previous tick and optionally delays the loop so it does not exceed the supplied frame-rate limit.",
+        useWhen: "Bounding CPU usage and obtaining elapsed time for time-based movement, animation, cooldowns, or effects.",
+        result: "The number of milliseconds since the previous call as an integer.",
+        caution: "Call tick once per frame. A frame-rate cap reduces excessive speed but does not by itself make movement frame-rate independent.",
+        importCode: "import pygame",
+        example: "clock = pygame.time.Clock()\nelapsed_ms = clock.tick(60)\nelapsed_seconds = elapsed_ms / 1000\nprint(elapsed_seconds >= 0)",
+      },
+    ],
   };
 })();

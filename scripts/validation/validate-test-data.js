@@ -14,6 +14,7 @@ const dataFiles = [
   path.join(PUBLIC_ROOT, "content/exercise-tests/tests-py04-07.js"),
   path.join(PUBLIC_ROOT, "content/exercise-tests/tests-py08-11.js"),
   path.join(PUBLIC_ROOT, "content/exercise-tests/tests-py12.js"),
+  path.join(PUBLIC_ROOT, "content/exercise-tests/tests-py13.js"),
 ];
 
 globalThis.window = {};

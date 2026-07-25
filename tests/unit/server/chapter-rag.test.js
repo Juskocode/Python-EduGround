@@ -24,6 +24,7 @@ test("the RAG corpus indexes all chapters from only the two public classroom sou
     "py10",
     "py11",
     "py12",
+    "py13",
   ]);
 
   for (const chapterId of await repository.listChapterIds()) {

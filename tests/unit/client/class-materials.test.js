@@ -34,6 +34,7 @@ const expectedChapterIds = [
   "py10",
   "py11",
   "py12",
+  "py13",
 ];
 const expectedMaterialIds = Object.fromEntries(expectedChapterIds.map((chapterId) => [
   chapterId,
@@ -50,6 +51,7 @@ const expectedMaterialIds = Object.fromEntries(expectedChapterIds.map((chapterId
     py10: "effect-free",
     py11: "divide-conquer",
     py12: "problem-solving-dp",
+    py13: "pygame-game-lab",
   })[chapterId]}-class`,
 ]));
 
@@ -243,7 +245,7 @@ test("every chapter reads as a complete 50 to 90 minute classroom syllabus", () 
   }
 
   assert.equal(plannedMinutes, declaredMinutes);
-  assert.equal(declaredMinutes, 1080, "twelve 90-minute classes should provide 1,080 planned minutes");
+  assert.equal(declaredMinutes, 1170, "thirteen 90-minute classes should provide 1,170 planned minutes");
 });
 
 test("all classroom data is deeply immutable", () => {
