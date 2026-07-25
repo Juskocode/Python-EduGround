@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A chapter-by-chapter Python class with structured lesson notes, runnable exercises, hidden tests, badges, ranks, and saved progress."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <title>Python EduGround · Learning Path</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script src="/app/theme-bootstrap.js"></script>
+    <link rel="stylesheet" href="/styles/course-ui.css" />
+    <link rel="stylesheet" href="/features/landing/landing-ui.css" />
+    <link rel="stylesheet" href="/features/dashboard/dashboard-ui.css" />
+    <link rel="stylesheet" href="/features/stage-recap/stage-recap-ui.css" />
+    <link rel="stylesheet" href="/features/clinic/learning-clinic.css" />
+    <link rel="stylesheet" href="/features/rounding/rounding-lab.css" />
+    <link rel="stylesheet" href="/features/classroom/class-page.css" />
+    <link rel="stylesheet" href="/features/assessment/assessment-ui.css" />
+    <link rel="stylesheet" href="/styles/geospace-ui.css" />
+    <link rel="stylesheet" href="/features/progress/progress-snake.css" />
+    <link rel="stylesheet" href="/features/landing/landing-snake.css" />
+    <link rel="stylesheet" href="/styles/workbench-mode.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#app-main">Skip to learning content</a>
+
+    <header class="site-topbar">
+      <div class="page-shell site-topbar__inner">
+        <a class="site-brand" href="#welcome" aria-label="Python EduGround welcome page">
+          <span class="site-brand__mark" aria-hidden="true"><span>&gt;</span>_</span>
+          <span class="site-brand__copy">
+            <strong>Python EduGround</strong>
+            <small>Understand · practise · level up</small>
+          </span>
+        </a>
+
+        <div class="site-actions">
+          <nav class="site-primary-nav" aria-label="Primary navigation">
+            <a class="topbar-home" href="#welcome" aria-label="Open the welcome page">
+              <span aria-hidden="true">◇</span>
+              <span>Home</span>
+            </a>
+            <a class="topbar-home" href="#home" aria-label="Open chapter dashboard">
+              <span aria-hidden="true">⌂</span>
+              <span>Chapters</span>
+            </a>
+            <a class="topbar-home" href="#assessments" aria-label="Open timed assessment rooms">
+              <span aria-hidden="true">◷</span>
+              <span>Assessments</span>
+            </a>
+          </nav>
+          <button
+            id="theme-toggle"
+            class="icon-button theme-toggle"
+            type="button"
+            aria-label="Switch to dark mode"
+            aria-pressed="false"
+          >
+            <span class="theme-toggle__sun" aria-hidden="true">☀</span>
+            <span class="theme-toggle__moon" aria-hidden="true">☾</span>
+          </button>
+          <button
+            id="sound-toggle"
+            class="icon-button sound-toggle"
+            type="button"
+            aria-label="Mute interface sounds"
+            aria-pressed="true"
+          >
+            <span class="sound-toggle__on" aria-hidden="true">♪</span>
+            <span class="sound-toggle__off" aria-hidden="true">×</span>
+          </button>
+
+          <div class="profile-menu">
+            <button
+              id="profile-button"
+              class="profile-button"
+              type="button"
+              aria-expanded="false"
+              aria-controls="profile-panel"
+            >
+              <span class="profile-button__avatar" aria-hidden="true">PY</span>
+              <span class="profile-button__copy">
+                <small id="profile-level-label">Level 1</small>
+                <strong id="profile-rank-label">Indent Initiate</strong>
+              </span>
+              <span class="profile-button__chevron" aria-hidden="true">⌄</span>
+            </button>
+            <aside id="profile-panel" class="profile-panel" aria-label="Learner profile" hidden></aside>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main id="app-main" class="app-main" tabindex="-1">
+      <div class="page-shell loading-state" role="status">
+        <span class="loading-state__mark" aria-hidden="true">&gt;_</span>
+        <p>Preparing your Python learning path…</p>
+      </div>
+    </main>
+
+    <p id="app-status" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
+    <div id="achievement-toasts" class="achievement-toasts" aria-live="polite" aria-atomic="false"></div>
+
+    <noscript>
+      <div class="noscript-message">
+        This learning path needs JavaScript for chapter navigation, the editor, tests, and saved progress.
+      </div>
+    </noscript>
+
+    <footer class="site-footer">
+      <div class="page-shell site-footer__inner">
+        <p><strong>Python EduGround</strong> · Built from the exercises in this repository.</p>
+        <p>Local by default. Sign in only when you want code and progress synced to your account.</p>
+      </div>
+    </footer>
+
+    <script src="/content/exercise-data.js" defer></script>
+    <script src="/content/generated/starter-code.js" defer></script>
+    <script src="/content/exercise-tests/tests-py01-03.js" defer></script>
+    <script src="/content/exercise-tests/tests-py04-07.js" defer></script>
+    <script src="/content/exercise-tests/tests-py08-11.js" defer></script>
+    <script src="/content/exercise-tests/tests-py12.js" defer></script>
+    <script src="/content/learning-content.js" defer></script>
+    <script src="/content/learning-toolbox.js" defer></script>
+    <script src="/content/learning-clinics.js" defer></script>
+    <script src="/features/clinic/concept-clinic.js" defer></script>
+    <script src="/content/class-materials.js" defer></script>
+    <script src="/features/classroom/class-page.js" defer></script>
+    <script src="/features/rounding/rounding-model.js" defer></script>
+    <script src="/features/rounding/rounding-lab.js" defer></script>
+    <script src="/content/stage-recaps.js" defer></script>
+    <script src="/features/dashboard/dashboard-model.js" defer></script>
+    <script src="/features/progress/progress-snake-view.js" defer></script>
+    <script src="/features/landing/landing-snake.js" defer></script>
+    <script src="/features/landing/landing-view.js" defer></script>
+    <script src="/features/stage-recap/stage-recap-view.js" defer></script>
+    <script src="/features/dashboard/dashboard-view.js" defer></script>
+    <script src="/content/assessment-data.js" defer></script>
+    <script src="/features/assessment/assessment-engine.js" defer></script>
+    <script src="/features/assessment/assessment-room.js" defer></script>
+    <script src="/assets/vendor/ace/ace.js" defer></script>
+    <script src="/assets/vendor/ace/ext-language_tools.js" defer></script>
+    <script src="/assets/vendor/ace/keybinding-sublime.js" defer></script>
+    <script src="/assets/vendor/ace/keybinding-vim.js" defer></script>
+    <script src="/assets/vendor/ace/mode-python.js" defer></script>
+    <script src="/assets/vendor/ace/theme-monokai.js" defer></script>
+    <script src="/app/audio-feedback.js" defer></script>
+    <script src="/app/solution-shape.js" defer></script>
+    <script src="/app/course-app.js" defer></script>
+  </body>
+</html>

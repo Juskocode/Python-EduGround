@@ -54,7 +54,7 @@ jobs:
         run: npm run validate
 
       - name: Check the browser worker
-        run: node --check python-runner-worker.mjs
+        run: node --check public/workers/python-runner-worker.js
 
       - name: Check patch hygiene
         run: git diff --check
@@ -157,7 +157,7 @@ jobs:
         with:
           name: browser-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            playwright-report/
-            test-results/
+            artifacts/playwright/report/
+            artifacts/playwright/results/
           if-no-files-found: ignore
           retention-days: 7

@@ -96,7 +96,7 @@ jobs:
       - name: Run full validation with PostgreSQL
         run: |
           npm run validate:release
-          node --check python-runner-worker.mjs
+          node --check public/workers/python-runner-worker.js
           git diff --check
 
       - name: Install the pinned Chromium test runtime

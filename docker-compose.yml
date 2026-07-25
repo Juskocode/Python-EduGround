@@ -67,9 +67,9 @@ services:
       - |
         export PGPASSWORD="$$(cat /run/secrets/postgres_password)"
         export APP_DATABASE_PASSWORD="$$(cat /run/secrets/app_database_password)"
-        exec psql --set=ON_ERROR_STOP=1 --file=/bootstrap/bootstrap-app-role.sql
+        exec psql --set=ON_ERROR_STOP=1 --file=/bootstrap/app-role.sql
     volumes:
-      - ./docker/bootstrap-app-role.sql:/bootstrap/bootstrap-app-role.sql:ro
+      - ./database/bootstrap/app-role.sql:/bootstrap/app-role.sql:ro
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m
@@ -104,7 +104,7 @@ services:
       - postgres_password
     command:
       - node
-      - scripts/migrate.mjs
+      - scripts/database/migrate.js
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m
