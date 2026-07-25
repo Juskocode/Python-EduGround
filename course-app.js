@@ -55,6 +55,7 @@
     : null;
   var dashboardModel = window.DASHBOARD_MODEL || null;
   var dashboardView = window.DASHBOARD_VIEW || null;
+  var progressSnakeView = window.PROGRESS_SNAKE_VIEW || null;
   var landingSnake = window.LANDING_SNAKE || null;
   var landingView = window.LANDING_VIEW || null;
   var stageRecapView = window.STAGE_RECAP_VIEW || null;
@@ -147,6 +148,8 @@
   var activeEditorResizeFrame = null;
   var activeRun = null;
   var activeLandingSnake = null;
+  var activeLandingSnakeDialog = null;
+  var activeLandingSnakeLauncher = null;
   var currentRoute = null;
   var selectedBadgeId = null;
   var signOutInProgress = false;
@@ -167,10 +170,7 @@
     flushDrafts();
     flushClassLabDrafts();
     if (assessmentRooms) assessmentRooms.flush();
-    if (activeLandingSnake) {
-      activeLandingSnake.destroy();
-      activeLandingSnake = null;
-    }
+    disposeLandingSnake(false);
   });
   elements.themeToggle.addEventListener("click", toggleTheme);
   elements.soundToggle.addEventListener("click", toggleSound);
@@ -199,10 +199,7 @@
     }
 
     if (assessmentRooms) assessmentRooms.dispose();
-    if (activeLandingSnake) {
-      activeLandingSnake.destroy();
-      activeLandingSnake = null;
-    }
+    disposeLandingSnake(false);
     disposeActiveEditor();
     currentRoute = parsed;
     document.body.dataset.route = parsed.name;
@@ -249,15 +246,8 @@
     refreshGeospaceMotion();
     renderProfile();
 
-    if (
-      parsed.name === "landing" &&
-      landingSnake &&
-      typeof landingSnake.mount === "function"
-    ) {
-      activeLandingSnake = landingSnake.mount(
-        elements.main.querySelector("[data-landing-snake]"),
-        { audio: audio }
-      );
+    if (parsed.name === "landing") {
+      setupLandingSnakeDialog();
     }
     if (parsed.name === "exercise") {
       window.requestAnimationFrame(function () {
@@ -516,6 +506,118 @@
     return landingView.render(model);
   }
 
+  function setupLandingSnakeDialog() {
+    var dialog = elements.main.querySelector("[data-snake-dialog]");
+    if (!dialog) {
+      return;
+    }
+    dialog.addEventListener("close", function () {
+      if (activeLandingSnakeDialog === dialog) {
+        disposeLandingSnake(true);
+        announce("Closed Python Snake.");
+      }
+    });
+    dialog.addEventListener("click", function (event) {
+      var toggle = event.target.closest("button[data-snake-action='toggle']");
+      if (!toggle) {
+        return;
+      }
+      window.requestAnimationFrame(function () {
+        var arcade = dialog.querySelector("[data-landing-snake]");
+        var playfield = dialog.querySelector("[data-snake-playfield]");
+        if (
+          dialog.open &&
+          arcade &&
+          arcade.dataset.snakePhase === "running" &&
+          playfield
+        ) {
+          try {
+            playfield.focus({ preventScroll: true });
+          } catch (error) {
+            playfield.focus();
+          }
+        }
+      });
+    });
+  }
+
+  function openLandingSnakeDialog(launcher) {
+    var dialog = elements.main.querySelector("[data-snake-dialog]");
+    var arcade = dialog && dialog.querySelector("[data-landing-snake]");
+    if (
+      !dialog ||
+      !arcade ||
+      !landingSnake ||
+      typeof landingSnake.mount !== "function"
+    ) {
+      announce("Python Snake is unavailable. Refresh the welcome page and try again.");
+      return;
+    }
+    if (activeLandingSnakeDialog && activeLandingSnakeDialog !== dialog) {
+      disposeLandingSnake(false);
+    }
+    if (!dialog.open) {
+      if (typeof dialog.showModal === "function") {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute("open", "");
+      }
+    }
+    activeLandingSnakeDialog = dialog;
+    activeLandingSnakeLauncher = launcher;
+    launcher.setAttribute("aria-expanded", "true");
+    if (!activeLandingSnake) {
+      activeLandingSnake = landingSnake.mount(arcade, { audio: audio });
+    }
+    refreshGeospaceMotion();
+    window.requestAnimationFrame(function () {
+      var start = dialog.querySelector("button[data-snake-action='toggle']");
+      if (dialog.open && start) {
+        try {
+          start.focus({ preventScroll: true });
+        } catch (error) {
+          start.focus();
+        }
+      }
+    });
+    announce("Opened Python Snake. The mission is idle until you press Start.");
+  }
+
+  function closeLandingSnakeDialog() {
+    var dialog = activeLandingSnakeDialog ||
+      elements.main.querySelector("[data-snake-dialog][open]");
+    if (!dialog) {
+      return;
+    }
+    if (typeof dialog.close === "function") {
+      dialog.close();
+    } else {
+      dialog.removeAttribute("open");
+      disposeLandingSnake(true);
+      announce("Closed Python Snake.");
+    }
+  }
+
+  function disposeLandingSnake(restoreFocus) {
+    var launcher = activeLandingSnakeLauncher;
+    if (activeLandingSnake) {
+      activeLandingSnake.destroy();
+      activeLandingSnake = null;
+    }
+    if (launcher) {
+      launcher.setAttribute("aria-expanded", "false");
+    }
+    activeLandingSnakeDialog = null;
+    activeLandingSnakeLauncher = null;
+    if (restoreFocus && launcher && launcher.isConnected) {
+      window.requestAnimationFrame(function () {
+        if (launcher.isConnected) {
+          launcher.focus();
+        }
+      });
+    }
+  }
+
   function renderDashboard() {
     var model = buildDashboardSnapshot();
     if (!model || !dashboardView || typeof dashboardView.render !== "function") {
@@ -553,6 +655,7 @@
   function renderChapterHub(chapter) {
     var wrapper = el("div", "page-shell chapter-page");
     var progress = getChapterProgress(chapter);
+    var guideProgress = getChapterLearningProgress(chapter);
     var hero = el("section", "chapter-hero");
     var art = renderChapterArt(chapter, "chapter-hero__art");
     var content = el("div", "chapter-hero__content");
@@ -577,6 +680,25 @@
     );
     content.append(eyebrow, title, summary, renderTags(chapter.topics), progressPanel);
     hero.append(art, content);
+    if (
+      progressSnakeView &&
+      typeof progressSnakeView.render === "function" &&
+      progress.total > 0 &&
+      progress.done === progress.total &&
+      guideProgress.total > 0 &&
+      guideProgress.done === guideProgress.total
+    ) {
+      var chapterAmbience = progressSnakeView.render({
+        groups: [
+          { id: "chapters", tone: "green", count: 1, total: 1 },
+          { id: "stages", tone: "blue", count: 0, total: 1 },
+          { id: "tests", tone: "yellow", count: 0, total: 2 }
+        ]
+      }, { variant: "chapter" });
+      if (chapterAmbience) {
+        hero.append(chapterAmbience);
+      }
+    }
 
     var choiceSection = el("section", "chapter-choices");
     var choiceHeading = el("header", "section-heading");
@@ -598,7 +720,6 @@
     var tutorialCount = chapterLearning && Array.isArray(chapterLearning.tutorial)
       ? chapterLearning.tutorial.length
       : 0;
-    var guideProgress = getChapterLearningProgress(chapter);
     var classMaterial = classMaterials[String(chapter.id)] || null;
     var classMinutes = classMaterial && Number.isFinite(Number(classMaterial.estimatedMinutes))
       ? " · " + Number(classMaterial.estimatedMinutes) + " min class"
@@ -2805,6 +2926,8 @@
       assessmentRooms.handleClick(event);
       return;
     }
+    var snakeLaunchButton = event.target.closest("button[data-snake-launch]");
+    var snakeCloseButton = event.target.closest("button[data-snake-close]");
     var hintButton = event.target.closest("button[data-reveal-hint]");
     var scrollButton = event.target.closest("button[data-scroll-target]");
     var classLabRunButton = event.target.closest("button[data-class-lab-run]");
@@ -2829,6 +2952,14 @@
     var ideFocusButton = event.target.closest("button[data-ide-focus]");
     var ideLayoutResetButton = event.target.closest("button[data-ide-layout-reset]");
 
+    if (snakeLaunchButton) {
+      openLandingSnakeDialog(snakeLaunchButton);
+      return;
+    }
+    if (snakeCloseButton) {
+      closeLandingSnakeDialog();
+      return;
+    }
     if (ideLayoutResetButton) {
       resetIdeLayout(ideLayoutResetButton.dataset.ideLayoutReset);
       return;

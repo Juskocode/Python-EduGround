@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  var progressSnakeView = window.PROGRESS_SNAKE_VIEW || null;
+
   function el(tagName, className, textContent) {
     var element = document.createElement(tagName);
     if (className) {
@@ -27,6 +29,7 @@
     var wrapper = el("div", "page-shell landing-page");
     wrapper.append(
       renderHero(safeModel),
+      renderSnakeDialog(),
       renderLearningLoop(),
       renderStagePreview(safeModel.stages),
       renderTrustStrip(safeModel)
@@ -35,9 +38,10 @@
   }
 
   function renderHero(model) {
-    var section = el("section", "landing-hero");
+    var section = el("section", "landing-hero landing-hero--calm");
     var copy = el("div", "landing-hero__copy");
-    var title = el("h1", null, "Play the logic. Then build it in Python.");
+    var demo = el("div", "landing-hero__demo");
+    var title = el("h1", null, "Learn Python by understanding what every line does.");
     var actions = el("div", "landing-hero__actions");
     var resume = model.resume || {};
     var primaryLabel = resume.kind === "achievement"
@@ -48,12 +52,12 @@
     section.setAttribute("aria-labelledby", title.id);
     section.append(renderHeroGeometry());
     copy.append(
-      el("p", "eyebrow", "Learn by reading · running · building"),
+      el("p", "eyebrow", "A complete browser-based Python class"),
       title,
       el(
         "p",
         "landing-hero__lede",
-        "Fly Python Snake through an orbital grid, then learn the variables, conditions, loops, lists, and functions that make games like it work."
+        "Begin with input(), variables, and exact output. Build through functions and collections, then finish with recursion, divide and conquer, knapsack, and dynamic programming."
       )
     );
     actions.append(
@@ -61,7 +65,16 @@
       link("#home", "button button--quiet", "Explore the roadmap")
     );
     copy.append(actions, renderHeroMetrics(model));
-    section.append(copy, renderSnakeArcade());
+    demo.append(renderTerminalPreview(), renderSnakeLauncher());
+    section.append(copy, demo);
+    if (progressSnakeView && typeof progressSnakeView.render === "function") {
+      var ambience = progressSnakeView.render(model.snakeAmbience, {
+        variant: "landing",
+      });
+      if (ambience) {
+        section.append(ambience);
+      }
+    }
     return section;
   }
 
@@ -105,6 +118,73 @@
       list.append(item);
     });
     return list;
+  }
+
+  function renderTerminalPreview() {
+    var visual = el("div", "landing-terminal");
+    var chrome = el("div", "landing-terminal__chrome");
+    var dots = el("span", "landing-terminal__dots");
+    var code = el("div", "landing-terminal__code");
+    var output = el("div", "landing-terminal__output");
+    visual.setAttribute("aria-hidden", "true");
+    visual.dataset.geoMotion = "code-console";
+    dots.append(el("i"), el("i"), el("i"));
+    chrome.append(dots, el("span", null, "first_steps.py"), el("span", null, "Python 3"));
+    [
+      ["1", "raw_count = input()"],
+      ["2", "count = int(raw_count)"],
+      ["3", "next_count = count + 1"],
+      ["4", "print(next_count)"],
+    ].forEach(function (line, index) {
+      var row = el("span", "landing-terminal__line");
+      row.style.setProperty("--line-delay", index * 110 + "ms");
+      row.append(el("b", null, line[0]), el("code", null, line[1]));
+      code.append(row);
+    });
+    output.append(
+      el("span", null, "Program input"),
+      el("code", null, "4"),
+      el("span", null, "Terminal"),
+      el("code", "landing-terminal__result", "5")
+    );
+    visual.append(chrome, code, output);
+    return visual;
+  }
+
+  function renderSnakeLauncher() {
+    var launcher = el("button", "landing-snake-launcher");
+    var visual = el("span", "landing-snake-launcher__visual");
+    var body = el("span", "landing-snake-launcher__body");
+    var copy = el("span", "landing-snake-launcher__copy");
+    launcher.type = "button";
+    launcher.dataset.snakeLaunch = "";
+    launcher.setAttribute("aria-haspopup", "dialog");
+    launcher.setAttribute("aria-controls", "landing-snake-dialog");
+    launcher.setAttribute("aria-expanded", "false");
+    [
+      "landing-snake-launcher__segment--one",
+      "landing-snake-launcher__segment--two",
+      "landing-snake-launcher__segment--three",
+      "landing-snake-launcher__segment--four",
+    ].forEach(function (className) {
+      body.append(el("i", "landing-snake-launcher__segment " + className));
+    });
+    visual.setAttribute("aria-hidden", "true");
+    visual.append(
+      body,
+      el("span", "landing-snake-launcher__head", "PY"),
+      el("span", "landing-snake-launcher__core", "✦")
+    );
+    copy.append(
+      el("small", null, "Optional playable preview"),
+      el("strong", null, "Launch Python Snake")
+    );
+    launcher.append(
+      visual,
+      copy,
+      el("span", "landing-snake-launcher__action", "Play ↗")
+    );
+    return launcher;
   }
 
   function svgEl(tagName, className) {
@@ -176,8 +256,11 @@
       background,
       grid,
       stars,
+      svgAttributes(svgEl("g"), { "data-snake-falling-star-layer": "" }),
       svgAttributes(svgEl("g"), { "data-snake-asteroid-layer": "" }),
       svgAttributes(svgEl("g"), { "data-snake-energy-layer": "" }),
+      svgAttributes(svgEl("g"), { "data-snake-powerup-layer": "" }),
+      svgAttributes(svgEl("g"), { "data-snake-echo-layer": "" }),
       svgAttributes(svgEl("g"), { "data-snake-segment-layer": "" })
     );
     return svg;
@@ -197,6 +280,7 @@
     var heading = el("header", "landing-snake__heading");
     var headingCopy = el("div");
     var title = el("h2", null, "snake.py // orbital loop");
+    var description = el("p", null, "Collect data cores. Avoid asteroids and your own trail. Crossing an edge warps you to the opposite side.");
     var hud = el("dl", "landing-snake__hud");
     var playfield = el("div", "landing-snake__playfield");
     var overlay = el("p", "landing-snake__overlay", "Press Start, Enter, or a direction");
@@ -209,15 +293,17 @@
     arcade.dataset.landingSnake = "";
     arcade.dataset.geoMotion = "snake-arcade";
     title.id = "landing-snake-title";
+    description.id = "landing-snake-dialog-description";
     arcade.setAttribute("aria-labelledby", title.id);
     headingCopy.append(
       el("p", "eyebrow", "Playable Python preview"),
       title,
-      el("p", null, "Collect data cores. Avoid asteroids and your own trail. Crossing an edge warps you to the opposite side.")
+      description
     );
     [
-      ["Score", "000", "snakeScore"],
-      ["Best", "000", "snakeBest"],
+      ["Score", "0000 / 1000", "snakeScore"],
+      ["Best", "0000", "snakeBest"],
+      ["Splits", "3 / 3", "snakeSplits"],
       ["Signal", "Ready", "snakePhaseLabel"],
     ].forEach(function (metric) {
       var group = el("div");
@@ -237,9 +323,10 @@
 
     var toggle = snakeControl("Start mission", "button button--primary", "snakeAction", "toggle");
     toggle.setAttribute("aria-pressed", "false");
+    var split = snakeControl("Split trail · 3", "button button--quiet", "snakeAction", "split");
     var restart = snakeControl("Restart", "button button--quiet", "snakeAction", "restart");
     var describe = snakeControl("Describe field", "button button--quiet", "snakeAction", "describe");
-    actions.append(toggle, restart, describe);
+    actions.append(toggle, split, restart, describe);
 
     [
       ["↑", "up", "Steer up"],
@@ -252,6 +339,7 @@
       dpad.append(button);
     });
     dpad.setAttribute("aria-label", "Touch steering controls");
+    dpad.setAttribute("role", "group");
 
     instructions.id = "landing-snake-instructions";
     instructions.append(
@@ -259,6 +347,8 @@
       document.createTextNode(" steer · "),
       el("strong", null, "Space"),
       document.createTextNode(" pauses · "),
+      el("strong", null, "X"),
+      document.createTextNode(" splits · "),
       el("strong", null, "R"),
       document.createTextNode(" restarts")
     );
@@ -269,6 +359,30 @@
     controls.append(actions, dpad);
     arcade.append(heading, playfield, controls, instructions, liveStatus);
     return arcade;
+  }
+
+  function renderSnakeDialog() {
+    var dialog = el("dialog", "landing-snake-dialog");
+    var frame = el("div", "landing-snake-dialog__frame");
+    var topbar = el("header", "landing-snake-dialog__topbar");
+    var close = el("button", "landing-snake-dialog__close", "×");
+    var topbarCopy = el("div");
+
+    dialog.id = "landing-snake-dialog";
+    dialog.dataset.snakeDialog = "";
+    dialog.setAttribute("aria-labelledby", "landing-snake-title");
+    dialog.setAttribute("aria-describedby", "landing-snake-dialog-description");
+    close.type = "button";
+    close.dataset.snakeClose = "";
+    close.setAttribute("aria-label", "Close Python Snake");
+    topbarCopy.append(
+      el("span", "eyebrow", "Python logic lab"),
+      el("strong", null, "Optional arcade")
+    );
+    topbar.append(topbarCopy, close);
+    frame.append(topbar, renderSnakeArcade());
+    dialog.append(frame);
+    return dialog;
   }
 
   function renderLearningLoop() {

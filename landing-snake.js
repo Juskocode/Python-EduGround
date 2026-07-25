@@ -1254,7 +1254,10 @@
       var previousPowerUp = state.powerUp;
       var previousEffect = state.phaseTicks;
       state = step(state);
-      if (state.lastEvent.indexOf("powerup-") === 0 && previousPowerUp) {
+      if (
+        ["powerup-shield", "powerup-boost", "powerup-stasis"].includes(state.lastEvent) &&
+        previousPowerUp
+      ) {
         callAudio("playAchievement");
         syncView(
           powerUpLabel(previousPowerUp.type) +
