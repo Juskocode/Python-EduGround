@@ -25,9 +25,12 @@ const labs = context.window.PYGAME_LABS;
 
 test("the Pygame lab API exposes frozen deterministic models", () => {
   assert.equal(typeof labs.create, "function");
+  assert.equal(typeof labs.chooseDeterministicSpawn, "function");
   assert.equal(typeof labs.stepSnake, "function");
   assert.equal(typeof labs.stepPlatformer, "function");
+  assert.equal(typeof labs.stepSystems, "function");
   assert.equal(Object.isFrozen(labs), true);
+  assert.equal(typeof labs.create().renderFrameTracer, "function");
 
   const snake = labs.createSnakeState();
   const platformer = labs.createPlatformerState();
@@ -75,6 +78,39 @@ test("Snake rejects reversal, grows at food, and can disable edge wrapping", () 
   }
   assert.equal(bounded.status, "collision");
   assert.match(bounded.lastUpdate, /Boundary collision/u);
+});
+
+test("Snake completes a full grid without respawning food inside its body", () => {
+  const width = 8;
+  const height = 6;
+  const food = { x: 1, y: 0 };
+  const cells = Array.from({ length: width * height }, (_, index) => ({
+    x: index % width,
+    y: Math.floor(index / width),
+  })).filter((cell) => cell.x !== food.x || cell.y !== food.y);
+  const head = cells.findIndex((cell) => cell.x === 0 && cell.y === 0);
+  cells.unshift(cells.splice(head, 1)[0]);
+  const state = Object.freeze({
+    width,
+    height,
+    snake: Object.freeze(cells.map(Object.freeze)),
+    food: Object.freeze(food),
+    direction: "right",
+    queuedDirection: "right",
+    wrap: true,
+    tick: 10,
+    score: 44,
+    status: "moving",
+    lastEvent: "",
+    lastUpdate: "",
+  });
+
+  const completed = labs.stepSnake(state);
+  assert.equal(completed.status, "complete");
+  assert.equal(completed.food, null);
+  assert.equal(completed.snake.length, width * height);
+  assert.equal(completed.score, 45);
+  assert.equal(labs.stepSnake(completed), completed);
 });
 
 test("platformer parameters are bounded before entering the physics update", () => {
@@ -133,4 +169,59 @@ test("platformer jump, gravity, landing, and camera remain separate state transi
   assert.equal(state.x > 8, true);
   assert.equal(state.vx, 5);
   assert.equal(state.cameraX > 0, true);
+});
+
+test("deterministic spawn selection avoids occupied cells and replays from one seed", () => {
+  const occupied = [1, 5, 9];
+  const first = labs.chooseDeterministicSpawn(12, occupied, 4);
+  const replay = labs.chooseDeterministicSpawn(12, occupied, 4);
+
+  assert.equal(first, 11);
+  assert.equal(replay, first);
+  assert.equal(occupied.includes(first), false);
+  assert.equal(
+    labs.chooseDeterministicSpawn(3, [0, 1, 2], 99),
+    null,
+  );
+});
+
+test("systems lab keeps scene transitions, deterministic spawns, and boost time explicit", () => {
+  let state = labs.createSystemsState({ spawnSeed: 4 });
+  const initialSpawn = state.spawnCell;
+
+  assert.equal(state.mode, "title");
+  assert.equal(state.score, 0);
+  assert.equal(Object.isFrozen(state.occupiedCells), true);
+
+  const ignoredCollection = labs.stepSystems(state, "collect");
+  assert.equal(ignoredCollection.score, 0);
+  assert.equal(ignoredCollection.mode, "title");
+
+  state = labs.stepSystems(state, "start");
+  assert.equal(state.mode, "running");
+
+  state = labs.stepSystems(state, "collect");
+  assert.equal(state.score, 50);
+  assert.equal(state.boostRemainingMs, 1500);
+  assert.notEqual(state.spawnCell, initialSpawn);
+
+  state = labs.stepSystems(state, "toggle-pause");
+  const paused = labs.stepSystems(state, "tick", 1000);
+  assert.equal(paused.mode, "paused");
+  assert.equal(paused.tick, state.tick);
+  assert.equal(paused.boostRemainingMs, 1500);
+
+  state = labs.stepSystems(paused, "toggle-pause");
+  state = labs.stepSystems(state, "tick", 1000);
+  state = labs.stepSystems(state, "tick", 800);
+  assert.equal(state.tick, 2);
+  assert.equal(state.boostRemainingMs, 0);
+  assert.match(state.lastTransition, /expired once/u);
+
+  state = labs.stepSystems(state, "collision");
+  assert.equal(state.mode, "game-over");
+  state = labs.stepSystems(state, "restart");
+  assert.equal(state.mode, "running");
+  assert.equal(state.tick, 0);
+  assert.equal(state.score, 0);
 });

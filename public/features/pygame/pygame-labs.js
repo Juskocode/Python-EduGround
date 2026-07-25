@@ -53,7 +53,7 @@
       snake: Object.freeze(state.snake.map(function (segment) {
         return point(segment.x, segment.y);
       })),
-      food: point(state.food.x, state.food.y),
+      food: state.food ? point(state.food.x, state.food.y) : null,
       direction: state.direction,
       queuedDirection: state.queuedDirection,
       wrap: Boolean(state.wrap),
@@ -101,7 +101,12 @@
   }
 
   function queueSnakeDirection(state, direction) {
-    if (!state || !DIRECTIONS[direction] || state.status === "collision") {
+    if (
+      !state ||
+      !DIRECTIONS[direction] ||
+      state.status === "collision" ||
+      state.status === "complete"
+    ) {
       return state;
     }
     if (isOpposite(state.direction, direction)) {
@@ -153,11 +158,11 @@
         return candidate;
       }
     }
-    return { x: 0, y: 0 };
+    return null;
   }
 
   function stepSnake(state, options) {
-    if (!state || state.status === "collision") {
+    if (!state || state.status === "collision" || state.status === "complete") {
       return state;
     }
     var settings = options || {};
@@ -222,20 +227,26 @@
       movedSnake.pop();
     }
     var nextTick = state.tick + 1;
+    var food = ate
+      ? nextFood(state.width, state.height, movedSnake, nextTick)
+      : state.food;
+    var completed = ate && food === null;
     return freezeSnakeState({
       width: state.width,
       height: state.height,
       snake: movedSnake,
-      food: ate ? nextFood(state.width, state.height, movedSnake, nextTick) : state.food,
+      food: food,
       direction: direction,
       queuedDirection: direction,
       wrap: wrap,
       tick: nextTick,
       score: state.score + (ate ? 1 : 0),
-      status: ate ? "ate" : "moving",
+      status: completed ? "complete" : ate ? "ate" : "moving",
       lastEvent: "Handled " + direction + " from the event queue.",
-      lastUpdate: ate
-        ? "Moved the head and kept the tail, so the snake grew."
+      lastUpdate: completed
+        ? "Moved the head, kept the tail, and filled every cell."
+        : ate
+          ? "Moved the head and kept the tail, so the snake grew."
         : "Moved the head and removed the tail, preserving length."
     });
   }
@@ -360,6 +371,141 @@
     });
   }
 
+  function normalizeOccupiedCells(cells, cellCount) {
+    var source = Array.isArray(cells) ? cells : [];
+    var result = [];
+    source.forEach(function (cell) {
+      var value = Math.floor(Number(cell));
+      if (
+        Number.isFinite(value) &&
+        value >= 0 &&
+        value < cellCount &&
+        result.indexOf(value) < 0
+      ) {
+        result.push(value);
+      }
+    });
+    return result;
+  }
+
+  function chooseDeterministicSpawn(cellCount, occupiedCells, seed) {
+    var count = integer(cellCount, 12, 1, 64);
+    var occupied = normalizeOccupiedCells(occupiedCells, count);
+    var start = ((Math.floor(Number(seed) || 0) * 5 + 3) % count + count) % count;
+    for (var offset = 0; offset < count; offset += 1) {
+      var candidate = (start + offset) % count;
+      if (occupied.indexOf(candidate) < 0) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  function freezeSystemsState(state) {
+    return Object.freeze({
+      cellCount: state.cellCount,
+      occupiedCells: Object.freeze(state.occupiedCells.slice()),
+      mode: state.mode,
+      tick: state.tick,
+      score: state.score,
+      boostRemainingMs: state.boostRemainingMs,
+      spawnSeed: state.spawnSeed,
+      spawnCell: state.spawnCell,
+      lastAction: state.lastAction,
+      lastTransition: state.lastTransition
+    });
+  }
+
+  function createSystemsState(options) {
+    var settings = options || {};
+    var cellCount = integer(settings.cellCount, 12, 8, 24);
+    var occupiedCells = normalizeOccupiedCells(
+      settings.occupiedCells || [1, 5, 9],
+      cellCount
+    );
+    var spawnSeed = integer(settings.spawnSeed, 4, 0, 9999);
+    return freezeSystemsState({
+      cellCount: cellCount,
+      occupiedCells: occupiedCells,
+      mode: "title",
+      tick: 0,
+      score: 0,
+      boostRemainingMs: 0,
+      spawnSeed: spawnSeed,
+      spawnCell: chooseDeterministicSpawn(cellCount, occupiedCells, spawnSeed),
+      lastAction: "No action yet.",
+      lastTransition: "Title mode waits for an explicit start event."
+    });
+  }
+
+  function stepSystems(state, action, elapsedMs) {
+    if (!state) {
+      return state;
+    }
+    var next = {
+      cellCount: state.cellCount,
+      occupiedCells: state.occupiedCells,
+      mode: state.mode,
+      tick: state.tick,
+      score: state.score,
+      boostRemainingMs: state.boostRemainingMs,
+      spawnSeed: state.spawnSeed,
+      spawnCell: state.spawnCell,
+      lastAction: String(action || "tick"),
+      lastTransition: "No legal state transition for this action."
+    };
+    var eventName = String(action || "tick");
+
+    if (eventName === "start" && state.mode === "title") {
+      next.mode = "running";
+      next.lastTransition = "title → running; gameplay updates are now enabled.";
+    } else if (eventName === "toggle-pause" && state.mode === "running") {
+      next.mode = "paused";
+      next.lastTransition = "running → paused; events and drawing continue, gameplay clocks stop.";
+    } else if (eventName === "toggle-pause" && state.mode === "paused") {
+      next.mode = "running";
+      next.lastTransition = "paused → running; the next elapsed value should be clamped.";
+    } else if (eventName === "collect" && state.mode === "running") {
+      next.score += 50;
+      next.boostRemainingMs = 1500;
+      next.spawnSeed += 1;
+      next.spawnCell = chooseDeterministicSpawn(
+        state.cellCount,
+        state.occupiedCells.concat(
+          state.spawnCell === null ? [] : [state.spawnCell]
+        ),
+        next.spawnSeed
+      );
+      next.lastTransition = "Power-up collected: score increased, boost timer started, and the next seeded free cell was selected.";
+    } else if (eventName === "collision" && state.mode === "running") {
+      next.mode = "game-over";
+      next.lastTransition = "running → game-over; movement and effect timers are now disabled.";
+    } else if (eventName === "restart" && state.mode === "game-over") {
+      next.mode = "running";
+      next.tick = 0;
+      next.score = 0;
+      next.boostRemainingMs = 0;
+      next.spawnSeed += 1;
+      next.spawnCell = chooseDeterministicSpawn(
+        state.cellCount,
+        state.occupiedCells,
+        next.spawnSeed
+      );
+      next.lastTransition = "game-over → running; transient state reset with a reproducible next seed.";
+    } else if (eventName === "tick" && state.mode === "running") {
+      var delta = finite(elapsedMs, 250, 0, 1000);
+      next.tick += 1;
+      next.boostRemainingMs = Math.max(0, state.boostRemainingMs - delta);
+      next.lastTransition = state.boostRemainingMs > 0 && next.boostRemainingMs === 0
+        ? "The boost timer crossed zero, so the temporary effect expired once."
+        : "Running update advanced timers by " + delta + " ms.";
+    } else if (eventName === "tick" && state.mode === "paused") {
+      next.lastTransition = "Paused update ignored elapsed time; events and drawing may still continue.";
+    }
+
+    return freezeSystemsState(next);
+  }
+
   function el(tagName, className, textContent) {
     var node = document.createElement(tagName);
     if (className) {
@@ -426,6 +572,214 @@
     if (mark) {
       mark.textContent = "✓";
     }
+  }
+
+  function renderFrameTracer(lab, announce) {
+    if (!lab || lab.kind !== "pygame-frame-tracer") {
+      return null;
+    }
+    var phases = Array.isArray(lab.phases) ? lab.phases : [];
+    var scenarios = Array.isArray(lab.scenarios) ? lab.scenarios : [];
+    if (!phases.length || !scenarios.length) {
+      return null;
+    }
+    var activePhase = 0;
+    var block = el("section", "pygame-lab pygame-lab--tracer");
+    var heading = el("header", "pygame-lab__heading");
+    var title = el("h3", null, lab.title);
+    var scenarioLabel = el("label", "pygame-tracer__scenario");
+    var scenarioSelect = el("select");
+    var phaseNavigation = el("div", "pygame-tracer__phases");
+    var phasePrompt = el("p", "pygame-tracer__prompt");
+    var parameterFieldset = el("fieldset", "pygame-tracer__parameters");
+    var parameterSummary = el("output", "pygame-tracer__parameter-summary");
+    var snapshots = el("div", "pygame-tracer__snapshots");
+    var snapshotOutputs = {};
+    var teachingNote = el("aside", "pygame-tracer__teaching-note");
+    var nextButton = el("button", "button button--primary", "Reveal next phase");
+    var status = el("p", "pygame-lab__status");
+    var invariants = el("ul", "pygame-tracer__invariants");
+    var controlInputs = [];
+
+    title.id = "pygame-frame-tracer-title";
+    block.dataset.pygameLab = "frame-tracer";
+    block.setAttribute("aria-labelledby", title.id);
+    heading.append(
+      el("span", "eyebrow", "Guided frame tracer"),
+      title,
+      el("p", null, lab.description)
+    );
+
+    scenarioSelect.id = "pygame-frame-tracer-scenario";
+    scenarios.forEach(function (scenario) {
+      var option = el("option", null, scenario.label);
+      option.value = scenario.id;
+      option.selected = scenario.id === lab.defaultScenario;
+      scenarioSelect.append(option);
+    });
+    scenarioLabel.htmlFor = scenarioSelect.id;
+    scenarioLabel.append(el("span", null, "Scenario"), scenarioSelect);
+
+    phases.forEach(function (phase, index) {
+      var button = el("button", "pygame-tracer__phase", phase.label);
+      button.type = "button";
+      button.dataset.tracerPhase = String(index);
+      button.setAttribute("aria-pressed", "false");
+      phaseNavigation.append(button);
+    });
+
+    parameterFieldset.append(el("legend", null, "Prediction controls"));
+    (Array.isArray(lab.controls) ? lab.controls : []).forEach(function (control) {
+      var label = el("label");
+      var input;
+      var valueOutput = el("output");
+      if (control.type === "select") {
+        input = el("select");
+        (Array.isArray(control.values) ? control.values : []).forEach(function (value) {
+          var option = el("option", null, value);
+          option.value = String(value);
+          option.selected = value === control.defaultValue;
+          input.append(option);
+        });
+      } else {
+        input = el("input");
+        input.type = control.type === "toggle" ? "checkbox" : "range";
+        if (control.type === "toggle") {
+          input.checked = Boolean(control.defaultValue);
+        } else {
+          input.min = String(control.min);
+          input.max = String(control.max);
+          input.step = String(control.step);
+          input.value = String(control.defaultValue);
+        }
+      }
+      input.id = "pygame-tracer-control-" + control.id;
+      input.dataset.tracerControl = control.id;
+      input.dataset.tracerLabel = control.label;
+      label.htmlFor = input.id;
+      label.append(el("span", null, control.label), valueOutput, input);
+      parameterFieldset.append(label);
+      controlInputs.push({ definition: control, input: input, output: valueOutput });
+    });
+    parameterFieldset.append(parameterSummary);
+
+    [
+      ["previous", "Previous snapshot"],
+      ["intent", "Interpreted intent"],
+      ["candidate", "Candidate state"],
+      ["committed", "Committed state"]
+    ].forEach(function (definition) {
+      var card = el("article", "pygame-tracer__snapshot");
+      var output = el("output");
+      output.dataset.tracerSnapshot = definition[0];
+      snapshotOutputs[definition[0]] = { card: card, output: output };
+      card.append(el("strong", null, definition[1]), output);
+      snapshots.append(card);
+    });
+    teachingNote.append(
+      el("strong", null, "Why this trace matters"),
+      el("p")
+    );
+    (Array.isArray(lab.invariants) ? lab.invariants : []).forEach(function (item) {
+      invariants.append(el("li", null, item));
+    });
+    nextButton.type = "button";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("aria-atomic", "true");
+    block.append(
+      heading,
+      scenarioLabel,
+      phaseNavigation,
+      phasePrompt,
+      parameterFieldset,
+      snapshots,
+      teachingNote,
+      nextButton,
+      el("h4", "pygame-tracer__invariants-title", "Rules that stay true"),
+      invariants,
+      status
+    );
+
+    function selectedScenario() {
+      return scenarios.find(function (scenario) {
+        return scenario.id === scenarioSelect.value;
+      }) || scenarios[0];
+    }
+
+    function readControlValue(entry) {
+      if (entry.definition.type === "toggle") {
+        return entry.input.checked ? "on" : "off";
+      }
+      return entry.input.value;
+    }
+
+    function render(speak) {
+      var scenario = selectedScenario();
+      var phase = phases[activePhase];
+      phaseNavigation.querySelectorAll("[data-tracer-phase]").forEach(function (button) {
+        var isActive = Number(button.dataset.tracerPhase) === activePhase;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", String(isActive));
+      });
+      phasePrompt.textContent = phase.prompt;
+      controlInputs.forEach(function (entry) {
+        var value = readControlValue(entry);
+        entry.output.value = value;
+        entry.output.textContent = value;
+      });
+      var summary = controlInputs.map(function (entry) {
+        return entry.definition.label + "=" + readControlValue(entry);
+      }).join(" · ");
+      parameterSummary.value = summary;
+      parameterSummary.textContent = summary;
+      ["previous", "intent", "candidate", "committed"].forEach(function (key, index) {
+        var entry = snapshotOutputs[key];
+        var revealAt = index === 0 ? 0 : index;
+        entry.card.hidden = activePhase < revealAt;
+        entry.output.value = scenario[key];
+        entry.output.textContent = scenario[key];
+      });
+      teachingNote.hidden = activePhase < phases.length - 1;
+      teachingNote.querySelector("p").textContent = scenario.teachingNote;
+      nextButton.textContent = activePhase < phases.length - 1
+        ? "Reveal next phase"
+        : "Restart trace";
+      status.textContent = (
+        scenario.label + ". " + phase.label + " of " + phases.length +
+        ". " + (activePhase < phases.length - 1
+          ? "Predict before revealing the next snapshot."
+          : "Trace complete; compare every committed field with your prediction.")
+      );
+      if (speak) {
+        announce(status.textContent);
+      }
+    }
+
+    phaseNavigation.addEventListener("click", function (event) {
+      var button = event.target.closest("[data-tracer-phase]");
+      if (!button) {
+        return;
+      }
+      activePhase = integer(button.dataset.tracerPhase, 0, 0, phases.length - 1);
+      render(true);
+    });
+    scenarioSelect.addEventListener("change", function () {
+      activePhase = 0;
+      render(true);
+    });
+    parameterFieldset.addEventListener("input", function () {
+      render(false);
+    });
+    parameterFieldset.addEventListener("change", function () {
+      render(true);
+    });
+    nextButton.addEventListener("click", function () {
+      activePhase = activePhase < phases.length - 1 ? activePhase + 1 : 0;
+      render(true);
+    });
+    render(false);
+    return block;
   }
 
   function renderSnakeLab(announce) {
@@ -568,16 +922,19 @@
           );
         }
       });
-      var foodCell = cells[state.food.y * state.width + state.food.x];
-      if (foodCell) {
-        foodCell.classList.add("pygame-snake__cell--food");
+      if (state.food) {
+        var foodCell = cells[state.food.y * state.width + state.food.x];
+        if (foodCell) {
+          foodCell.classList.add("pygame-snake__cell--food");
+        }
       }
       eventOutput.value = state.lastEvent;
       eventOutput.textContent = state.lastEvent;
       updateOutput.value = state.lastUpdate;
       updateOutput.textContent = state.lastUpdate;
       var drawText = (
-        "Drew " + state.snake.length + " snake segments and one food item."
+        "Drew " + state.snake.length + " snake segments and " +
+        (state.food ? "one food item." : "no food: the grid is complete.")
       );
       drawOutput.value = drawText;
       drawOutput.textContent = drawText;
@@ -590,6 +947,8 @@
       );
       if (state.status === "collision") {
         status.textContent += " Collision: reset to continue.";
+      } else if (state.status === "complete") {
+        status.textContent += " Grid complete: reset to replay.";
       }
       if (discoveries.event) {
         completeDiscovery(block, "snake-event");
@@ -621,13 +980,18 @@
       discoveries.update = true;
       discoveries.food = discoveries.food || state.score > previousScore;
       renderState(speak);
-      if (state.status === "collision") {
+      if (state.status === "collision" || state.status === "complete") {
         stop();
       }
     }
 
     function start() {
-      if (reducedMotion || running || state.status === "collision") {
+      if (
+        reducedMotion ||
+        running ||
+        state.status === "collision" ||
+        state.status === "complete"
+      ) {
         return;
       }
       running = true;
@@ -754,7 +1118,7 @@
       el(
         "p",
         null,
-        "Use A/D or Arrow keys to move and Space to jump. Change one physics value, predict the effect, then compare the state inspector."
+        "Use A/D or Arrow keys to move and Space to jump. This lab measures height above ground as positive upward; a local Pygame adapter maps it to downward-growing screen y."
       )
     );
 
@@ -832,7 +1196,7 @@
 
     [
       ["x", "World x"],
-      ["y", "World y"],
+      ["y", "Height above ground"],
       ["vx", "Horizontal velocity"],
       ["vy", "Vertical velocity"],
       ["grounded", "Grounded"],
@@ -876,8 +1240,9 @@
       outputs.collision.textContent = state.lastCollision;
       status.textContent = (
         "Frame " + state.tick +
-        ". World position " + state.x.toFixed(1) + ", " + state.y.toFixed(1) +
-        ". Vertical velocity " + state.vy.toFixed(1) +
+        ". World x " + state.x.toFixed(1) +
+        ". Height above ground " + state.y.toFixed(1) +
+        ". Up-positive velocity " + state.vy.toFixed(1) +
         ". Camera offset " + state.cameraX.toFixed(1) + "."
       );
       if (state.vx !== 0) {
@@ -1033,6 +1398,267 @@
     return block;
   }
 
+  function renderSystemsLab(announce) {
+    var state = createSystemsState();
+    var block = el("section", "pygame-lab pygame-lab--systems");
+    var heading = el("header", "pygame-lab__heading");
+    var title = el("h3", null, "Lab 3 · Direct modes, spawns, and power-ups");
+    var workspace = el("div", "pygame-lab__workspace");
+    var visual = el("div", "pygame-lab__visual");
+    var board = el("div", "pygame-systems");
+    var modes = el("ol", "pygame-systems__modes");
+    var controls = el("div", "pygame-lab__controls");
+    var transport = el("div", "pygame-lab__transport");
+    var startButton = el("button", "button button--primary", "Start run");
+    var tickButton = el("button", "button button--quiet", "Advance 250 ms");
+    var pauseButton = el("button", "button button--quiet", "Pause");
+    var collectButton = el("button", "button button--quiet", "Collect power-up");
+    var collisionButton = el("button", "button button--quiet", "Simulate collision");
+    var restartButton = el("button", "button button--quiet", "Restart run");
+    var resetButton = el("button", "button button--quiet", "Reset lab");
+    var parameters = el("fieldset", "pygame-lab__parameters");
+    var seedLabel = el("label");
+    var seed = el("input");
+    var seedOutput = el("output");
+    var status = el("p", "pygame-lab__status");
+    var inspector = el("aside", "pygame-lab__inspector");
+    var outputs = {};
+    var discoveries = {
+      running: false,
+      paused: false,
+      power: false,
+      expired: false,
+      recovery: false
+    };
+    var discoveryList = renderDiscoveryList([
+      { id: "systems-running", label: "Enter running through an explicit start event." },
+      { id: "systems-paused", label: "Prove that a paused tick preserves gameplay timers." },
+      { id: "systems-power", label: "Collect a power-up and move the deterministic spawn." },
+      { id: "systems-expired", label: "Advance until the temporary boost expires at zero." },
+      { id: "systems-recovery", label: "Recover from game-over through one restart transition." }
+    ]);
+
+    title.id = "pygame-systems-lab-title";
+    block.setAttribute("aria-labelledby", title.id);
+    block.dataset.pygameLab = "systems";
+    heading.append(
+      el("span", "eyebrow", "State machine → seeded spawn → timed effect"),
+      title,
+      el(
+        "p",
+        null,
+        "Drive the same systems that make arcade gameplay recoverable. Each button is an event; illegal transitions leave state unchanged and explain why."
+      )
+    );
+
+    board.setAttribute("role", "img");
+    board.setAttribute(
+      "aria-label",
+      "Twelve-cell deterministic spawn board with three occupied cells and one power-up"
+    );
+    for (var index = 0; index < state.cellCount; index += 1) {
+      var cell = el("span", "pygame-systems__cell");
+      cell.dataset.systemsCell = String(index);
+      cell.setAttribute("aria-hidden", "true");
+      board.append(cell);
+    }
+
+    ["title", "running", "paused", "game-over"].forEach(function (modeName) {
+      var item = el("li", null, modeName);
+      item.dataset.systemsMode = modeName;
+      modes.append(item);
+    });
+    visual.append(board, modes);
+
+    [
+      startButton,
+      tickButton,
+      pauseButton,
+      collectButton,
+      collisionButton,
+      restartButton,
+      resetButton
+    ].forEach(function (button) {
+      button.type = "button";
+    });
+    transport.append(
+      startButton,
+      tickButton,
+      pauseButton,
+      collectButton,
+      collisionButton,
+      restartButton,
+      resetButton
+    );
+
+    seed.type = "range";
+    seed.min = "0";
+    seed.max = "20";
+    seed.step = "1";
+    seed.value = String(state.spawnSeed);
+    seed.id = "pygame-systems-seed";
+    seed.dataset.systemsSeed = "true";
+    seedOutput.dataset.systemsSeedOutput = "true";
+    seedLabel.htmlFor = seed.id;
+    seedLabel.append(
+      el("span", null, "Replay seed"),
+      seedOutput,
+      seed,
+      el("small", null, "The same seed and occupied cells choose the same spawn.")
+    );
+    parameters.append(el("legend", null, "Deterministic input"), seedLabel);
+    controls.append(transport, parameters);
+    visual.append(controls, status);
+
+    [
+      ["mode", "Scene mode"],
+      ["tick", "Gameplay tick"],
+      ["score", "Score"],
+      ["boost", "Boost remaining"],
+      ["seed", "Spawn seed"],
+      ["spawn", "Power-up cell"],
+      ["transition", "Transition evidence"]
+    ].forEach(function (definition) {
+      var row = el("div", "pygame-lab__state-row");
+      var output = el("output");
+      if (definition[0] === "transition") {
+        row.classList.add("pygame-lab__state-row--wide");
+      }
+      outputs[definition[0]] = output;
+      row.append(el("span", null, definition[1]), output);
+      inspector.append(row);
+    });
+    inspector.prepend(
+      el("span", "eyebrow", "Systems inspector"),
+      el("h4", null, "One event, one legal transition")
+    );
+    inspector.append(el("h4", null, "Studio checks"), discoveryList);
+    workspace.append(visual, inspector);
+    block.append(heading, workspace);
+
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("aria-atomic", "true");
+
+    function renderState(speak) {
+      Array.prototype.forEach.call(board.children, function (cell, cellIndex) {
+        cell.className = "pygame-systems__cell";
+        cell.textContent = "";
+        if (state.occupiedCells.indexOf(cellIndex) >= 0) {
+          cell.classList.add("pygame-systems__cell--occupied");
+        }
+        if (state.spawnCell === cellIndex) {
+          cell.classList.add("pygame-systems__cell--power");
+          cell.textContent = "✦";
+        }
+      });
+      Array.prototype.forEach.call(modes.children, function (item) {
+        item.classList.toggle(
+          "is-active",
+          item.dataset.systemsMode === state.mode
+        );
+      });
+      outputs.mode.value = state.mode;
+      outputs.mode.textContent = state.mode;
+      outputs.tick.value = String(state.tick);
+      outputs.tick.textContent = String(state.tick);
+      outputs.score.value = String(state.score);
+      outputs.score.textContent = String(state.score);
+      outputs.boost.value = state.boostRemainingMs + " ms";
+      outputs.boost.textContent = state.boostRemainingMs + " ms";
+      outputs.seed.value = String(state.spawnSeed);
+      outputs.seed.textContent = String(state.spawnSeed);
+      outputs.spawn.value = state.spawnCell === null ? "none free" : String(state.spawnCell);
+      outputs.spawn.textContent = state.spawnCell === null ? "none free" : String(state.spawnCell);
+      outputs.transition.value = state.lastTransition;
+      outputs.transition.textContent = state.lastTransition;
+      seedOutput.value = String(state.spawnSeed);
+      seedOutput.textContent = String(state.spawnSeed);
+      seed.value = String(Math.min(20, state.spawnSeed));
+      status.textContent = (
+        "Mode " + state.mode +
+        ". Tick " + state.tick +
+        ". Score " + state.score +
+        ". Boost " + state.boostRemainingMs + " ms." +
+        " Power-up cell " + (state.spawnCell === null ? "unavailable" : state.spawnCell) + "."
+      );
+      startButton.disabled = state.mode !== "title";
+      tickButton.disabled = state.mode === "title" || state.mode === "game-over";
+      pauseButton.disabled = state.mode === "title" || state.mode === "game-over";
+      pauseButton.textContent = state.mode === "paused" ? "Resume" : "Pause";
+      collectButton.disabled = state.mode !== "running";
+      collisionButton.disabled = state.mode !== "running";
+      restartButton.disabled = state.mode !== "game-over";
+      Object.keys(discoveries).forEach(function (key) {
+        if (discoveries[key]) {
+          completeDiscovery(block, "systems-" + key);
+        }
+      });
+      if (speak) {
+        announce(status.textContent + " " + state.lastTransition);
+      }
+    }
+
+    function apply(action, elapsedMs) {
+      var previous = state;
+      state = stepSystems(state, action, elapsedMs);
+      discoveries.running = discoveries.running || state.mode === "running";
+      discoveries.paused = discoveries.paused || (
+        previous.mode === "paused" &&
+        action === "tick" &&
+        previous.tick === state.tick &&
+        previous.boostRemainingMs === state.boostRemainingMs
+      );
+      discoveries.power = discoveries.power || (
+        action === "collect" &&
+        state.score > previous.score &&
+        state.spawnCell !== previous.spawnCell
+      );
+      discoveries.expired = discoveries.expired || (
+        previous.boostRemainingMs > 0 &&
+        state.boostRemainingMs === 0
+      );
+      discoveries.recovery = discoveries.recovery || (
+        previous.mode === "game-over" &&
+        action === "restart" &&
+        state.mode === "running"
+      );
+      renderState(true);
+    }
+
+    startButton.addEventListener("click", function () { apply("start"); });
+    tickButton.addEventListener("click", function () { apply("tick", 250); });
+    pauseButton.addEventListener("click", function () { apply("toggle-pause"); });
+    collectButton.addEventListener("click", function () { apply("collect"); });
+    collisionButton.addEventListener("click", function () { apply("collision"); });
+    restartButton.addEventListener("click", function () { apply("restart"); });
+    resetButton.addEventListener("click", function () {
+      state = createSystemsState({ spawnSeed: Number(seed.value) });
+      discoveries = {
+        running: false,
+        paused: false,
+        power: false,
+        expired: false,
+        recovery: false
+      };
+      block.querySelectorAll(".pygame-lab__discoveries li").forEach(function (item) {
+        item.classList.remove("is-complete");
+        var mark = item.querySelector(".pygame-lab__discovery-mark");
+        if (mark) {
+          mark.textContent = "○";
+        }
+      });
+      renderState(true);
+    });
+    seed.addEventListener("input", function () {
+      state = createSystemsState({ spawnSeed: Number(seed.value) });
+      renderState(true);
+    });
+
+    renderState(false);
+    return block;
+  }
+
   function create(options) {
     var settings = options || {};
     var announce = typeof settings.announce === "function"
@@ -1040,6 +1666,9 @@
       : function () {};
 
     return Object.freeze({
+      renderFrameTracer: function (_chapter, lab) {
+        return renderFrameTracer(lab, announce);
+      },
       render: function () {
         var root = el("div", "pygame-labs");
         var intro = el("aside", "pygame-labs__intro");
@@ -1053,7 +1682,12 @@
           ),
           renderLoopLegend()
         );
-        root.append(intro, renderSnakeLab(announce), renderPlatformerLab(announce));
+        root.append(
+          intro,
+          renderSnakeLab(announce),
+          renderPlatformerLab(announce),
+          renderSystemsLab(announce)
+        );
         return root;
       }
     });
@@ -1061,11 +1695,14 @@
 
   window.PYGAME_LABS = Object.freeze({
     create: create,
+    chooseDeterministicSpawn: chooseDeterministicSpawn,
     createPlatformerState: createPlatformerState,
     createSnakeState: createSnakeState,
+    createSystemsState: createSystemsState,
     normalizePlatformerParameters: normalizePlatformerParameters,
     queueSnakeDirection: queueSnakeDirection,
     stepPlatformer: stepPlatformer,
-    stepSnake: stepSnake
+    stepSnake: stepSnake,
+    stepSystems: stepSystems
   });
 })();

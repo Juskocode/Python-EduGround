@@ -18,7 +18,7 @@ test.afterEach(async () => {
   expect(unexpectedBrowserErrors).toEqual([]);
 });
 
-test("the Pygame class connects game-loop theory to two interactive labs", async ({
+test("the Pygame class connects game-loop theory to three interactive systems labs", async ({
   page,
 }) => {
   await page.goto("/#chapter/py13/tutorials");
@@ -72,6 +72,39 @@ test("the Pygame class connects game-loop theory to two interactive labs", async
     platformerLab.locator('[data-platform-parameter-output="gravity"]'),
   ).toHaveText("24");
 
+  const systemsLab = page.locator('[data-pygame-lab="systems"]');
+  await expect(systemsLab).toBeVisible();
+  await expect(systemsLab.locator('[data-systems-mode="title"]')).toHaveClass(
+    /is-active/u,
+  );
+  await systemsLab.getByRole("button", { name: "Start run", exact: true }).click();
+  await expect(systemsLab.locator('[data-systems-mode="running"]')).toHaveClass(
+    /is-active/u,
+  );
+  await systemsLab.getByRole("button", { name: "Collect power-up" }).click();
+  await expect(systemsLab.getByText("1500 ms", { exact: true }).first()).toBeVisible();
+  await expect(
+    systemsLab.locator('[data-discovery="systems-power"]'),
+  ).toHaveClass(/is-complete/u);
+  await systemsLab.getByRole("button", { name: "Pause" }).click();
+  await systemsLab.getByRole("button", { name: "Advance 250 ms" }).click();
+  await expect(
+    systemsLab.locator('[data-discovery="systems-paused"]'),
+  ).toHaveClass(/is-complete/u);
+
+  const frameTracer = page.locator('[data-pygame-lab="frame-tracer"]');
+  await expect(frameTracer).toBeVisible();
+  await expect(
+    frameTracer.locator('[data-tracer-snapshot="candidate"]'),
+  ).toBeHidden();
+  await frameTracer.getByRole("button", { name: "Reveal next phase" }).click();
+  await frameTracer.getByRole("button", { name: "Reveal next phase" }).click();
+  await expect(
+    frameTracer.locator('[data-tracer-snapshot="candidate"]'),
+  ).toBeVisible();
+  await frameTracer.getByLabel("Scenario").selectOption("power-expiry");
+  await expect(frameTracer).toContainText("Temporary boost expires");
+
   await expect(page.getByRole("link", {
     name: /Pygame events.*official documentation/u,
   })).toBeVisible();
@@ -113,6 +146,7 @@ test("the interactive studio remains usable without horizontal overflow on mobil
 
   await expect(page.locator('[data-pygame-lab="snake"]')).toBeVisible();
   await expect(page.locator('[data-pygame-lab="platformer"]')).toBeVisible();
+  await expect(page.locator('[data-pygame-lab="systems"]')).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   );

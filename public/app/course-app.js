@@ -1226,6 +1226,13 @@
     if (lab.kind === "rounding-boundaries" && roundingLabController) {
       return roundingLabController.render(chapter, lab);
     }
+    if (
+      lab.kind === "pygame-frame-tracer" &&
+      pygameLabsController &&
+      typeof pygameLabsController.renderFrameTracer === "function"
+    ) {
+      return pygameLabsController.renderFrameTracer(chapter, lab);
+    }
     return null;
   }
 
