@@ -403,14 +403,14 @@ conflict journeys remain explicit roadmap items.
 | Path | Responsibility |
 | --- | --- |
 | `public/` | The complete and only HTTP-served browser application |
-| `public/app/` | Router, application orchestration, audio, theme bootstrap, and shared source-shape helpers |
+| `public/app/` | Application composition with dedicated bootstrap, feedback, and routing modules |
 | `public/content/` | Solution-free curriculum data, generated starters, and visible/hidden learning checks |
-| `public/features/` | Vertical UI features with their controller/view and local styles together |
-| `public/styles/` | Shared responsive visual system and exercise-workbench chrome |
-| `public/workers/` | Dedicated browser-Python worker and execution boundary |
+| `public/features/` | Vertical UI features, including exercise-only grading and route layout |
+| `public/styles/` | Shared responsive visual system used across multiple routes |
+| `public/workers/` | Testable main-thread runner client plus the dedicated browser-Python worker execution boundary |
 | `public/assets/` | Vendored Ace runtime, original illustrations, sprites, and other static media |
 | `src/server/` | NodeNext server source; strict TypeScript is introduced here incrementally |
-| `src/server/api/` | Same-origin account, state, file, run-history, and health routes |
+| `src/server/api/` | Same-origin API composition plus narrow typed route modules |
 | `src/server/curriculum/` | Stable exercise manifest and private submission-file mirror |
 | `src/server/http/` | Static-file and HTTP response helpers |
 | `src/server/persistence/` | PostgreSQL configuration, migrations, and learner-state operations |

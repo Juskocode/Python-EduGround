@@ -240,6 +240,10 @@ owns the documentation shell and embedded workspace markup.
 [`public/app/course-app.js`](../public/app/course-app.js) supplies the runner,
 answer checks, draft storage, progress, deep dives, runbooks, official references,
 and navigation.
+The worker lifecycle itself is isolated in
+[`public/workers/python-runner-client.js`](../public/workers/python-runner-client.js);
+the course app injects its `prepare` and `run` operations into both classroom and
+assessment workspaces.
 
 Room completions are stored in the existing per-chapter learning-progress set as
 `room:<task id>`. They are idempotent and separate from passed exercise IDs, stars,

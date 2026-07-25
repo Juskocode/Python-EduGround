@@ -10,7 +10,7 @@
     <meta name="color-scheme" content="light dark" />
     <title>Python EduGround · Learning Path</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <script src="/app/theme-bootstrap.js"></script>
+    <script src="/app/bootstrap/theme-bootstrap.js"></script>
     <link rel="stylesheet" href="/styles/course-ui.css" />
     <link rel="stylesheet" href="/features/landing/landing-ui.css" />
     <link rel="stylesheet" href="/features/dashboard/dashboard-ui.css" />
@@ -23,7 +23,7 @@
     <link rel="stylesheet" href="/styles/geospace-ui.css" />
     <link rel="stylesheet" href="/features/progress/progress-snake.css" />
     <link rel="stylesheet" href="/features/landing/landing-snake.css" />
-    <link rel="stylesheet" href="/styles/workbench-mode.css" />
+    <link rel="stylesheet" href="/features/exercise/workbench-mode.css" />
   </head>
   <body>
     <a class="skip-link" href="#app-main">Skip to learning content</a>
@@ -152,8 +152,10 @@
     <script src="/assets/vendor/ace/keybinding-vim.js" defer></script>
     <script src="/assets/vendor/ace/mode-python.js" defer></script>
     <script src="/assets/vendor/ace/theme-monokai.js" defer></script>
-    <script src="/app/audio-feedback.js" defer></script>
-    <script src="/app/solution-shape.js" defer></script>
+    <script src="/app/feedback/audio-feedback.js" defer></script>
+    <script src="/features/exercise/solution-shape.js" defer></script>
+    <script src="/app/routing/course-router.js" defer></script>
+    <script src="/workers/python-runner-client.js" defer></script>
     <script src="/app/course-app.js" defer></script>
   </body>
 </html>

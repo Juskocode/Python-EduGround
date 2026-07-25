@@ -7,7 +7,10 @@ import vm from "node:vm";
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const [engineSource, earlyTestData, recursionTestData] = await Promise.all([
-  readFile(resolve(REPOSITORY_ROOT, "public/app/solution-shape.js"), "utf8"),
+  readFile(
+    resolve(REPOSITORY_ROOT, "public/features/exercise/solution-shape.js"),
+    "utf8",
+  ),
   readFile(
     resolve(REPOSITORY_ROOT, "public/content/exercise-tests/tests-py01-03.js"),
     "utf8",

@@ -57,7 +57,7 @@ test("static learning remains available while cloud saving reports unavailable",
   assert.match(home.headers.get("permissions-policy"), /camera=\(\)/u);
   assert.match(await home.text(), /Python EduGround/u);
 
-  const themeBootstrap = await fetch(`${url}/app/theme-bootstrap.js`);
+  const themeBootstrap = await fetch(`${url}/app/bootstrap/theme-bootstrap.js`);
   assert.equal(themeBootstrap.status, 200);
   assert.match(await themeBootstrap.text(), /prefers-color-scheme/u);
 

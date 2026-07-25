@@ -17,13 +17,13 @@ test("required playground assets remain public from their organized URLs", async
   for (const pathname of [
     "/",
     "/favicon.svg",
-    "/app/theme-bootstrap.js",
-    "/app/audio-feedback.js",
-    "/app/solution-shape.js",
+    "/app/bootstrap/theme-bootstrap.js",
+    "/app/feedback/audio-feedback.js",
+    "/features/exercise/solution-shape.js",
     "/app/course-app.js",
     "/styles/course-ui.css",
     "/styles/geospace-ui.css",
-    "/styles/workbench-mode.css",
+    "/features/exercise/workbench-mode.css",
     "/features/landing/landing-snake.css",
     "/features/landing/landing-snake.js",
     "/features/landing/landing-ui.css",
@@ -93,7 +93,9 @@ test("the toolbox data loads before the application reads it", async () => {
     'src="/features/stage-recap/stage-recap-view.js"',
   );
   const dashboardViewPosition = index.indexOf('src="/features/dashboard/dashboard-view.js"');
-  const solutionShapePosition = index.indexOf('src="/app/solution-shape.js"');
+  const solutionShapePosition = index.indexOf(
+    'src="/features/exercise/solution-shape.js"',
+  );
   const applicationPosition = index.indexOf('src="/app/course-app.js"');
 
   assert.ok(learningContentPosition >= 0, "index should load learning-content.js");
@@ -133,7 +135,9 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
     'href="/features/progress/progress-snake.css"',
   );
   const landingSnakePosition = index.indexOf('href="/features/landing/landing-snake.css"');
-  const workbenchModePosition = index.indexOf('href="/styles/workbench-mode.css"');
+  const workbenchModePosition = index.indexOf(
+    'href="/features/exercise/workbench-mode.css"',
+  );
 
   assert.ok(courseUiPosition >= 0, "index should load course-ui.css");
   assert.ok(dashboardUiPosition > courseUiPosition, "dashboard UI should load after shared course styles");

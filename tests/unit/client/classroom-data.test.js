@@ -13,7 +13,7 @@ const classMaterialsSource = await readFile(
   "utf8",
 );
 const solutionShapeSource = await readFile(
-  resolve(REPOSITORY_ROOT, "public/app/solution-shape.js"),
+  resolve(REPOSITORY_ROOT, "public/features/exercise/solution-shape.js"),
   "utf8",
 );
 const courseAppSource = await readFile(

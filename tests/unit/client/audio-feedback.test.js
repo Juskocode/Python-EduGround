@@ -6,7 +6,10 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const source = await readFile(resolve(REPOSITORY_ROOT, "public/app/audio-feedback.js"), "utf8");
+const source = await readFile(
+  resolve(REPOSITORY_ROOT, "public/app/feedback/audio-feedback.js"),
+  "utf8",
+);
 
 function createAudioParam(label, trace) {
   return {

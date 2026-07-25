@@ -4,7 +4,7 @@
   const DEFAULT_ENDPOINT = "/api/tutor/chat";
   const DEFAULT_TIMEOUT_MS = 100000;
   const MAX_MESSAGE_LENGTH = 1200;
-  const CHAPTER_ID_PATTERN = /^py(?:0[1-9]|1[0-2])$/u;
+  const CHAPTER_ID_PATTERN = /^py(?:0[1-9]|1[0-3])$/u;
   const CLIENT_STORAGE_KEY = "fp-playground.tutor-client.v1";
   const CLIENT_ID_PATTERN = /^[a-f0-9-]{32,80}$/iu;
 

@@ -40,6 +40,8 @@
   };
 
   var course = window.COURSE_DATA;
+  var courseRouter = window.COURSE_ROUTER || null;
+  var pythonRunnerClient = window.PYTHON_RUNNER_CLIENT || null;
   var testData = window.EXERCISE_TESTS || {};
   var solutionShape = window.SOLUTION_SHAPE || null;
   var starterCode = window.STARTER_CODE || {};
@@ -71,6 +73,14 @@
     renderDataError();
     return;
   }
+  if (
+    !courseRouter ||
+    typeof courseRouter.parseRoute !== "function" ||
+    typeof courseRouter.getRouteAnnouncement !== "function"
+  ) {
+    renderDataError();
+    return;
+  }
 
   var chapters = course.chapters.slice().sort(function (a, b) {
     return Number(a.number) - Number(b.number);
@@ -92,6 +102,12 @@
   });
   (Array.isArray(assessmentData.blocks) ? assessmentData.blocks : []).forEach(function (block) {
     assessmentById.set(String(block.id), block);
+  });
+  var routeRegistries = Object.freeze({
+    assessmentById: assessmentById,
+    chapterById: chapterById,
+    chapterForExercise: chapterForExercise,
+    exerciseById: exerciseById
   });
 
   var deliberateLocalSignOut = safeRead(STORAGE_KEYS.authSignedOut) === "1";
@@ -157,7 +173,7 @@
   var selectedBadgeId = null;
   var signOutInProgress = false;
   var geospaceMotionObserver = null;
-  var pythonRunner = createPythonRunner();
+  var pythonRunner = createPythonRunnerClient();
   var assessmentRooms = createAssessmentRoomsController();
   var ideLayoutPreferences = readIdeLayoutPreferences();
 
@@ -194,11 +210,11 @@
   }
 
   function renderRoute(announceChange, focusTarget) {
-    var parsed = parseRoute();
+    var parsed = courseRouter.parseRoute(window.location.hash, routeRegistries);
 
     if (parsed.redirect) {
       window.history.replaceState(null, "", parsed.redirect);
-      parsed = parseRoute();
+      parsed = courseRouter.parseRoute(window.location.hash, routeRegistries);
     }
 
     if (assessmentRooms) assessmentRooms.dispose();
@@ -277,7 +293,7 @@
       } catch (error) {
         elements.main.focus();
       }
-      announce(getRouteAnnouncement(parsed));
+      announce(courseRouter.getRouteAnnouncement(parsed));
     }
   }
 
@@ -325,108 +341,6 @@
         link.removeAttribute("aria-current");
       }
     });
-  }
-
-  function parseRoute() {
-    var rawHash = window.location.hash.slice(1);
-    var decoded;
-    try {
-      decoded = decodeURIComponent(rawHash);
-    } catch (error) {
-      decoded = rawHash;
-    }
-
-    decoded = decoded.replace(/^\/+|\/+$/g, "");
-    if (!decoded || decoded === "welcome") {
-      return { name: "landing" };
-    }
-    if (decoded === "home") {
-      return { name: "home" };
-    }
-
-    if (chapterById.has(decoded)) {
-      return { redirect: "#chapter/" + encodeURIComponent(decoded) };
-    }
-
-    var parts = decoded.split("/");
-    if (parts[0] === "chapter" && chapterById.has(parts[1])) {
-      var chapter = chapterById.get(parts[1]);
-      if (!parts[2]) {
-        return { name: "chapter", chapter: chapter };
-      }
-      if (parts[2] === "exercises") {
-        return { name: "exercises", chapter: chapter };
-      }
-      if (parts[2] === "tutorials" || parts[2] === "tutorial" || parts[2] === "runbook") {
-        return { name: "tutorial", chapter: chapter };
-      }
-    }
-
-    if (parts[0] === "exercise" && exerciseById.has(parts[1])) {
-      return {
-        name: "exercise",
-        exercise: exerciseById.get(parts[1]),
-        chapter: chapterForExercise.get(parts[1])
-      };
-    }
-
-    if (decoded === "profile/badges") {
-      return { name: "badges" };
-    }
-
-    if (decoded === "assessments") {
-      return { name: "assessments" };
-    }
-
-    if (parts[0] === "stage" && assessmentById.has(parts[1]) && parts[2] === "recap") {
-      return { name: "stage-recap", block: assessmentById.get(parts[1]) };
-    }
-
-    if (parts[0] === "assessment" && assessmentById.has(parts[1])) {
-      var block = assessmentById.get(parts[1]);
-      if (!parts[2]) {
-        return { name: "assessment-block", block: block };
-      }
-      if (parts[2] === "theory" || parts[2] === "practical") {
-        return { name: "assessment-mode", block: block, mode: parts[2] };
-      }
-    }
-
-    return { redirect: "#home" };
-  }
-
-  function getRouteAnnouncement(route) {
-    if (route.name === "landing") {
-      return "Opened the Python EduGround welcome page.";
-    }
-    if (route.name === "chapter") {
-      return "Opened " + route.chapter.title + ".";
-    }
-    if (route.name === "exercises") {
-      return "Opened the " + route.chapter.title + " exercise list.";
-    }
-    if (route.name === "tutorial") {
-      return "Opened the " + route.chapter.title + " class materials.";
-    }
-    if (route.name === "exercise") {
-      return "Opened " + route.exercise.title + ".";
-    }
-    if (route.name === "badges") {
-      return "Opened all badges.";
-    }
-    if (route.name === "assessments") {
-      return "Opened the timed assessment rooms.";
-    }
-    if (route.name === "assessment-block") {
-      return "Opened " + route.block.title + ".";
-    }
-    if (route.name === "assessment-mode") {
-      return "Opened the " + route.mode + " room for " + route.block.title + ".";
-    }
-    if (route.name === "stage-recap") {
-      return "Opened the stage recap for " + route.block.title + ".";
-    }
-    return "Opened the chapter dashboard.";
   }
 
   function buildDashboardSnapshot() {
@@ -6933,119 +6847,22 @@
     });
   }
 
-  function createPythonRunner() {
-    var worker = null;
-    var readyPromise = null;
-    var readyResolve = null;
-    var readyReject = null;
-    var startupTimer = null;
-    var requestCounter = 0;
-    var pending = new Map();
-
-    function ensureReady() {
-      if (window.location.protocol === "file:") {
-        return Promise.reject(new Error("Python execution needs the local web server; module workers cannot start from a file:// page."));
-      }
-      if (readyPromise) {
-        return readyPromise;
-      }
-      readyPromise = new Promise(function (resolve, reject) {
-        readyResolve = resolve;
-        readyReject = reject;
-      });
-      try {
-        worker = new Worker("/workers/python-runner-worker.js", { type: "module" });
-      } catch (error) {
-        var failedReadyPromise = readyPromise;
-        readyReject(error);
-        resetWorker();
-        return failedReadyPromise;
-      }
-      startupTimer = window.setTimeout(function () {
-        var error = new Error("Python took too long to load. Check the network connection and try again.");
-        if (readyReject) {
-          readyReject(error);
-        }
-        resetWorker(error);
-      }, 90000);
-      worker.addEventListener("message", handleWorkerMessage);
-      worker.addEventListener("error", function (event) {
-        var error = new Error(event.message || "The Python worker could not start.");
-        if (readyReject) {
-          readyReject(error);
-        }
-        resetWorker(error);
-      });
-      return readyPromise;
+  function createPythonRunnerClient() {
+    if (
+      pythonRunnerClient &&
+      typeof pythonRunnerClient.create === "function"
+    ) {
+      return pythonRunnerClient.create();
     }
-
-    function handleWorkerMessage(event) {
-      var message = event.data || {};
-      if (message.type === "ready") {
-        window.clearTimeout(startupTimer);
-        startupTimer = null;
-        if (readyResolve) {
-          readyResolve();
-        }
-        readyResolve = null;
-        readyReject = null;
-        return;
-      }
-      if (message.type === "startup-error") {
-        var startupError = new Error("Python could not load: " + message.error);
-        if (readyReject) {
-          readyReject(startupError);
-        }
-        resetWorker(startupError);
-        return;
-      }
-      var request = pending.get(message.id);
-      if (!request) {
-        return;
-      }
-      window.clearTimeout(request.timer);
-      pending.delete(message.id);
-      if (message.type === "result") {
-        request.resolve(message.results || []);
-      } else {
-        request.reject(new Error("Python runner error: " + (message.error || "Unknown error")));
-      }
+    function unavailable() {
+      return Promise.reject(new Error(
+        "The Python runner client could not load. Refresh the page and try again."
+      ));
     }
-
-    function resetWorker(error) {
-      window.clearTimeout(startupTimer);
-      startupTimer = null;
-      if (worker) {
-        worker.terminate();
-      }
-      worker = null;
-      pending.forEach(function (request) {
-        window.clearTimeout(request.timer);
-        request.reject(error || new Error("The Python runner was restarted."));
-      });
-      pending.clear();
-      readyPromise = null;
-      readyResolve = null;
-      readyReject = null;
-    }
-
-    async function run(code, mode, tests) {
-      await ensureReady();
-      requestCounter += 1;
-      var requestId = "run-" + requestCounter;
-      return new Promise(function (resolve, reject) {
-        var timer = window.setTimeout(function () {
-          pending.delete(requestId);
-          var timeoutError = new Error("The test run exceeded 12 seconds. The runner restarted to stop a possible infinite loop.");
-          reject(timeoutError);
-          resetWorker(timeoutError);
-        }, 12000);
-        pending.set(requestId, { resolve: resolve, reject: reject, timer: timer });
-        worker.postMessage({ id: requestId, code: code, mode: mode, tests: tests });
-      });
-    }
-
-    return { run: run, prepare: ensureReady };
+    return Object.freeze({
+      prepare: unavailable,
+      run: unavailable
+    });
   }
 
   function renderDataError() {

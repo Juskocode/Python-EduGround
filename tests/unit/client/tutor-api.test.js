@@ -145,6 +145,45 @@ test("invalid chapters and oversized questions are rejected before fetch", async
   assert.equal(calls, 0);
 });
 
+test("the tutor client accepts the Chapter 13 Pygame classroom contract", async () => {
+  const api = loadApi();
+  let requestBody = null;
+  const client = api.createClient({
+    sessionStorage: {
+      getItem: () => null,
+      setItem() {},
+    },
+    crypto: {
+      randomUUID: () => "123e4567-e89b-12d3-a456-426614174000",
+    },
+    fetch: async (_path, options) => {
+      requestBody = JSON.parse(options.body);
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => ({
+          answer: "Separate the event, update, and draw phases.",
+          citations: [],
+          conversationId: "pygame-room",
+        }),
+      };
+    },
+  });
+
+  const response = await client.ask({
+    chapterId: "py13",
+    message: "How should I structure one game frame?",
+  });
+
+  assert.equal(api.CHAPTER_ID_PATTERN.test("py13"), true);
+  assert.deepEqual(requestBody, {
+    chapterId: "py13",
+    message: "How should I structure one game frame?",
+  });
+  assert.equal(response.conversationId, "pygame-room");
+});
+
 test("rate-limit metadata is preserved for an actionable classroom message", async () => {
   const api = loadApi();
   const client = api.createClient({

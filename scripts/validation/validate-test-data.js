@@ -7,7 +7,7 @@ import {
 } from "../lib/paths.js";
 
 const dataFiles = [
-  path.join(PUBLIC_ROOT, "app/solution-shape.js"),
+  path.join(PUBLIC_ROOT, "features/exercise/solution-shape.js"),
   path.join(PUBLIC_ROOT, "content/exercise-data.js"),
   path.join(GENERATED_CURRICULUM_ROOT, "solution-code.js"),
   path.join(PUBLIC_ROOT, "content/exercise-tests/tests-py01-03.js"),
