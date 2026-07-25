@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { createHealthRouteHandler } from "./routes/health-route.js";
 import { DatabaseUnavailableError } from "../persistence/database.js";
 import { getExerciseFile } from "../curriculum/exercise-manifest.js";
 import { HttpError, readJson, requireMethod, sendJson } from "../http/responses.js";
@@ -339,6 +340,7 @@ export function createApiHandler({
   logger = console,
 }) {
   const rateLimit = createRateLimiter();
+  const healthHandler = createHealthRouteHandler({ database });
   const sessionTtlSeconds = readIntegerSetting(environment, "SESSION_TTL_SECONDS", {
     fallback: 30 * 24 * 60 * 60,
     minimum: 3_600,
@@ -367,23 +369,7 @@ export function createApiHandler({
     if (!isApiPath && pathname !== "/healthz" && pathname !== "/readyz") return false;
 
     try {
-      if (pathname === "/healthz") {
-        requireMethod(request, ["GET", "HEAD"]);
-        sendJson(response, 200, { status: "ok" }, request.method);
-        return true;
-      }
-
-      if (pathname === "/api/health" || pathname === "/readyz") {
-        requireMethod(request, ["GET", "HEAD"]);
-        const storage = await database.health();
-        sendJson(
-          response,
-          storage.available ? 200 : 503,
-          { status: storage.available ? "ok" : "degraded", database: storage },
-          request.method
-        );
-        return true;
-      }
+      if (await healthHandler(request, response, requestUrl)) return true;
 
       if (
         request.method === "POST" ||
