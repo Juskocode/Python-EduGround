@@ -1,27 +1,3 @@
-.landing-hero {
-  grid-template-columns: minmax(260px, 0.7fr) minmax(520px, 1.3fr);
-  gap: clamp(24px, 3.4vw, 48px);
-  padding: clamp(26px, 3.5vw, 48px);
-}
-
-.landing-hero h1 {
-  max-width: 12ch;
-  margin-bottom: 14px;
-  font-size: clamp(2.1rem, 4vw, 3.65rem);
-  line-height: 1.01;
-  letter-spacing: -0.052em;
-}
-
-.landing-hero__lede {
-  max-width: 590px;
-}
-
-.landing-hero__geometry {
-  right: 22%;
-  width: min(35vw, 460px);
-  opacity: 0.16;
-}
-
 .landing-snake {
   --snake-board: #030817;
   --snake-grid: rgba(88, 220, 255, 0.13);
@@ -53,9 +29,7 @@
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--geo-cyan), transparent);
   content: "";
-  opacity: 0.56;
-  transform: translateY(0);
-  animation: landing-snake-scan 5.8s ease-in-out infinite;
+  opacity: 0.42;
   pointer-events: none;
 }
 
@@ -93,8 +67,9 @@
 }
 
 .landing-snake__hud {
-  display: flex;
+  display: grid;
   flex: 0 0 auto;
+  grid-template-columns: repeat(4, minmax(58px, auto));
   gap: 6px;
   padding: 0;
   margin: 0;
@@ -163,12 +138,12 @@
 
 .landing-snake__stars {
   fill: #bcecff;
-  opacity: 0.72;
-  animation: landing-snake-stars 2.8s ease-in-out infinite alternate;
+  opacity: 0.62;
 }
 
 .landing-snake__asteroid {
   color: #7b879a;
+  transition: transform 920ms linear;
 }
 
 .landing-snake__asteroid polygon {
@@ -178,12 +153,12 @@
   transform-box: fill-box;
   transform-origin: center;
   vector-effect: non-scaling-stroke;
-  animation: landing-snake-rock 8s linear infinite;
+  animation: landing-snake-rock 26s linear infinite;
 }
 
 .landing-snake__asteroid:nth-child(2n) polygon {
   animation-direction: reverse;
-  animation-duration: 10.5s;
+  animation-duration: 33s;
 }
 
 .landing-snake__crater {
@@ -210,6 +185,80 @@
   fill: #fffbe7;
 }
 
+.landing-snake__falling-star {
+  color: #d9f7ff;
+  pointer-events: none;
+  transition: transform 120ms linear;
+}
+
+.landing-snake__falling-star-streak {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 0.12;
+  filter: drop-shadow(0 0 0.18px #58dcff);
+  opacity: 0.72;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__falling-star-core {
+  fill: #fff9d8;
+  stroke: #58dcff;
+  stroke-width: 0.045;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__powerup {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: landing-snake-powerup 1.4s ease-in-out infinite alternate;
+}
+
+.landing-snake__powerup-halo {
+  fill: rgba(88, 220, 255, 0.13);
+  stroke: #58dcff;
+  stroke-dasharray: 0.14 0.09;
+  stroke-width: 0.055;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__powerup-core {
+  fill: #153a55;
+  stroke: #bcecff;
+  stroke-width: 0.05;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__powerup-label {
+  fill: #eefcff;
+  font: 950 0.28px var(--font-mono);
+  pointer-events: none;
+}
+
+.landing-snake__powerup--shield .landing-snake__powerup-core {
+  fill: #174b78;
+  stroke: #7dcaff;
+}
+
+.landing-snake__powerup--boost .landing-snake__powerup-core {
+  fill: #70530b;
+  stroke: #ffe07f;
+}
+
+.landing-snake__powerup--stasis .landing-snake__powerup-core {
+  fill: #3d347c;
+  stroke: #aaa1ff;
+}
+
+.landing-snake__echo rect {
+  fill: rgba(88, 220, 255, 0.24);
+  stroke: #58dcff;
+  stroke-dasharray: 0.12 0.08;
+  stroke-width: 0.045;
+  vector-effect: non-scaling-stroke;
+  animation: landing-snake-echo 1.32s ease-out both;
+}
+
 .landing-snake__segment rect {
   fill: #2eaf7b;
   stroke: #8ff3c5;
@@ -234,6 +283,17 @@
   font: 900 0.28px var(--font-mono);
   letter-spacing: -0.04em;
   pointer-events: none;
+}
+
+.landing-snake[data-snake-effect="split-phase"] .landing-snake__head rect {
+  fill: #58dcff;
+  stroke: #effcff;
+  filter: drop-shadow(0 0 0.2px #58dcff);
+}
+
+.landing-snake[data-snake-effect="shield"] .landing-snake__head rect {
+  stroke: #7dcaff;
+  stroke-width: 0.12;
 }
 
 .landing-snake__overlay {
@@ -287,6 +347,23 @@
 .landing-snake__actions .button--quiet {
   background: rgba(14, 29, 49, 0.78);
   color: #d8e7f7;
+}
+
+.landing-snake__actions [data-snake-action="split"] {
+  border-color: rgba(88, 220, 255, 0.46);
+  color: #bcecff;
+}
+
+.landing-snake__actions [data-snake-action="split"]:not(:disabled):hover,
+.landing-snake__actions [data-snake-action="split"]:not(:disabled):focus-visible {
+  border-color: #58dcff;
+  background: rgba(88, 220, 255, 0.14);
+}
+
+.landing-snake__actions [data-snake-action="split"]:disabled {
+  border-color: rgba(148, 168, 192, 0.16);
+  color: rgba(148, 168, 192, 0.48);
+  cursor: not-allowed;
 }
 
 .landing-snake__dpad {
@@ -356,30 +433,6 @@
   }
 }
 
-@keyframes landing-snake-scan {
-  0%,
-  12% {
-    opacity: 0;
-    transform: translateY(0);
-  }
-
-  42% {
-    opacity: 0.48;
-  }
-
-  74%,
-  100% {
-    opacity: 0;
-    transform: translateY(430px);
-  }
-}
-
-@keyframes landing-snake-stars {
-  to {
-    opacity: 0.38;
-  }
-}
-
 @keyframes landing-snake-rock {
   to {
     rotate: 360deg;
@@ -389,6 +442,23 @@
 @keyframes landing-snake-energy {
   to {
     scale: 1.16;
+  }
+}
+
+@keyframes landing-snake-powerup {
+  to {
+    opacity: 0.72;
+    scale: 1.08;
+  }
+}
+
+@keyframes landing-snake-echo {
+  from {
+    opacity: 0.84;
+  }
+
+  to {
+    opacity: 0.08;
   }
 }
 
@@ -403,15 +473,6 @@
 }
 
 @media (max-width: 1080px) {
-  .landing-hero {
-    grid-template-columns: minmax(230px, 0.62fr) minmax(480px, 1.38fr);
-    padding: 30px;
-  }
-
-  .landing-hero h1 {
-    font-size: clamp(2rem, 4.4vw, 3.2rem);
-  }
-
   .landing-snake__heading {
     align-items: flex-start;
     flex-direction: column;
@@ -420,21 +481,6 @@
 }
 
 @media (max-width: 900px) {
-  .landing-hero {
-    grid-template-columns: 1fr;
-    padding: 28px;
-  }
-
-  .landing-hero h1 {
-    max-width: 16ch;
-  }
-
-  .landing-hero__geometry {
-    right: -10%;
-    width: 440px;
-    opacity: 0.1;
-  }
-
   .landing-snake__heading {
     align-items: end;
     flex-direction: row;
@@ -442,14 +488,6 @@
 }
 
 @media (max-width: 620px) {
-  .landing-hero {
-    padding: 20px 15px;
-  }
-
-  .landing-hero h1 {
-    font-size: clamp(2rem, 10.5vw, 2.85rem);
-  }
-
   .landing-snake {
     padding: 14px 10px;
     border-radius: 12px 20px 12px 20px;
@@ -462,6 +500,7 @@
 
   .landing-snake__hud {
     width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .landing-snake__hud div {
@@ -504,8 +543,19 @@
   .landing-snake::before,
   .landing-snake__stars,
   .landing-snake__asteroid polygon,
-  .landing-snake__energy {
+  .landing-snake__energy,
+  .landing-snake__powerup,
+  .landing-snake__echo rect {
     animation: none;
+  }
+
+  .landing-snake__asteroid,
+  .landing-snake__falling-star {
+    transition: none;
+  }
+
+  .landing-snake__falling-star {
+    display: none !important;
   }
 }
 
@@ -519,7 +569,9 @@
 
   .landing-snake::before,
   .landing-snake__stars,
-  .landing-snake__grid {
+  .landing-snake__grid,
+  .landing-snake__falling-star,
+  .landing-snake__echo {
     display: none;
   }
 
@@ -545,7 +597,9 @@
   }
 
   .landing-snake__energy polygon,
-  .landing-snake__energy-core {
+  .landing-snake__energy-core,
+  .landing-snake__powerup-core,
+  .landing-snake__powerup-halo {
     fill: LinkText;
     stroke: Canvas;
     filter: none;
