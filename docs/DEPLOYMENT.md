@@ -24,6 +24,12 @@ PostgreSQL has no host-published port in `docker-compose.yml`. The application p
 binds to `127.0.0.1` by default. Keep that default when a reverse proxy runs on the
 host; do not expose the Node or database port directly to the internet.
 
+The optional chapter tutor is deployed through the separate
+`docker-compose.ai.yml` overlay. Its model bootstrap, network isolation, resource
+budget, and 10–20 learner capacity plan are documented in
+[AI_CLASSROOM_OPERATIONS.md](AI_CLASSROOM_OPERATIONS.md). Never publish Ollama's
+unauthenticated port.
+
 ## First Compose deployment
 
 Requirements:

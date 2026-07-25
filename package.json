@@ -29,6 +29,7 @@
     "validate:backend": "npm run validate:unit",
     "validate:integration": "npm run build:server && node scripts/validation/validate-database-integration.js",
     "validate:compose": "bash scripts/validation/validate-compose-integration.sh",
+    "validate:ai-infra": "node scripts/validation/validate-ai-infrastructure.js",
     "validate:browser": "npm run build:server && playwright test",
     "validate:security": "node scripts/validation/validate-security.js",
     "validate:release": "npm run validate && npm run validate:integration && npm audit --audit-level=high --ignore-scripts",
@@ -36,7 +37,7 @@
     "build:solutions": "node scripts/build/build-solution-bundle.js",
     "build:starters": "node scripts/build/build-starter-bundle.js",
     "validate:links": "node scripts/validation/check-learning-links.js",
-    "validate": "npm run validate:structure && npm run validate:types && npm run validate:syntax && npm run validate:content && npm run validate:unit && npm run validate:security"
+    "validate": "npm run validate:structure && npm run validate:types && npm run validate:syntax && npm run validate:content && npm run validate:unit && npm run validate:security && npm run validate:ai-infra"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",

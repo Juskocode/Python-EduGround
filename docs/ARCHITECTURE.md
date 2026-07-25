@@ -35,6 +35,7 @@ The structure validator fails when a root-level implementation file, a non-vendo
 │       ├── curriculum/         # Exercise manifest and submission mirror
 │       ├── http/               # Static files and response helpers
 │       ├── persistence/        # PostgreSQL, migrations, learner state
+│       ├── rag/                # Chapter-only retrieval and Ollama adapter
 │       ├── security/           # Authentication and runtime policy
 │       ├── main.js             # Process entrypoint
 │       └── paths.js            # Canonical absolute repository paths
@@ -144,12 +145,17 @@ helpers and never reach into test or documentation directories.
 | `curriculum/` | Stable exercise-to-file mapping and private saved-file mirror |
 | `http/` | Static file resolution, MIME types, security headers, JSON responses |
 | `persistence/` | Database configuration, migration loading, state and run records |
+| `rag/` | Solution-free chapter corpus, retrieval, prompt policy, inference capacity |
 | `security/` | Passwords, cookies, tab capability, origin/CSP/proxy policy |
 | `paths.js` | Resolved public, migration, and repository roots |
 
 The API runs learner Python nowhere on the server. Python remains inside the
 dedicated browser worker. The server accepts bounded learner state and run evidence
-for optional account sync.
+for optional account sync. The optional chapter tutor is a separate server-side
+path: it retrieves only from an explicit allowlist of solution-free public class
+files and calls an internal Ollama service. Browsers never receive the Ollama
+address, private solution files never enter the retrieval corpus, and tutor
+responses are rendered as untrusted text.
 
 ## Curriculum and generated artifacts
 
@@ -237,12 +243,17 @@ flowchart LR
   App["UI and curriculum<br/>public/app + features + content"]
   Worker["Python worker<br/>public/workers"]
   API["Same-origin API<br/>src/server/api"]
+  RAG["Chapter tutor<br/>src/server/rag"]
+  Ollama["Internal Ollama<br/>Llama 3.1 8B"]
   Store["PostgreSQL<br/>learner state and history"]
   Files["Private submission mirror<br/>chapter/exNN.py"]
 
   Browser --> App
   App --> Worker
   App -->|"optional signed-in sync"| API
+  App -->|"bounded same-origin question"| API
+  API --> RAG
+  RAG -->|"internal AI network only"| Ollama
   API --> Store
   API --> Files
   Worker -. "never receives account capability" .-> API
@@ -250,6 +261,13 @@ flowchart LR
 
 The dotted edge is denied by design: worker-originated requests do not possess the
 tab-only account capability.
+
+Tutor prompts and responses are not part of learner persistence. Admission is
+bounded independently from PostgreSQL by per-learner rate limits, one in-flight
+question per learner, a global generation gate, a finite queue, response caching,
+and timeouts. See
+[AI_CLASSROOM_OPERATIONS.md](AI_CLASSROOM_OPERATIONS.md) for deployment and
+10–20 learner capacity guidance.
 
 ## Validation layers
 

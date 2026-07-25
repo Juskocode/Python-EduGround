@@ -126,6 +126,10 @@ fi
 
 printf 'Building and booting the real Compose topology.\n'
 "${compose[@]}" config --quiet
+"${compose[@]}" \
+  --file docker-compose.yml \
+  --file docker-compose.ai.yml \
+  config --quiet
 "${compose[@]}" up --build --detach --wait --wait-timeout "$wait_timeout"
 
 postgres_id=$("${compose[@]}" ps --all --quiet postgres)

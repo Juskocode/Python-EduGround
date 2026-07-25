@@ -398,6 +398,7 @@ conflict journeys remain explicit roadmap items.
 | `src/server/curriculum/` | Stable exercise manifest and private submission-file mirror |
 | `src/server/http/` | Static-file and HTTP response helpers |
 | `src/server/persistence/` | PostgreSQL configuration, migrations, and learner-state operations |
+| `src/server/rag/` | Chapter-scoped retrieval, guarded prompts, bounded Ollama adapter, and tutor admission |
 | `src/server/security/` | Credentials, cookies, origin checks, CSP, proxy policy, and runtime guards |
 | `curriculum/solutions/` | Private Python reference solutions, grouped by the original 12 chapters |
 | `curriculum/generated/` | Private generated solution bundle used only by build-time validation |
@@ -410,6 +411,7 @@ conflict journeys remain explicit roadmap items.
 | `tests/integration/` | PostgreSQL-backed persistence and account integration tests |
 | `tests/e2e/` | Chromium learner journeys, responsive behavior, and accessibility checks |
 | `dist/server/` | Git-ignored JavaScript emitted from `src/server/` and executed by tests and production |
+| `docker-compose.ai.yml` | Optional local-only Ollama overlay with one-shot model seeding and isolated inference |
 | `.github/workflows/` | CI, PostgreSQL integration, CodeQL, supply-chain, container, documentation, and release workflows |
 | `artifacts/` | Git-ignored browser results and generated validation evidence |
 | `docs/ARCHITECTURE.md` | Detailed boundaries, runtime flow, change map, and extension rules |
@@ -417,6 +419,7 @@ conflict journeys remain explicit roadmap items.
 | `docs/ASSESSMENTS.md` | Timed-room rules, chapter/PDF mapping, scoring, references, persistence, and security boundaries |
 | `docs/PERSISTENCE.md` | Account sync, data model, storage bounds, migrations, and deletion behavior |
 | `docs/DEPLOYMENT.md` | First deploy, proxy, upgrade, backup/restore drill, image promotion, and rollback runbook |
+| `docs/AI_CLASSROOM_OPERATIONS.md` | Ollama isolation, resource bounds, classroom capacity plan, and incident procedures |
 | `docs/SECURE_SDLC.md` | Trust boundaries, local/CI gates, release policy, incident response, and residual risks |
 
 The browser deliberately remains a small ordered classic-script application, so

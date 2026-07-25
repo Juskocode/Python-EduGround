@@ -124,6 +124,15 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Validate the isolated AI Compose overlay
+        env:
+          APP_ORIGIN: http://127.0.0.1:8000
+        run: >-
+          docker compose
+          --file docker-compose.yml
+          --file docker-compose.ai.yml
+          config --quiet
+
       - name: Boot and verify the hardened Compose stack
         run: npm run validate:compose
 
