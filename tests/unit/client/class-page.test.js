@@ -248,6 +248,7 @@ test("the section plan is stable, scoped, ordered, and reflects optional supplie
       "lecture-demo",
       "room-tasks",
       "lesson-notes",
+      "tutor",
       "class-activities",
       "independent-practice",
       "deep-dive",
@@ -329,6 +330,7 @@ test("render builds a complete accessible class page from canonical material and
   assert.ok(roomTask);
   assert.ok(findByText(page, "H2", "Guided room tasks"));
   assert.ok(findByText(page, "STRONG", "Expected output"));
+  assert.ok(findByText(page, "H2", "Ask the chapter tutor"));
   assert.ok(findByText(page, "H2", "Class activities"));
   assert.ok(findByText(page, "H2", "Independent practice"));
   assert.ok(findByText(page, "H2", "Class recap"));
@@ -353,6 +355,7 @@ test("render supplies useful class defaults when optional instructional arrays a
   assert.ok(findByText(page, "H2", "Lesson plan"));
   assert.ok(findByText(page, "H2", "In this class"));
   assert.ok(findByText(page, "H2", "Lecture demonstration"));
+  assert.ok(findByText(page, "H2", "Ask the chapter tutor"));
   assert.ok(findByText(page, "H2", "Class activities"));
   assert.ok(findByText(page, "H2", "Independent practice"));
   assert.ok(findByText(page, "H2", "Class recap"));
@@ -361,7 +364,7 @@ test("render supplies useful class defaults when optional instructional arrays a
     new Set(nodes
       .filter((node) => node.dataset && node.dataset.scrollTarget)
       .map((node) => node.dataset.scrollTarget)).size,
-    8,
+    9,
   );
   assert.equal(
     nodes.some((node) => node.tagName === "A" && node.href === "#chapter/py01/exercises"),

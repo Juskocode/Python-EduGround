@@ -320,6 +320,7 @@
       sections.push({ key: "lesson-notes", label: "Lesson notes" });
     }
     sections.push(
+      { key: "tutor", label: "Ask the chapter tutor" },
       { key: "class-activities", label: "Class activities" },
       { key: "independent-practice", label: "Independent practice" },
     );
@@ -462,6 +463,7 @@
     }
 
     article.append(
+      renderChapterTutor(sectionByKey.get("tutor"), chapter, material),
       renderClassActivities(sectionByKey.get("class-activities"), material.classActivities),
       renderIndependentPractice(
         sectionByKey.get("independent-practice"),
@@ -1146,6 +1148,137 @@
     return `Lesson ${index + 1}`;
   }
 
+  function renderChapterTutor(section, chapter, material) {
+    const chapterId = String(chapter && chapter.id || "");
+    const scope = `${section.id}-workspace`;
+    const block = renderSectionHeader(
+      section,
+      "Chapter-grounded study coach",
+      "Ask the chapter tutor",
+      "Ask for a simpler explanation, a fresh example to trace, or a short knowledge check. The tutor searches only this chapter’s published class material before answering.",
+    );
+    const panel = createElement("div", "chapter-tutor");
+    const boundary = createElement("aside", "chapter-tutor__boundary");
+    const boundaryCopy = createElement("div");
+    const toolbar = createElement("header", "chapter-tutor__toolbar");
+    const toolbarCopy = createElement("div");
+    const clearButton = createElement("button", "button button--quiet", "Clear chat");
+    const transcript = createElement("div", "chapter-tutor__transcript");
+    const welcome = createElement(
+      "article",
+      "chapter-tutor__message chapter-tutor__message--assistant",
+    );
+    const welcomeHeader = createElement("header");
+    const form = createElement("form", "chapter-tutor__form");
+    const label = createElement("label", null, `Ask about ${material.title}`);
+    const textarea = createElement("textarea");
+    const promptList = createElement("div", "chapter-tutor__prompts");
+    const formFooter = createElement("div", "chapter-tutor__form-footer");
+    const help = createElement(
+      "p",
+      "chapter-tutor__help",
+      "Ask one focused question. Include what you already tried so the coach can meet you at the right step.",
+    );
+    const status = createElement(
+      "p",
+      "chapter-tutor__status",
+      "Ready for a chapter question.",
+    );
+    const submit = createElement("button", "button button--primary", "Ask tutor");
+    const prompts = [
+      "Explain the main idea in beginner-friendly language.",
+      "Give me a new example to trace without solving an exercise.",
+      "Quiz me with one question, then wait for my answer.",
+    ];
+
+    panel.dataset.chapterTutor = chapterId;
+    panel.dataset.tutorConversationId = "";
+    panel.setAttribute("aria-labelledby", `${scope}-title`);
+    panel.setAttribute("aria-busy", "false");
+
+    boundaryCopy.append(
+      createElement("strong", null, "Learning boundary"),
+      createElement(
+        "p",
+        null,
+        "This coach is restricted to the current chapter. It should explain ideas and create similar examples, but it will not reveal exercise solutions, answer keys, or hidden tests. AI can make mistakes—verify important details against the cited class notes.",
+      ),
+    );
+    boundary.append(createElement("span", "chapter-tutor__boundary-icon", "◎"), boundaryCopy);
+
+    toolbarCopy.append(
+      createElement("span", "eyebrow", "Local classroom assistant"),
+      createElement("strong", null, "Llama 3.1 · chapter RAG"),
+    );
+    clearButton.type = "button";
+    clearButton.dataset.chapterTutorClear = chapterId;
+    toolbar.append(toolbarCopy, clearButton);
+
+    transcript.dataset.chapterTutorTranscript = chapterId;
+    transcript.setAttribute("role", "log");
+    transcript.setAttribute("aria-live", "polite");
+    transcript.setAttribute("aria-relevant", "additions");
+    transcript.setAttribute("aria-label", `${material.title} tutor conversation`);
+    transcript.tabIndex = 0;
+    welcomeHeader.append(
+      createElement("strong", null, "Chapter tutor"),
+      createElement("span", null, "Study coach"),
+    );
+    welcome.append(
+      welcomeHeader,
+      createElement(
+        "p",
+        null,
+        `I can help you understand ${material.title} using this chapter’s class material. Ask me to explain, compare, trace, or quiz you.`,
+      ),
+    );
+    transcript.append(welcome);
+
+    form.dataset.chapterTutorForm = chapterId;
+    textarea.id = `${scope}-question`;
+    textarea.name = "question";
+    textarea.rows = 3;
+    textarea.maxLength = 1200;
+    textarea.placeholder = "For example: What does input() return, and why might I convert it with int()?";
+    textarea.dataset.chapterTutorQuestion = chapterId;
+    textarea.setAttribute("aria-describedby", `${scope}-help ${scope}-status`);
+    textarea.setAttribute("aria-keyshortcuts", "Control+Enter");
+    label.htmlFor = textarea.id;
+    help.id = `${scope}-help`;
+    prompts.forEach((prompt) => {
+      const button = createElement("button", null, prompt);
+      button.type = "button";
+      button.dataset.chapterTutorPrompt = prompt;
+      promptList.append(button);
+    });
+    status.id = `${scope}-status`;
+    status.dataset.chapterTutorStatus = chapterId;
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    submit.type = "submit";
+    submit.setAttribute("aria-keyshortcuts", "Control+Enter");
+    formFooter.append(
+      createElement(
+        "small",
+        null,
+        "Ctrl + Enter to send · conversation stays in this browser tab",
+      ),
+      submit,
+    );
+    form.append(
+      label,
+      textarea,
+      help,
+      promptList,
+      formFooter,
+      status,
+    );
+
+    panel.append(boundary, toolbar, transcript, form);
+    block.append(panel);
+    return block;
+  }
+
   function renderClassActivities(section, activities) {
     const block = renderSectionHeader(
       section,
@@ -1317,6 +1450,7 @@
     buildSectionPlan,
     normalizeMaterial,
     render,
+    renderChapterTutor,
     renderRunnableLab,
     slugify,
   });

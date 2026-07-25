@@ -468,6 +468,134 @@ test("the terminal keeps output printed before a full traceback", async ({ page 
   );
 });
 
+test("the chapter tutor stays scoped, renders citations as text, and carries correlation only", async ({
+  page,
+}) => {
+  const requests = [];
+  const clientHeaders = [];
+  await page.route("**/api/tutor/chat", async (route) => {
+    requests.push(route.request().postDataJSON());
+    clientHeaders.push(route.request().headers()["x-eduground-tutor-client"]);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        answer: requests.length === 1
+          ? "input() returns a str. Convert only when the program needs numeric operations. <img src=x onerror=alert(1)>"
+          : "Exactly: conversion creates a number from compatible text.",
+        citations: [{
+          title: "<strong>Reading keyboard input</strong>",
+          section: "The input() return value",
+        }],
+        conversationId: "correlation-py01",
+        model: "llama3.1:8b",
+      }),
+    });
+  });
+  await openClassRoom(page);
+
+  const tutor = page.locator('[data-chapter-tutor="py01"]');
+  const transcript = tutor.locator("[data-chapter-tutor-transcript]");
+  const question = tutor.locator("textarea[data-chapter-tutor-question]");
+  const ask = tutor.getByRole("button", { name: "Ask tutor", exact: true });
+
+  await expect(tutor.getByText("Learning boundary", { exact: true })).toBeVisible();
+  await expect(tutor).toContainText("restricted to the current chapter");
+  await expect(transcript).toHaveAttribute("role", "log");
+  await expect(transcript).toHaveAttribute("aria-live", "polite");
+  await expect(question).toHaveAttribute("maxlength", "1200");
+  await expect(question).toHaveAttribute("aria-keyshortcuts", "Control+Enter");
+
+  await tutor.getByRole("button", {
+    name: "Explain the main idea in beginner-friendly language.",
+    exact: true,
+  }).click();
+  await expect(question).toHaveValue(
+    "Explain the main idea in beginner-friendly language.",
+  );
+  await ask.click();
+
+  await expect(tutor).toHaveAttribute("aria-busy", "true");
+  await expect(tutor.getByRole("button", { name: "Thinking…", exact: true })).toBeDisabled();
+  await expect(tutor.locator("[data-chapter-tutor-status]")).toContainText(
+    "Searching this chapter",
+  );
+  await expect(transcript).toContainText("input() returns a str");
+  await expect(transcript).toContainText("<img src=x onerror=alert(1)>");
+  await expect(transcript.locator("img")).toHaveCount(0);
+  await expect(transcript).toContainText("<strong>Reading keyboard input</strong>");
+  await expect(transcript.locator("strong").filter({
+    hasText: "<strong>Reading keyboard input</strong>",
+  })).toHaveCount(0);
+  await expect(tutor).toHaveAttribute("aria-busy", "false");
+  await expect(tutor.locator("[data-chapter-tutor-status]")).toContainText(
+    "Answer ready with 1 chapter source",
+  );
+  expect(requests[0]).toEqual({
+    chapterId: "py01",
+    message: "Explain the main idea in beginner-friendly language.",
+  });
+
+  await question.fill("So conversion changes compatible text into a number?");
+  await question.press("Control+Enter");
+  await expect(transcript).toContainText("Exactly: conversion creates a number");
+  expect(requests[1]).toEqual({
+    chapterId: "py01",
+    message: "So conversion changes compatible text into a number?",
+    conversationId: "correlation-py01",
+  });
+  expect(clientHeaders[0]).toMatch(/^[a-f0-9-]{32,80}$/iu);
+  expect(clientHeaders[1]).toBe(clientHeaders[0]);
+  await expect
+    .poll(() => page.evaluate(() =>
+      sessionStorage.getItem("fp-playground.tutor-client.v1")
+    ))
+    .toBe(clientHeaders[0]);
+
+  await tutor.getByRole("button", { name: "Clear chat", exact: true }).click();
+  await expect(transcript.locator(".chapter-tutor__message")).toHaveCount(1);
+  await expect(tutor.locator("[data-chapter-tutor-status]")).toContainText(
+    "Conversation cleared",
+  );
+});
+
+test("the chapter tutor exposes bounded rate-limit feedback and preserves the question", async ({
+  page,
+}) => {
+  await page.route("**/api/tutor/chat", (route) => route.fulfill({
+    status: 429,
+    contentType: "application/json",
+    body: JSON.stringify({
+      error: {
+        code: "TUTOR_RATE_LIMITED",
+        message: "Internal capacity details should not be shown.",
+        retryAfterSeconds: 9,
+      },
+    }),
+  }));
+  await openClassRoom(page);
+
+  const tutor = page.locator('[data-chapter-tutor="py01"]');
+  const transcript = tutor.locator("[data-chapter-tutor-transcript]");
+  const question = tutor.locator("textarea[data-chapter-tutor-question]");
+  await question.fill("Why does input return text?");
+  await tutor.getByRole("button", { name: "Ask tutor", exact: true }).click();
+
+  await expect(tutor.locator("[data-chapter-tutor-status]")).toHaveText(
+    "The classroom request limit is active. Try again in about 9 seconds.",
+  );
+  await expect(tutor.locator("[data-chapter-tutor-status]")).not.toContainText(
+    "Internal capacity",
+  );
+  await expect(question).toHaveValue("Why does input return text?");
+  await expect(transcript.locator(".chapter-tutor__message")).toHaveCount(1);
+  await expect(tutor).toHaveAttribute("aria-busy", "false");
+  unexpectedBrowserErrors = unexpectedBrowserErrors.filter(
+    (message) => !message.includes("status of 429"),
+  );
+});
+
 test("the interactive room remains stacked and free of horizontal overflow on mobile", async ({
   page,
 }) => {
@@ -479,6 +607,7 @@ test("the interactive room remains stacked and free of horizontal overflow on mo
   await expect(
     page.locator(`button[data-class-room-check="${INPUT_TYPE_TASK}"]`),
   ).toBeVisible();
+  await expect(page.locator('[data-chapter-tutor="py01"]')).toBeVisible();
 
   const geometry = await page.evaluate(() => {
     const lab = document.querySelector(
@@ -493,9 +622,12 @@ test("the interactive room remains stacked and free of horizontal overflow on mo
       inputTop: input.top,
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: window.innerWidth,
+      tutorRight: document.querySelector('[data-chapter-tutor="py01"]')
+        .getBoundingClientRect().right,
     };
   });
 
   expect(geometry.inputTop).toBeGreaterThanOrEqual(geometry.editorBottom - 2);
   expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+  expect(geometry.tutorRight).toBeLessThanOrEqual(geometry.viewportWidth + 1);
 });
