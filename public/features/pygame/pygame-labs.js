@@ -28,6 +28,8 @@
       "platform-move",
       "platform-jump",
       "platform-land",
+      "platform-head",
+      "platform-side",
       "platform-camera"
     ]),
     systems: Object.freeze([
@@ -292,10 +294,39 @@
     });
   }
 
+  var PLATFORMER_PLAYER_WIDTH = 0.84;
+  var PLATFORMER_PLAYER_HEIGHT = 1.35;
+  var PLATFORMER_PLATFORMS = Object.freeze([
+    Object.freeze({ id: "platform-1", x: 8, width: 4, top: 2.2, thickness: 0.45 }),
+    Object.freeze({ id: "platform-2", x: 17, width: 4, top: 3.8, thickness: 0.45 }),
+    Object.freeze({ id: "platform-3", x: 27, width: 5, top: 1.8, thickness: 0.45 })
+  ]);
+
+  function emptyPlatformerContacts() {
+    return {
+      feet: null,
+      head: null,
+      left: null,
+      right: null
+    };
+  }
+
+  function freezePlatformerContacts(contacts) {
+    var source = contacts || {};
+    return Object.freeze({
+      feet: source.feet || null,
+      head: source.head || null,
+      left: source.left || null,
+      right: source.right || null
+    });
+  }
+
   function freezePlatformerState(state) {
     return Object.freeze({
       worldWidth: state.worldWidth,
       viewportWidth: state.viewportWidth,
+      playerWidth: PLATFORMER_PLAYER_WIDTH,
+      playerHeight: PLATFORMER_PLAYER_HEIGHT,
       x: state.x,
       y: state.y,
       vx: state.vx,
@@ -304,6 +335,7 @@
       cameraX: state.cameraX,
       tick: state.tick,
       status: state.status,
+      contacts: freezePlatformerContacts(state.contacts),
       lastCollision: state.lastCollision
     });
   }
@@ -312,10 +344,12 @@
     var settings = options || {};
     var worldWidth = finite(settings.worldWidth, 40, 24, 60);
     var viewportWidth = finite(settings.viewportWidth, 16, 10, 22);
+    var minimumX = PLATFORMER_PLAYER_WIDTH / 2;
+    var maximumX = worldWidth - PLATFORMER_PLAYER_WIDTH / 2;
     return freezePlatformerState({
       worldWidth: worldWidth,
       viewportWidth: Math.min(viewportWidth, worldWidth),
-      x: finite(settings.x, 2, 0, worldWidth - 1),
+      x: finite(settings.x, 2, minimumX, maximumX),
       y: 0,
       vx: 0,
       vy: 0,
@@ -323,6 +357,7 @@
       cameraX: 0,
       tick: 0,
       status: "ready",
+      contacts: { feet: "ground", head: null, left: null, right: null },
       lastCollision: "Standing on the ground."
     });
   }
@@ -331,23 +366,54 @@
     var source = parameters || {};
     return Object.freeze({
       gravity: finite(source.gravity, 18, 4, 32),
-      jumpStrength: finite(source.jumpStrength, 8, 3, 14),
+      jumpStrength: finite(source.jumpStrength, 11.5, 3, 20),
       moveSpeed: finite(source.moveSpeed, 5, 1, 10),
-      delta: finite(source.delta, 0.12, 0.04, 0.25)
+      delta: finite(source.delta, 0.09, 0.04, 0.25)
     });
   }
 
-  function platformHeightAt(x) {
-    if (x >= 8 && x <= 12) {
-      return 2.2;
+  function playerEdges(x, y) {
+    return {
+      left: x - PLATFORMER_PLAYER_WIDTH / 2,
+      right: x + PLATFORMER_PLAYER_WIDTH / 2,
+      feet: y,
+      head: y + PLATFORMER_PLAYER_HEIGHT
+    };
+  }
+
+  function platformEdges(platform) {
+    return {
+      left: platform.x,
+      right: platform.x + platform.width,
+      top: platform.top,
+      bottom: platform.top - platform.thickness
+    };
+  }
+
+  function overlapsStrict(firstStart, firstEnd, secondStart, secondEnd) {
+    return firstStart < secondEnd && firstEnd > secondStart;
+  }
+
+  function contactSummary(contacts) {
+    if (contacts.head) {
+      return "HEAD · the rising head crossed the underside of " +
+        contacts.head + ", so y snapped below it and vertical velocity became zero.";
     }
-    if (x >= 17 && x <= 21) {
-      return 3.8;
+    if (contacts.feet) {
+      return contacts.feet === "ground"
+        ? "FEET · the downward feet path crossed the ground, so y and vertical velocity became zero."
+        : "FEET · the downward feet path crossed the top of " +
+          contacts.feet + ", so y snapped to its surface and vertical velocity became zero.";
     }
-    if (x >= 27 && x <= 32) {
-      return 1.8;
+    if (contacts.left) {
+      return "LEFT SIDE · the left edge crossed " + contacts.left +
+        ", so x snapped outside it and horizontal velocity became zero.";
     }
-    return 0;
+    if (contacts.right) {
+      return "RIGHT SIDE · the right edge crossed " + contacts.right +
+        ", so x snapped outside it and horizontal velocity became zero.";
+    }
+    return "No player body part crossed a solid edge this frame.";
   }
 
   function stepPlatformer(state, input, parameters) {
@@ -359,43 +425,145 @@
     var horizontal = clamp(Number(controls.horizontal) || 0, -1, 1);
     var vx = horizontal * settings.moveSpeed;
     var vy = controls.jump && state.grounded ? settings.jumpStrength : state.vy;
+    var contacts = emptyPlatformerContacts();
+    var previousX = state.x;
     var previousY = state.y;
-    var nextX = clamp(state.x + vx * settings.delta, 0, state.worldWidth - 1);
+    var rawNextX = state.x + vx * settings.delta;
+    var minimumX = PLATFORMER_PLAYER_WIDTH / 2;
+    var maximumX = state.worldWidth - PLATFORMER_PLAYER_WIDTH / 2;
+    var nextX = clamp(rawNextX, minimumX, maximumX);
     var wasGrounded = state.grounded;
+
+    if (rawNextX < minimumX) {
+      contacts.left = "world boundary";
+      vx = 0;
+    } else if (rawNextX > maximumX) {
+      contacts.right = "world boundary";
+      vx = 0;
+    }
+
+    var previousHorizontalEdges = playerEdges(previousX, previousY);
+    var candidateHorizontalEdges = playerEdges(nextX, previousY);
+    if (vx > 0) {
+      PLATFORMER_PLATFORMS.some(function (platform) {
+        var edges = platformEdges(platform);
+        var verticalOverlap = overlapsStrict(
+          previousHorizontalEdges.feet,
+          previousHorizontalEdges.head,
+          edges.bottom,
+          edges.top
+        );
+        if (
+          verticalOverlap &&
+          previousHorizontalEdges.right <= edges.left &&
+          candidateHorizontalEdges.right >= edges.left
+        ) {
+          nextX = edges.left - PLATFORMER_PLAYER_WIDTH / 2;
+          vx = 0;
+          contacts.right = platform.id;
+          return true;
+        }
+        return false;
+      });
+    } else if (vx < 0) {
+      PLATFORMER_PLATFORMS.slice().reverse().some(function (platform) {
+        var edges = platformEdges(platform);
+        var verticalOverlap = overlapsStrict(
+          previousHorizontalEdges.feet,
+          previousHorizontalEdges.head,
+          edges.bottom,
+          edges.top
+        );
+        if (
+          verticalOverlap &&
+          previousHorizontalEdges.left >= edges.right &&
+          candidateHorizontalEdges.left <= edges.right
+        ) {
+          nextX = edges.right + PLATFORMER_PLAYER_WIDTH / 2;
+          vx = 0;
+          contacts.left = platform.id;
+          return true;
+        }
+        return false;
+      });
+    }
 
     vy -= settings.gravity * settings.delta;
     var nextY = state.y + vy * settings.delta;
-    var landingHeight = platformHeightAt(nextX);
-    var landed = vy <= 0 && previousY >= landingHeight && nextY <= landingHeight;
-    if (landed) {
-      nextY = landingHeight;
-      vy = 0;
-    } else if (nextY < 0) {
-      nextY = 0;
-      vy = 0;
-      landed = true;
-      landingHeight = 0;
+    var previousVerticalEdges = playerEdges(nextX, previousY);
+    var candidateVerticalEdges = playerEdges(nextX, nextY);
+    var horizontalEdges = playerEdges(nextX, previousY);
+
+    if (vy > 0) {
+      PLATFORMER_PLATFORMS.some(function (platform) {
+        var edges = platformEdges(platform);
+        var horizontalOverlap = overlapsStrict(
+          horizontalEdges.left,
+          horizontalEdges.right,
+          edges.left,
+          edges.right
+        );
+        if (
+          horizontalOverlap &&
+          previousVerticalEdges.head <= edges.bottom &&
+          candidateVerticalEdges.head >= edges.bottom
+        ) {
+          nextY = edges.bottom - PLATFORMER_PLAYER_HEIGHT;
+          vy = 0;
+          contacts.head = platform.id;
+          return true;
+        }
+        return false;
+      });
+    } else {
+      var landingCandidates = PLATFORMER_PLATFORMS.filter(function (platform) {
+        var edges = platformEdges(platform);
+        return (
+          overlapsStrict(
+            horizontalEdges.left,
+            horizontalEdges.right,
+            edges.left,
+            edges.right
+          ) &&
+          previousVerticalEdges.feet >= edges.top &&
+          candidateVerticalEdges.feet <= edges.top
+        );
+      }).sort(function (first, second) {
+        return second.top - first.top;
+      });
+      if (landingCandidates.length) {
+        nextY = landingCandidates[0].top;
+        vy = 0;
+        contacts.feet = landingCandidates[0].id;
+      }
     }
 
-    var grounded = landed;
+    if (!contacts.feet && nextY < 0) {
+      nextY = 0;
+      vy = 0;
+      contacts.feet = "ground";
+    }
+
+    var grounded = Boolean(contacts.feet);
     var cameraLimit = Math.max(0, state.worldWidth - state.viewportWidth);
     var cameraX = clamp(
       nextX - state.viewportWidth * 0.42,
       0,
       cameraLimit
     );
-    var status = horizontal
-      ? "moving"
-      : controls.jump && wasGrounded
-        ? "jumped"
-        : grounded
-          ? "grounded"
-          : "falling";
-    var collision = landed
-      ? landingHeight > 0
-        ? "The downward path crossed a platform top, so y snapped to the surface."
-        : "The downward path reached the ground, so vertical velocity became zero."
-      : "No landing surface crossed this frame.";
+    var status = contacts.head
+      ? "head contact"
+      : contacts.left || contacts.right
+        ? "side contact"
+          : controls.jump && wasGrounded
+            ? "jumped"
+            : grounded
+              ? horizontal
+                ? "moving"
+                : "grounded"
+              : vy > 0
+              ? "rising"
+              : "falling";
 
     return freezePlatformerState({
       worldWidth: state.worldWidth,
@@ -408,8 +576,61 @@
       cameraX: cameraX,
       tick: state.tick + 1,
       status: status,
-      lastCollision: collision
+      contacts: contacts,
+      lastCollision: contactSummary(contacts)
     });
+  }
+
+  function runPlatformerCollisionDrill(part, state, parameters) {
+    var baseline = state || createPlatformerState();
+    var settings = normalizePlatformerParameters(parameters);
+    var horizontalTravel = settings.moveSpeed * settings.delta;
+    var firstPlatform = PLATFORMER_PLATFORMS[0];
+    var common = {
+      worldWidth: baseline.worldWidth,
+      viewportWidth: baseline.viewportWidth,
+      vx: 0,
+      grounded: false,
+      cameraX: baseline.cameraX,
+      tick: baseline.tick,
+      status: "drill ready",
+      contacts: emptyPlatformerContacts(),
+      lastCollision: "Collision drill prepared."
+    };
+    var drillState;
+    var drillInput = { horizontal: 0, jump: false };
+
+    if (part === "feet") {
+      drillState = freezePlatformerState(Object.assign({}, common, {
+        x: 9,
+        y: 5,
+        vy: -32
+      }));
+    } else if (part === "head") {
+      drillState = freezePlatformerState(Object.assign({}, common, {
+        x: 9,
+        y: 0.1,
+        vy: 14
+      }));
+    } else if (part === "right") {
+      drillState = freezePlatformerState(Object.assign({}, common, {
+        x: firstPlatform.x - PLATFORMER_PLAYER_WIDTH / 2 - horizontalTravel / 2,
+        y: 1.8,
+        vy: 0
+      }));
+      drillInput.horizontal = 1;
+    } else if (part === "left") {
+      drillState = freezePlatformerState(Object.assign({}, common, {
+        x: firstPlatform.x + firstPlatform.width +
+          PLATFORMER_PLAYER_WIDTH / 2 + horizontalTravel / 2,
+        y: 1.8,
+        vy: 0
+      }));
+      drillInput.horizontal = -1;
+    } else {
+      throw new Error("Platformer collision drill must target feet, head, left, or right.");
+    }
+    return stepPlatformer(drillState, drillInput, settings);
   }
 
   function normalizeOccupiedCells(cells, cellCount) {
@@ -1405,16 +1626,20 @@
     );
     var resetButton = el("button", "button button--quiet", "Reset");
     var movement = el("div", "pygame-platformer__directions");
+    var collisionDrills = el("div", "pygame-platformer__drills");
     var leftButton = el("button", "pygame-platformer__direction", "← Left");
     var jumpButton = el("button", "pygame-platformer__direction", "↑ Jump");
     var rightButton = el("button", "pygame-platformer__direction", "Right →");
     var fieldset = el("fieldset", "pygame-lab__parameters pygame-lab__parameters--grid");
     var inspector = el("aside", "pygame-lab__inspector");
     var outputs = {};
+    var contactSensors = {};
     var discoveryList = renderDiscoveryList([
       { id: "platform-move", label: "Change horizontal velocity with input." },
       { id: "platform-jump", label: "Jump, then watch gravity reverse velocity." },
       { id: "platform-land", label: "Land through a top-surface collision." },
+      { id: "platform-head", label: "Resolve a head collision against an underside." },
+      { id: "platform-side", label: "Resolve a left or right side collision." },
       { id: "platform-camera", label: "Move far enough for the camera to follow." }
     ], progress);
 
@@ -1427,7 +1652,7 @@
       el(
         "p",
         null,
-        "Use A/D or Arrow keys to move and Space to jump. This lab measures height above ground as positive upward; a local Pygame adapter maps it to downward-growing screen y."
+        "Use A/D or Arrow keys to move and Space to jump. The brighter head, feet, left, and right strips show exactly which body part supplied collision evidence."
       )
     );
 
@@ -1437,19 +1662,29 @@
     stage.setAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight A D Space");
     scene.setAttribute("aria-hidden", "true");
     [
-      [0, 0, 40, "ground"],
-      [8, 2.2, 4, "platform"],
-      [17, 3.8, 4, "platform"],
-      [27, 1.8, 5, "platform"]
-    ].forEach(function (platform) {
+      { id: "ground", x: 0, top: 0, width: 40, thickness: 0.75, kind: "ground" }
+    ].concat(PLATFORMER_PLATFORMS.map(function (platform) {
+      return Object.assign({ kind: "platform" }, platform);
+    })).forEach(function (platform) {
       var surface = el(
         "span",
-        "pygame-platformer__surface pygame-platformer__surface--" + platform[3]
+        "pygame-platformer__surface pygame-platformer__surface--" + platform.kind
       );
-      surface.style.setProperty("--platform-x", String(platform[0]));
-      surface.style.setProperty("--platform-y", String(platform[1]));
-      surface.style.setProperty("--platform-width", String(platform[2]));
+      surface.dataset.platformId = platform.id;
+      surface.style.setProperty("--platform-x", String(platform.x));
+      surface.style.setProperty("--platform-y", String(platform.top));
+      surface.style.setProperty("--platform-width", String(platform.width));
+      surface.style.setProperty("--platform-thickness", String(platform.thickness));
       scene.append(surface);
+    });
+    ["head", "right", "feet", "left"].forEach(function (part) {
+      var sensor = el(
+        "i",
+        "pygame-platformer__contact pygame-platformer__contact--" + part
+      );
+      sensor.dataset.contactPart = part;
+      contactSensors[part] = sensor;
+      player.append(sensor);
     });
     scene.append(player);
     stage.append(scene);
@@ -1479,10 +1714,22 @@
     }
     transport.append(stepButton, playButton, resetButton);
     movement.append(leftButton, jumpButton, rightButton);
+    collisionDrills.append(el("strong", null, "Contact drills"));
+    ["feet", "head", "left", "right"].forEach(function (part) {
+      var button = el(
+        "button",
+        "pygame-platformer__drill",
+        part[0].toUpperCase() + part.slice(1)
+      );
+      button.type = "button";
+      button.dataset.platformCollisionDrill = part;
+      button.setAttribute("aria-label", "Run " + part + " collision drill");
+      collisionDrills.append(button);
+    });
 
     [
       ["gravity", "Gravity", 4, 32, 1, parameters.gravity],
-      ["jumpStrength", "Jump strength", 3, 14, 0.5, parameters.jumpStrength],
+      ["jumpStrength", "Jump strength", 3, 20, 0.5, parameters.jumpStrength],
       ["moveSpeed", "Move speed", 1, 10, 0.5, parameters.moveSpeed]
     ].forEach(function (definition) {
       var label = el("label");
@@ -1500,7 +1747,7 @@
       fieldset.append(label);
     });
     fieldset.prepend(el("legend", null, "Physics parameters"));
-    controls.append(transport, movement, fieldset);
+    controls.append(transport, movement, collisionDrills, fieldset);
     visual.append(stage, controls, status);
 
     [
@@ -1510,6 +1757,10 @@
       ["vy", "Vertical velocity"],
       ["grounded", "Grounded"],
       ["camera", "Camera x"],
+      ["feet", "Feet contact"],
+      ["head", "Head contact"],
+      ["left", "Left contact"],
+      ["right", "Right contact"],
       ["collision", "Collision check"]
     ].forEach(function (definition) {
       var row = el("div", "pygame-lab__state-row");
@@ -1517,6 +1768,7 @@
       if (definition[0] === "collision") {
         row.classList.add("pygame-lab__state-row--wide");
       }
+      output.dataset.platformState = definition[0];
       outputs[definition[0]] = output;
       row.append(el("span", null, definition[1]), output);
       inspector.append(row);
@@ -1532,6 +1784,14 @@
     function renderState(speak) {
       player.style.setProperty("--player-x", String(state.x));
       player.style.setProperty("--player-y", String(state.y));
+      player.style.setProperty(
+        "--player-world-width",
+        String(state.playerWidth * 2.5) + "%"
+      );
+      player.style.setProperty(
+        "--player-world-height",
+        String(state.playerHeight * 8) + "%"
+      );
       scene.style.setProperty("--camera-x", String(state.cameraX));
       outputs.x.value = state.x.toFixed(2);
       outputs.x.textContent = state.x.toFixed(2);
@@ -1545,13 +1805,30 @@
       outputs.grounded.textContent = state.grounded ? "yes" : "no";
       outputs.camera.value = state.cameraX.toFixed(2);
       outputs.camera.textContent = state.cameraX.toFixed(2);
+      ["feet", "head", "left", "right"].forEach(function (part) {
+        var contact = state.contacts[part] || "clear";
+        outputs[part].value = contact;
+        outputs[part].textContent = contact;
+        contactSensors[part].classList.toggle(
+          "is-active",
+          Boolean(state.contacts[part])
+        );
+      });
+      var activeContacts = ["feet", "head", "left", "right"].filter(function (part) {
+        return Boolean(state.contacts[part]);
+      });
+      player.dataset.contactParts = activeContacts.length
+        ? activeContacts.join(" ")
+        : "none";
       outputs.collision.value = state.lastCollision;
       outputs.collision.textContent = state.lastCollision;
       status.textContent = (
         "Frame " + state.tick +
+        ". Phase " + state.status +
         ". World x " + state.x.toFixed(1) +
         ". Height above ground " + state.y.toFixed(1) +
         ". Up-positive velocity " + state.vy.toFixed(1) +
+        ". Contact " + (activeContacts.join(" and ") || "none") +
         ". Camera offset " + state.cameraX.toFixed(1) + "."
       );
       if (state.vx !== 0) {
@@ -1560,8 +1837,18 @@
       if (!state.grounded && state.y > 0) {
         completeDiscovery(block, "platform-jump", progress);
       }
-      if (state.tick > 1 && state.grounded && /crossed|ground/u.test(state.lastCollision)) {
+      if (
+        state.tick > 0 &&
+        state.contacts.feet &&
+        state.contacts.feet !== "ground"
+      ) {
         completeDiscovery(block, "platform-land", progress);
+      }
+      if (state.contacts.head) {
+        completeDiscovery(block, "platform-head", progress);
+      }
+      if (state.contacts.left || state.contacts.right) {
+        completeDiscovery(block, "platform-side", progress);
       }
       if (state.cameraX > 0.5) {
         completeDiscovery(block, "platform-camera", progress);
@@ -1575,6 +1862,14 @@
       state = stepPlatformer(state, input, parameters);
       input.jump = false;
       renderState(speak);
+    }
+
+    function focusStage() {
+      try {
+        stage.focus({ preventScroll: true });
+      } catch (_error) {
+        stage.focus();
+      }
     }
 
     function stop() {
@@ -1642,6 +1937,9 @@
         input.horizontal = 0;
       }
     });
+    stage.addEventListener("blur", function () {
+      input.horizontal = 0;
+    });
     [leftButton, rightButton].forEach(function (button) {
       button.addEventListener("pointerdown", function (event) {
         event.preventDefault();
@@ -1658,7 +1956,7 @@
         setHorizontal(button.dataset.platformDirection, false);
       });
       button.addEventListener("click", function () {
-        stage.focus();
+        focusStage();
       });
     });
     jumpButton.addEventListener("click", function () {
@@ -1666,7 +1964,21 @@
       if (!running) {
         step(true);
       }
-      stage.focus();
+      focusStage();
+    });
+    collisionDrills.addEventListener("click", function (event) {
+      var button = event.target.closest("[data-platform-collision-drill]");
+      if (!button) {
+        return;
+      }
+      stop();
+      state = runPlatformerCollisionDrill(
+        button.dataset.platformCollisionDrill,
+        state,
+        parameters
+      );
+      renderState(true);
+      focusStage();
     });
     stepButton.addEventListener("click", function () { step(true); });
     playButton.addEventListener("click", function () {
@@ -1681,7 +1993,7 @@
       stop();
       state = createPlatformerState();
       renderState(true);
-      stage.focus();
+      focusStage();
     });
     fieldset.addEventListener("input", function (event) {
       var key = event.target.dataset.platformParameter;
@@ -2255,7 +2567,9 @@
     createSnakeState: createSnakeState,
     createSystemsState: createSystemsState,
     normalizePlatformerParameters: normalizePlatformerParameters,
+    platformerPlatforms: PLATFORMER_PLATFORMS,
     queueSnakeDirection: queueSnakeDirection,
+    runPlatformerCollisionDrill: runPlatformerCollisionDrill,
     stepPlatformer: stepPlatformer,
     stepSnake: stepSnake,
     stepSystems: stepSystems

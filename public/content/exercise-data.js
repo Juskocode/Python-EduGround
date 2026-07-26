@@ -1632,6 +1632,7 @@
           step("Separate rules from effects", "Write movement, collision, spawning, scoring, modes, and timers as plain state transformations before drawing pixels or playing sounds."),
           step("Trace one timed frame", "Record events, held controls, intent, elapsed-time conversion, candidate state, collision resolution, commit, draw, present, and clock timing in order."),
           step("Use one coordinate contract", "Choose an origin, axis direction, float world position, Rect synchronization point, grid size, and velocity unit before implementing movement."),
+          step("Resolve by body part", "Trace previous and candidate feet, head, left, and right edges; name the contacted platform, snap the responsible edge outside it, and zero only that axis velocity."),
           step("Replay awkward state", "Check opposite keys, edge-only contact, corner landings, fast falls, occupied spawn cells, effect expiry, pause, restart, and leaving the level with a recorded seed."),
           step("Transfer one unchanged rule", "Move a proven browser rule into a plain local module, then keep Pygame events, coordinates, drawing, text, and optional sound inside a narrow adapter."),
           step("Audit readable feedback", "Repeat success, warning, pause, expiry, failure, and recovery with sound muted, reduced motion, high zoom, and keyboard-only control."),

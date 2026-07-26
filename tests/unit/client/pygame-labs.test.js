@@ -28,6 +28,7 @@ test("the Pygame lab API exposes frozen deterministic models", () => {
   assert.equal(typeof labs.chooseDeterministicSpawn, "function");
   assert.equal(typeof labs.stepSnake, "function");
   assert.equal(typeof labs.stepPlatformer, "function");
+  assert.equal(typeof labs.runPlatformerCollisionDrill, "function");
   assert.equal(typeof labs.stepSystems, "function");
   assert.equal(typeof labs.createProgressTracker, "function");
   assert.equal(typeof labs.deriveFrameTrace, "function");
@@ -252,6 +253,8 @@ test("platformer parameters are bounded before entering the physics update", () 
     },
   );
   assert.equal(Object.isFrozen(parameters), true);
+  assert.equal(labs.normalizePlatformerParameters().jumpStrength, 11.5);
+  assert.equal(labs.normalizePlatformerParameters().delta, 0.09);
 });
 
 test("platformer jump, gravity, landing, and camera remain separate state transitions", () => {
@@ -285,6 +288,142 @@ test("platformer jump, gravity, landing, and camera remain separate state transi
   assert.equal(state.x > 8, true);
   assert.equal(state.vx, 5);
   assert.equal(state.cameraX > 0, true);
+});
+
+test("the reachable default jump can land feet-first on the first platform", () => {
+  const parameters = labs.normalizePlatformerParameters();
+  let state = labs.createPlatformerState({ x: 5 });
+  state = labs.stepPlatformer(
+    state,
+    { horizontal: 1, jump: true },
+    parameters,
+  );
+
+  let landed = false;
+  for (let frame = 0; frame < 40 && !landed; frame += 1) {
+    state = labs.stepPlatformer(
+      state,
+      { horizontal: 1, jump: false },
+      parameters,
+    );
+    landed = state.contacts.feet === "platform-1";
+  }
+
+  assert.equal(landed, true);
+  assert.equal(state.y, 2.2);
+  assert.equal(state.vy, 0);
+  assert.equal(state.grounded, true);
+  assert.match(state.lastCollision, /^FEET/u);
+});
+
+test("platformer collision drills identify and freeze every contacted body part", () => {
+  const baseline = labs.createPlatformerState();
+  const expected = {
+    feet: "platform-1",
+    head: "platform-1",
+    left: "platform-1",
+    right: "platform-1",
+  };
+
+  Object.entries(expected).forEach(([part, platform]) => {
+    const state = labs.runPlatformerCollisionDrill(part, baseline);
+    assert.equal(state.contacts[part], platform);
+    assert.equal(Object.isFrozen(state), true);
+    assert.equal(Object.isFrozen(state.contacts), true);
+    assert.match(state.lastCollision, new RegExp(`^${part.toUpperCase()}`, "u"));
+    if (part === "feet") {
+      assert.equal(state.grounded, true);
+      assert.equal(state.vy, 0);
+    }
+    if (part === "head") {
+      assert.equal(state.grounded, false);
+      assert.equal(state.vy, 0);
+    }
+    if (part === "left" || part === "right") {
+      assert.equal(state.vx, 0);
+    }
+  });
+});
+
+test("side-collision drills stay deterministic across the full speed range", () => {
+  const baseline = labs.createPlatformerState();
+  [
+    { gravity: 4, jumpStrength: 3, moveSpeed: 1, delta: 0.04 },
+    labs.normalizePlatformerParameters(),
+    { gravity: 32, jumpStrength: 20, moveSpeed: 10, delta: 0.25 },
+  ].forEach((parameters) => {
+    const left = labs.runPlatformerCollisionDrill(
+      "left",
+      baseline,
+      parameters,
+    );
+    const right = labs.runPlatformerCollisionDrill(
+      "right",
+      baseline,
+      parameters,
+    );
+    assert.equal(left.contacts.left, "platform-1");
+    assert.equal(right.contacts.right, "platform-1");
+    assert.equal(left.vx, 0);
+    assert.equal(right.vx, 0);
+  });
+});
+
+test("part contacts clear on the next free frame", () => {
+  const contacted = labs.runPlatformerCollisionDrill(
+    "head",
+    labs.createPlatformerState(),
+  );
+  const clear = labs.stepPlatformer(
+    {
+      ...contacted,
+      x: 14,
+      y: 3,
+      vy: 1,
+      grounded: false,
+    },
+    { horizontal: 0, jump: false },
+    { gravity: 4, jumpStrength: 11.5, moveSpeed: 5, delta: 0.04 },
+  );
+
+  assert.deepEqual(
+    {
+      feet: clear.contacts.feet,
+      head: clear.contacts.head,
+      left: clear.contacts.left,
+      right: clear.contacts.right,
+    },
+    { feet: null, head: null, left: null, right: null },
+  );
+  assert.match(clear.lastCollision, /No player body part/u);
+});
+
+test("world boundaries resolve against the player's left and right body edges", () => {
+  const parameters = {
+    gravity: 4,
+    jumpStrength: 11.5,
+    moveSpeed: 10,
+    delta: 0.25,
+  };
+  const leftStart = labs.createPlatformerState({ x: -100 });
+  const left = labs.stepPlatformer(
+    leftStart,
+    { horizontal: -1, jump: false },
+    parameters,
+  );
+  assert.equal(left.x, 0.42);
+  assert.equal(left.contacts.left, "world boundary");
+  assert.equal(left.vx, 0);
+
+  const rightStart = labs.createPlatformerState({ x: 100 });
+  const right = labs.stepPlatformer(
+    rightStart,
+    { horizontal: 1, jump: false },
+    parameters,
+  );
+  assert.equal(right.x, right.worldWidth - 0.42);
+  assert.equal(right.contacts.right, "world boundary");
+  assert.equal(right.vx, 0);
 });
 
 test("deterministic spawn selection avoids occupied cells and replays from one seed", () => {

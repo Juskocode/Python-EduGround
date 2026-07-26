@@ -173,6 +173,63 @@ test("the game-project hub reaches all eight exercises through the standard edit
   ).toBeVisible();
 });
 
+test("platformer contact drills expose feet, head, left, and right collision evidence", async ({
+  page,
+}) => {
+  await page.goto("/#chapter/py13/tutorials");
+  await page.getByRole("tab", { name: /Platform physics/u }).click();
+
+  const lab = page.locator('[data-pygame-lab="platformer"]');
+  for (const part of ["feet", "head", "left", "right"]) {
+    await lab.getByRole("button", {
+      name: `Run ${part} collision drill`,
+    }).click();
+    await expect(
+      lab.locator(`[data-platform-state="${part}"]`),
+    ).toHaveText("platform-1");
+    await expect(
+      lab.locator(`[data-contact-part="${part}"]`),
+    ).toHaveClass(/is-active/u);
+    await expect(lab.locator(".pygame-lab__status")).toContainText(
+      `Contact ${part}`,
+    );
+  }
+
+  await expect(
+    lab.locator('[data-discovery="platform-land"]'),
+  ).toHaveClass(/is-complete/u);
+  await expect(
+    lab.locator('[data-discovery="platform-head"]'),
+  ).toHaveClass(/is-complete/u);
+  await expect(
+    lab.locator('[data-discovery="platform-side"]'),
+  ).toHaveClass(/is-complete/u);
+  await expect(lab.locator('[data-platform-state="collision"]')).toContainText(
+    /SIDE/u,
+  );
+
+  const renderedGeometry = await lab.evaluate((element) => {
+    const stage = element.querySelector(".pygame-platformer");
+    const scene = element.querySelector(".pygame-platformer__scene");
+    const player = element.querySelector(".pygame-platformer__player");
+    const stageBox = stage.getBoundingClientRect();
+    const sceneBox = scene.getBoundingClientRect();
+    const playerBox = player.getBoundingClientRect();
+    return {
+      actualHeight: playerBox.height,
+      actualWidth: playerBox.width,
+      expectedHeight: stageBox.height * 1.35 * 0.08,
+      expectedWidth: sceneBox.width * 0.84 * 0.025,
+    };
+  });
+  expect(Math.abs(
+    renderedGeometry.actualWidth - renderedGeometry.expectedWidth,
+  )).toBeLessThan(1);
+  expect(Math.abs(
+    renderedGeometry.actualHeight - renderedGeometry.expectedHeight,
+  )).toBeLessThan(1);
+});
+
 test("the interactive studio remains usable without horizontal overflow on mobile", async ({
   page,
 }) => {
@@ -183,6 +240,14 @@ test("the interactive studio remains usable without horizontal overflow on mobil
   await expect(page.locator('[data-pygame-lab="snake"]')).toBeVisible();
   await expect(page.locator('[data-pygame-lab="platformer"]')).toBeHidden();
   await expect(page.locator('[data-pygame-lab="systems"]')).toBeHidden();
+  await page.getByRole("tab", { name: /Platform physics/u }).click();
+  const platformer = page.locator('[data-pygame-lab="platformer"]');
+  await platformer.getByRole("button", {
+    name: "Run feet collision drill",
+  }).click();
+  await expect(platformer.locator('[data-platform-state="feet"]')).toHaveText(
+    "platform-1",
+  );
   await page.getByRole("tab", { name: /Game systems/u }).click();
   await expect(page.locator('[data-pygame-lab="systems"]')).toBeVisible();
   const overflow = await page.evaluate(
