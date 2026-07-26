@@ -72,7 +72,7 @@
 .site-brand__mark {
   position: relative;
   overflow: visible;
-  border-radius: 11px 15px 11px 15px;
+  border-radius: 8px;
   transition:
     border-color 200ms ease,
     box-shadow 220ms ease,
@@ -114,46 +114,12 @@
   transition-timing-function: var(--geo-spring);
 }
 
-.button::after,
-.topbar-home::after,
-.icon-button::after,
-.profile-button::after {
-  position: absolute;
-  z-index: -1;
-  top: -80%;
-  bottom: -80%;
-  left: -35%;
-  width: 26%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--geo-cyan) 18%, transparent),
-    transparent
-  );
-  content: "";
-  opacity: 0;
-  transform: translate3d(-220%, 0, 0) rotate(18deg);
-  transition: opacity 180ms ease, transform 520ms var(--geo-spring);
-  pointer-events: none;
-}
-
-.button:hover::after,
-.button:focus-visible::after,
-.topbar-home:hover::after,
-.topbar-home:focus-visible::after,
-.icon-button:hover::after,
-.icon-button:focus-visible::after,
-.profile-button:hover::after,
-.profile-button:focus-visible::after {
-  opacity: 1;
-  transform: translate3d(650%, 0, 0) rotate(18deg);
-}
-
 .button:active,
 .topbar-home:active,
 .icon-button:active,
 .profile-button:active {
-  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+  transform: translateY(1px);
 }
 
 .topbar-home.is-current::before {
@@ -227,7 +193,7 @@
 
 .landing-hero {
   position: relative;
-  border-radius: 22px 34px 22px 34px;
+  border-radius: var(--radius-xl);
   background:
     linear-gradient(125deg, color-mix(in srgb, var(--primary) 10%, transparent), transparent 42%),
     linear-gradient(165deg, color-mix(in srgb, var(--geo-violet) 4%, transparent), transparent 60%),
@@ -388,9 +354,9 @@
 
 .landing-terminal {
   border-color: color-mix(in srgb, var(--geo-cyan) 34%, #3a4557);
-  border-radius: 10px 22px 10px 22px;
+  border-radius: 10px;
   box-shadow:
-    0 24px 70px rgba(2, 9, 18, 0.34),
+    0 10px 28px rgba(2, 9, 18, 0.28),
     0 0 0 1px color-mix(in srgb, var(--geo-cyan) 8%, transparent);
   transform: none;
   transition:
@@ -413,14 +379,6 @@
   transform: translate3d(0, -30px, 0);
   animation: geo-console-scan 6.8s 1s ease-in-out infinite;
   pointer-events: none;
-}
-
-.landing-terminal:hover {
-  border-color: color-mix(in srgb, var(--geo-cyan) 68%, #3a4557);
-  box-shadow:
-    0 30px 78px rgba(2, 9, 18, 0.4),
-    0 0 30px color-mix(in srgb, var(--geo-cyan) 10%, transparent);
-  transform: translateY(-4px);
 }
 
 .landing-terminal__result {
@@ -472,7 +430,7 @@
 
 .landing-loop li {
   overflow: hidden;
-  border-radius: 14px 22px 14px 22px;
+  border-radius: 10px;
   transition:
     border-color 190ms ease,
     box-shadow 220ms ease,
@@ -491,17 +449,11 @@
   opacity: 0.45;
 }
 
-.landing-loop li:hover {
-  border-color: color-mix(in srgb, var(--geo-cyan) 45%, var(--border));
-  box-shadow: 0 14px 34px color-mix(in srgb, var(--geo-cyan) 9%, transparent);
-  transform: translateY(-3px);
-}
-
 .landing-loop__mark {
   position: relative;
   z-index: 1;
-  border-radius: 50%;
-  box-shadow: 0 0 0 5px var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 3px var(--surface);
 }
 
 .landing-stage-card {
@@ -523,7 +475,7 @@
 .landing-stage-card__link {
   position: relative;
   overflow: hidden;
-  border-radius: 12px 24px 12px 12px;
+  border-radius: 10px;
   background:
     radial-gradient(circle at 30px 32px, color-mix(in srgb, var(--card-accent) 13%, transparent), transparent 95px),
     var(--surface);
@@ -573,7 +525,7 @@
 }
 
 .landing-stage-card__link:hover {
-  transform: translateY(-4px);
+  transform: translateY(-1px);
 }
 
 .landing-stage-card__action {
@@ -583,13 +535,13 @@
 .landing-stage-card__link:hover .landing-stage-card__action,
 .landing-stage-card__link:focus-visible .landing-stage-card__action {
   color: var(--card-accent);
-  transform: translateX(4px);
+  transform: translateX(2px);
 }
 
 .landing-trust {
   position: relative;
   overflow: hidden;
-  border-radius: 16px 28px 16px 28px;
+  border-radius: var(--radius-lg);
 }
 
 .landing-trust::after {
@@ -626,7 +578,7 @@
 }
 
 .learning-stage {
-  border-radius: 12px 20px 12px 20px;
+  border-radius: 10px;
 }
 
 .learning-stage::before,
@@ -730,7 +682,7 @@
 .learning-stage__assessment:focus-visible,
 .learning-stage__recap:hover,
 .learning-stage__recap:focus-visible {
-  transform: translateY(-3px);
+  transform: translateY(-1px);
 }
 
 .learning-stage__recap-icon {
@@ -747,14 +699,151 @@
 
 .home-rank,
 .home-overview-card {
-  border-radius: 10px 18px 10px 18px;
+  border-radius: 10px;
+}
+
+/*
+ * Precision surface grammar
+ *
+ * Feature styles own layout and meaning. This late shared layer keeps the
+ * structural corner hierarchy consistent across routes without changing
+ * circular nodes, status pills, focus indicators, or touch-target sizes.
+ */
+.landing-hero,
+.home-resume,
+.chapter-hero,
+.tutorial-hero,
+.badges-hero,
+.stage-recap-hero,
+.stage-recap-checkpoint,
+.stage-award,
+.assessment-hub-hero,
+.assessment-block-hero,
+.assessment-room-landing,
+.assessment-attempt-header {
+  border-radius: var(--radius-xl);
+}
+
+.profile-panel,
+.home-onboarding,
+.home-overview-card,
+.learning-stage,
+.dashboard-stat,
+.chapter-hero__quickstart,
+.choice-card,
+.continue-strip,
+.tutorial-cta,
+.catalogue-progress,
+.exercise-row,
+.objective-box,
+.tutorial-boundary,
+.learning-loop li,
+.tutorial-toc,
+.tutorial-section,
+.runbook-section,
+.tutorial-code,
+.tutorial-checklist,
+.chapter-visuals,
+.chapter-visual,
+.mental-model__flow li,
+.guided-practice-card,
+.guided-practice-card__answer,
+.glossary-panel,
+.debug-checklist,
+.knowledge-check,
+.runbook-toolbox,
+.runbook-conversation,
+.runbook-documentation,
+.runbook-tool,
+.runbook-documentation__card,
+.runbook-step,
+.rank-card,
+.badge-card,
+.badge-dialog__card,
+.dashboard-assessment-callout,
+.assessment-block-card,
+.assessment-mode-card,
+.assessment-reference-card,
+.assessment-question-card,
+.assessment-practical-card,
+.assessment-result-section,
+.pygame-studio,
+.pygame-lab,
+.class-page__start-panel,
+.class-room-task,
+.class-room-lab,
+.chapter-tutor,
+.exercise-workbench__lesson,
+.exercise-workbench__code,
+.results-empty,
+.runner-status,
+.achievement-toast,
+.results-summary,
+.test-result,
+.run-history__notice,
+.run-history__item,
+.exercise-next-card,
+.error-card,
+.noscript-message {
+  border-radius: 10px;
+}
+
+.topbar-home,
+.icon-button,
+.button {
+  border-radius: 8px;
+}
+
+.profile-button {
+  border-radius: 10px;
+}
+
+.chapter-hero,
+.tutorial-hero,
+.badges-hero,
+.home-resume,
+.pygame-studio,
+.pygame-lab {
+  box-shadow: var(--shadow-sm);
+}
+
+.choice-card:hover,
+.choice-card:focus-visible,
+.landing-stage-card__link:hover,
+.landing-stage-card__link:focus-visible,
+.assessment-block-card:hover,
+.assessment-mode-card:hover,
+.assessment-reference-card:hover,
+.assessment-block-card:focus-visible,
+.assessment-mode-card:focus-visible,
+.assessment-reference-card:focus-visible,
+.chapter-visual:hover,
+.chapter-visual:focus-visible,
+.runbook-documentation__card:hover,
+.runbook-documentation__card:focus-visible,
+.badge-card:hover,
+.badge-card:focus-visible,
+.exercise-next-card:hover,
+.exercise-next-card:focus-visible,
+.stage-recap-outcomes li:hover,
+.stage-recap-chapter:hover,
+.stage-recap-retrieval-card:hover,
+.stage-recap-mode:hover,
+.stage-recap-reference:hover,
+.stage-recap-reference:focus-visible {
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+body[data-route="onboarding"] .app-main::before {
+  opacity: 0.38;
 }
 
 /* Recap mission briefing */
 
 .stage-recap-hero {
   position: relative;
-  border-radius: 18px 32px 18px 32px;
+  border-radius: var(--radius-xl);
   isolation: isolate;
 }
 
@@ -859,7 +948,7 @@
 .stage-recap-reference {
   position: relative;
   overflow: hidden;
-  border-radius: 11px 19px 11px 19px;
+  border-radius: 10px;
   transition:
     border-color 180ms ease,
     box-shadow 220ms ease,
@@ -888,8 +977,8 @@
 .stage-recap-reference:hover,
 .stage-recap-reference:focus-visible {
   border-color: color-mix(in srgb, var(--recap-accent) 48%, var(--border));
-  box-shadow: 0 14px 32px color-mix(in srgb, var(--recap-accent) 8%, transparent);
-  transform: translateY(-3px);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .stage-recap-bridge__mark {
@@ -1219,10 +1308,6 @@
     display: none;
   }
 
-  .landing-terminal:hover {
-    transform: none;
-  }
-
   .learning-stage__route-beacon {
     top: 39px;
     top: calc(39px + (var(--stage-route-fill) * (100% - 81px)));
@@ -1258,7 +1343,7 @@
 
   .landing-hero,
   .stage-recap-hero {
-    border-radius: 16px 24px 16px 24px;
+    border-radius: var(--radius-xl);
   }
 
   .landing-hero__geometry,
@@ -1273,7 +1358,7 @@
   .stage-recap-retrieval-card,
   .stage-recap-mode,
   .stage-recap-reference {
-    border-radius: 10px 17px 10px 17px;
+    border-radius: 10px;
   }
 }
 

@@ -6,12 +6,12 @@
 .class-page--onboarding .class-page__header {
   position: relative;
   overflow: hidden;
-  padding: clamp(24px, 4vw, 42px);
+  padding: clamp(20px, 3vw, 32px);
   border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-top: 3px solid var(--primary);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(circle at 88% 14%, color-mix(in srgb, var(--primary) 16%, transparent) 0 8%, transparent 9%),
-    linear-gradient(130deg, var(--primary-softer), transparent 54%),
+    linear-gradient(130deg, var(--primary-softer), transparent 58%),
     var(--surface);
 }
 
@@ -19,10 +19,10 @@
   position: absolute;
   right: clamp(20px, 5vw, 56px);
   bottom: clamp(18px, 4vw, 42px);
-  color: color-mix(in srgb, var(--primary) 22%, transparent);
+  color: color-mix(in srgb, var(--primary) 15%, transparent);
   content: "00";
   font-family: var(--font-mono);
-  font-size: clamp(3.5rem, 9vw, 7rem);
+  font-size: clamp(3rem, 7vw, 5rem);
   font-weight: 900;
   line-height: 0.8;
   pointer-events: none;
@@ -458,9 +458,9 @@
 .class-page__start-panel {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--surface);
-  box-shadow: 0 16px 38px color-mix(in srgb, #020b18 9%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
 .class-page__start-steps {
@@ -714,8 +714,8 @@
   overflow: hidden;
   margin: 0;
   border-color: var(--code-border);
-  border-radius: 9px;
-  box-shadow: 0 8px 20px rgba(3, 8, 15, 0.13);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
 }
 
 .class-page__code pre {
@@ -727,7 +727,7 @@
   overflow: hidden;
   margin-top: 13px;
   border: 1px solid var(--code-border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--code-bg);
 }
 
@@ -810,9 +810,9 @@
 .class-room-task {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--surface);
-  box-shadow: 0 8px 26px rgba(9, 18, 32, 0.06);
+  box-shadow: var(--shadow-soft);
   scroll-margin-top: 86px;
   transition:
     border-color 160ms ease,
@@ -1015,9 +1015,9 @@
   overflow: hidden;
   margin-top: 15px;
   border: 1px solid #394457;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #111720;
-  box-shadow: 0 12px 28px rgba(3, 8, 15, 0.17);
+  box-shadow: var(--shadow-sm);
 }
 
 .class-room-lab__toolbar,
@@ -1178,10 +1178,10 @@
 .chapter-tutor {
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: 8px;
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, var(--primary) 6%), var(--surface));
-  box-shadow: 0 16px 38px rgba(3, 8, 15, 0.11);
+  box-shadow: var(--shadow-sm);
 }
 
 .chapter-tutor__boundary {

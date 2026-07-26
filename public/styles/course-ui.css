@@ -3,14 +3,15 @@
   --bg: #f3f6fb;
   --bg-soft: #eaf0f8;
   --surface: #ffffff;
+  --surface-raised: #ffffff;
   --surface-2: #f8fafe;
   --surface-3: #eef3f9;
   --text: #182131;
   --text-strong: #0d1728;
   --muted: #58667a;
   --muted-strong: #4d5c72;
-  --border: #dce3ed;
-  --border-strong: #c5d0df;
+  --border: #d7e0eb;
+  --border-strong: #b9c6d7;
   --primary: #146c4a;
   --primary-strong: #0d583b;
   --primary-soft: #e2f5ed;
@@ -27,13 +28,14 @@
   --code-surface: #222832;
   --code-border: #343d4b;
   --code-text: #f2f5f8;
-  --shadow-sm: 0 5px 18px rgba(29, 43, 68, 0.08);
-  --shadow-md: 0 14px 40px rgba(26, 42, 68, 0.12);
-  --shadow-lg: 0 28px 70px rgba(22, 38, 61, 0.16);
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
-  --radius-xl: 30px;
+  --shadow-soft: 0 1px 3px rgba(29, 43, 68, 0.07);
+  --shadow-sm: 0 2px 8px rgba(29, 43, 68, 0.07);
+  --shadow-md: 0 8px 24px rgba(26, 42, 68, 0.1);
+  --shadow-lg: 0 16px 40px rgba(22, 38, 61, 0.14);
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --shell: 1320px;
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
@@ -44,14 +46,15 @@
   --bg: #0b1018;
   --bg-soft: #101722;
   --surface: #141c28;
+  --surface-raised: #182231;
   --surface-2: #182231;
   --surface-3: #202b3c;
   --text: #e9eef5;
   --text-strong: #f7f9fc;
   --muted: #9cabc0;
   --muted-strong: #bcc7d6;
-  --border: #29364a;
-  --border-strong: #3a4960;
+  --border: #2e3c50;
+  --border-strong: #44536a;
   --primary: #61d89f;
   --primary-strong: #8be8ba;
   --primary-soft: #153b2e;
@@ -68,9 +71,10 @@
   --code-surface: #1a2029;
   --code-border: #303946;
   --code-text: #f5f7fa;
-  --shadow-sm: 0 8px 22px rgba(0, 0, 0, 0.24);
-  --shadow-md: 0 18px 45px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 32px 80px rgba(0, 0, 0, 0.42);
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.38);
 }
 
 *,
@@ -235,7 +239,7 @@ pre {
 
 .site-topbar__inner {
   display: flex;
-  min-height: 74px;
+  min-height: 70px;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
@@ -257,14 +261,14 @@ pre {
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
-  border-radius: 13px;
+  border-radius: 8px;
   background: linear-gradient(145deg, var(--primary-soft), var(--surface));
   color: var(--primary-strong);
   font-family: var(--font-mono);
   font-size: 0.96rem;
   font-weight: 800;
   letter-spacing: -0.12em;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-soft);
 }
 
 .site-brand__mark span {
@@ -318,7 +322,7 @@ pre {
   align-items: center;
   gap: 7px;
   padding: 0 13px;
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--muted-strong);
   font-size: 0.86rem;
   font-weight: 700;
@@ -345,7 +349,7 @@ pre {
   height: 42px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--muted-strong);
   cursor: pointer;
   font-weight: 800;
@@ -441,7 +445,7 @@ pre {
   align-items: center;
   gap: 10px;
   padding: 4px 10px 4px 5px;
-  border-radius: 15px;
+  border-radius: 10px;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
@@ -459,13 +463,13 @@ pre {
   height: 38px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 11px;
+  border-radius: 8px;
   background: linear-gradient(145deg, var(--primary), var(--primary-strong));
   color: #ffffff;
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 900;
-  box-shadow: 0 5px 12px color-mix(in srgb, var(--primary) 22%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .profile-button__copy {
@@ -511,7 +515,7 @@ pre {
   max-height: min(760px, calc(100vh - 96px));
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow-lg);
   animation: profile-in 150ms ease-out both;
@@ -532,7 +536,7 @@ pre {
   height: 50px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 15px;
+  border-radius: var(--radius-md);
   background: var(--text-strong);
   color: var(--surface);
   font-family: var(--font-mono);
@@ -601,7 +605,7 @@ pre {
   place-items: center;
   padding: 10px 5px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--surface-2);
   text-align: center;
 }
@@ -660,7 +664,7 @@ pre {
   gap: 4px;
   padding: 8px 3px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--surface-2);
   cursor: pointer;
   transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
@@ -678,7 +682,7 @@ pre {
   width: 28px;
   height: 28px;
   place-items: center;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--surface-3);
   color: var(--muted);
   font-family: var(--font-mono);
@@ -706,7 +710,7 @@ pre {
 .profile-badge-detail {
   margin-top: 10px;
   padding: 11px 12px;
-  border-radius: 11px;
+  border-radius: var(--radius-md);
   background: var(--surface-2);
 }
 
@@ -910,13 +914,13 @@ pre {
 
 .button {
   display: inline-flex;
-  min-height: 46px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 0 17px;
   border: 1px solid var(--border-strong);
-  border-radius: 13px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--text-strong);
   cursor: pointer;
@@ -928,15 +932,15 @@ pre {
 
 .button:hover {
   border-color: var(--primary);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft);
 }
 
 .button--primary {
   border-color: var(--primary-strong);
   background: var(--primary-strong);
   color: #ffffff;
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 22%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 :root[data-theme="dark"] .button--primary {
@@ -1152,7 +1156,7 @@ pre {
   display: grid;
   overflow: hidden;
   grid-template-columns: minmax(300px, 0.78fr) minmax(0, 1.22fr);
-  min-height: 420px;
+  min-height: 390px;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: var(--surface);
@@ -1160,7 +1164,7 @@ pre {
 }
 
 .chapter-hero__art {
-  min-height: 380px;
+  min-height: 350px;
   border-right: 1px solid var(--border);
 }
 
@@ -1169,12 +1173,12 @@ pre {
   min-width: 0;
   flex-direction: column;
   justify-content: center;
-  padding: clamp(30px, 5vw, 66px);
+  padding: clamp(28px, 4vw, 52px);
 }
 
 .chapter-hero h1 {
   margin-bottom: 14px;
-  font-size: clamp(2.2rem, 4.5vw, 4.3rem);
+  font-size: clamp(2.15rem, 4vw, 3.7rem);
 }
 
 .chapter-hero__summary {
@@ -1518,9 +1522,9 @@ pre {
 .tutorial-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
-  gap: 38px;
+  gap: 30px;
   align-items: center;
-  padding: clamp(28px, 5vw, 58px);
+  padding: clamp(26px, 4vw, 48px);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: linear-gradient(135deg, var(--primary-softer), var(--surface) 58%);
@@ -1529,7 +1533,7 @@ pre {
 
 .tutorial-hero h1 {
   margin-bottom: 12px;
-  font-size: clamp(2.2rem, 4.4vw, 4.1rem);
+  font-size: clamp(2.1rem, 3.8vw, 3.55rem);
 }
 
 .tutorial-hero__subtitle {
@@ -1772,14 +1776,14 @@ pre {
 .tutorial-article {
   display: grid;
   min-width: 0;
-  gap: 22px;
+  gap: 18px;
 }
 
 .tutorial-section,
 .runbook-section {
   min-width: 0;
   scroll-margin-top: 100px;
-  padding: clamp(24px, 4vw, 42px);
+  padding: clamp(22px, 3.2vw, 36px);
   border: 1px solid var(--border);
   border-radius: 21px;
   background: var(--surface);
@@ -2810,7 +2814,7 @@ pre {
   grid-template-columns: minmax(0, 0.75fr) minmax(500px, 1.25fr);
   gap: 36px;
   align-items: center;
-  padding: clamp(30px, 5vw, 58px);
+  padding: clamp(28px, 4vw, 48px);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: linear-gradient(125deg, var(--primary-softer), var(--surface));
@@ -2819,7 +2823,7 @@ pre {
 
 .badges-hero h1 {
   margin-bottom: 11px;
-  font-size: clamp(2.1rem, 4.2vw, 4rem);
+  font-size: clamp(2.05rem, 3.8vw, 3.5rem);
 }
 
 .badges-hero > div:first-child > p:last-child {
@@ -3097,9 +3101,9 @@ pre {
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-soft);
 }
 
 .exercise-workbench__lesson {
@@ -3290,7 +3294,7 @@ pre {
   margin-top: 10px;
   padding: 18px;
   border: 1px solid color-mix(in srgb, var(--success) 27%, var(--border));
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--success-soft);
 }
 
@@ -3326,7 +3330,7 @@ pre {
   height: 38px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--warning-soft);
   color: var(--warning);
   font-family: var(--font-mono);
@@ -3359,7 +3363,7 @@ pre {
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--surface);
 }
 
@@ -3424,9 +3428,9 @@ pre {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 15px;
+  border-radius: var(--radius-md);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-soft);
 }
 
 .example-card__header {
@@ -3522,9 +3526,9 @@ pre {
   overflow: hidden;
   grid-template-columns: minmax(0, 1fr) minmax(310px, 0.34fr);
   border: 1px solid var(--code-border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: var(--code-bg);
-  box-shadow: 0 24px 60px rgba(3, 9, 17, 0.25);
+  box-shadow: var(--shadow-md);
 }
 
 .exercise-workbench .ide-layout {
@@ -3691,9 +3695,9 @@ pre {
   gap: 4px;
   padding: 6px;
   border: 1px solid #414b59;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: #202630;
-  box-shadow: 0 18px 42px rgba(3, 9, 17, 0.42);
+  box-shadow: var(--shadow-md);
 }
 
 .ide-tools__menu .ide-button {
@@ -3715,7 +3719,7 @@ pre {
   gap: 6px;
   padding: 0 4px 0 9px;
   border: 1px solid #414b59;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: #242c37;
   color: #9da9b7;
   font-family: var(--font-mono);
@@ -3727,7 +3731,7 @@ pre {
   min-height: 26px;
   padding: 0 22px 0 7px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   outline: 0;
   background: #343e4b;
   color: #eef3f7;
@@ -3743,7 +3747,7 @@ pre {
   min-height: 34px;
   padding: 0 11px;
   border: 1px solid #414b59;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: #2b333f;
   color: #dbe2e9;
   cursor: pointer;
@@ -5633,7 +5637,7 @@ pre {
   min-height: 32px;
   padding: 0 11px;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--muted-strong);
   cursor: pointer;
@@ -5848,7 +5852,7 @@ pre {
   flex: 0 0 auto;
   padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--muted-strong);
   cursor: pointer;
@@ -5879,7 +5883,7 @@ pre {
 
 .ide-dock__panel--tests .test-plan-case {
   border-color: var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
 }
 

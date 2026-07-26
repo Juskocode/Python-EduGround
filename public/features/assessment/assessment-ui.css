@@ -87,10 +87,10 @@
 .assessment-attempt-header {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
-  gap: 28px;
+  gap: 24px;
   align-items: center;
-  padding: 34px;
-  margin: 24px 0 46px;
+  padding: 28px;
+  margin: 20px 0 34px;
   border: 1px solid var(--border);
   border-radius: 22px;
   background:

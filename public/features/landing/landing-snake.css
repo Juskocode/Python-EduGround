@@ -9,13 +9,13 @@
   overflow: hidden;
   padding: clamp(16px, 2vw, 22px);
   border: 1px solid color-mix(in srgb, var(--geo-cyan) 43%, #334158);
-  border-radius: 14px 26px 14px 26px;
+  border-radius: var(--radius-lg);
   background:
     radial-gradient(circle at 85% 8%, rgba(165, 152, 255, 0.15), transparent 15rem),
     linear-gradient(155deg, rgba(13, 31, 51, 0.98), rgba(4, 10, 24, 0.99));
   color: var(--snake-text);
   box-shadow:
-    0 28px 72px rgba(1, 5, 15, 0.36),
+    0 16px 40px rgba(1, 5, 15, 0.34),
     inset 0 0 0 1px rgba(88, 220, 255, 0.05);
   animation: landing-snake-arrive 580ms 90ms var(--geo-spring) both;
 }
@@ -599,7 +599,7 @@
 @media (max-width: 620px) {
   .landing-snake {
     padding: 14px 10px;
-    border-radius: 12px 20px 12px 20px;
+    border-radius: var(--radius-lg);
   }
 
   .landing-snake__heading {

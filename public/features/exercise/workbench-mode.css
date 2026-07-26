@@ -10,7 +10,7 @@ body[data-route="exercise"] .site-brand {
 body[data-route="exercise"] .site-brand__mark {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 0.82rem;
 }
 
@@ -30,27 +30,27 @@ body[data-route="exercise"] .site-primary-nav {
 body[data-route="exercise"] .topbar-home {
   min-height: 38px;
   padding-inline: 10px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 0.76rem;
 }
 
 body[data-route="exercise"] .icon-button {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 body[data-route="exercise"] .profile-button {
   min-height: 42px;
   gap: 8px;
   padding: 3px 8px 3px 4px;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 body[data-route="exercise"] .profile-button__avatar {
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: 8px;
   font-size: 0.68rem;
 }
 
@@ -127,7 +127,7 @@ body[data-route="exercise"] .ide-layout-reset,
 body[data-route="exercise"] .ide-focus-button {
   min-height: 32px;
   padding-inline: 9px;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 0.62rem;
 }
 
