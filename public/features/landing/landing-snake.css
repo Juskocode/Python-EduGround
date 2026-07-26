@@ -5,9 +5,14 @@
   --snake-muted: #94a8c0;
   position: relative;
   z-index: 3;
+  display: grid;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 9px;
   overflow: hidden;
-  padding: clamp(16px, 2vw, 22px);
+  padding: clamp(12px, 1.6vw, 18px);
   border: 1px solid color-mix(in srgb, var(--geo-cyan) 43%, #334158);
   border-radius: var(--radius-lg);
   background:
@@ -17,7 +22,7 @@
   box-shadow:
     0 16px 40px rgba(1, 5, 15, 0.34),
     inset 0 0 0 1px rgba(88, 220, 255, 0.05);
-  animation: landing-snake-arrive 580ms 90ms var(--geo-spring) both;
+  animation: landing-snake-arrive 360ms 60ms var(--geo-spring) both;
 }
 
 .landing-snake::before {
@@ -38,7 +43,7 @@
   align-items: end;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 14px;
+  margin: 0;
 }
 
 .landing-snake__heading > div:first-child {
@@ -62,17 +67,21 @@
   max-width: 520px;
   margin: 5px 0 0;
   color: var(--snake-muted);
-  font-size: 0.69rem;
-  line-height: 1.48;
+  font-size: 0.67rem;
+  line-height: 1.4;
 }
 
 .landing-snake__hud {
   display: grid;
   flex: 0 0 auto;
   grid-template-columns: repeat(4, minmax(58px, auto));
-  gap: 6px;
+  gap: 1px;
   padding: 0;
   margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(88, 220, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(88, 220, 255, 0.18);
 }
 
 .landing-snake__hud div {
@@ -80,8 +89,8 @@
   min-width: 60px;
   gap: 1px;
   padding: 6px 8px;
-  border: 1px solid rgba(88, 220, 255, 0.18);
-  border-radius: 7px;
+  border: 0;
+  border-radius: 0;
   background: rgba(9, 23, 40, 0.72);
 }
 
@@ -102,9 +111,9 @@
   display: grid;
   grid-template-columns: auto minmax(120px, 1fr);
   align-items: center;
-  gap: 5px 14px;
-  padding: 9px 11px;
-  margin: 0 0 10px;
+  gap: 4px 12px;
+  padding: 7px 10px;
+  margin: 0;
   border: 1px solid rgba(88, 220, 255, 0.18);
   border-radius: 8px;
   background: rgba(6, 18, 35, 0.74);
@@ -179,14 +188,23 @@
 
 .landing-snake__playfield {
   position: relative;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(88, 220, 255, 0.28);
-  border-radius: 9px 17px 9px 17px;
-  background: var(--snake-board);
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      45deg,
+      rgba(88, 220, 255, 0.025) 25%,
+      transparent 25% 75%,
+      rgba(88, 220, 255, 0.025) 75%
+    ),
+    var(--snake-board);
+  background-size: 40px 40px;
   box-shadow:
     inset 0 0 42px rgba(40, 112, 177, 0.16),
     0 0 0 3px rgba(88, 220, 255, 0.035);
-  cursor: crosshair;
+  cursor: default;
   outline: 0;
   touch-action: none;
 }
@@ -201,7 +219,8 @@
 .landing-snake__board {
   display: block;
   width: 100%;
-  aspect-ratio: 12 / 7;
+  height: 100%;
+  min-height: 0;
 }
 
 .landing-snake__space {
@@ -223,7 +242,8 @@
 
 .landing-snake__asteroid {
   color: #7b879a;
-  transition: transform 920ms linear;
+  opacity: 0.78;
+  transition: transform 1.4s linear;
 }
 
 .landing-snake__asteroid polygon {
@@ -233,12 +253,6 @@
   transform-box: fill-box;
   transform-origin: center;
   vector-effect: non-scaling-stroke;
-  animation: landing-snake-rock 26s linear infinite;
-}
-
-.landing-snake__asteroid:nth-child(2n) polygon {
-  animation-direction: reverse;
-  animation-duration: 33s;
 }
 
 .landing-snake__crater {
@@ -248,21 +262,21 @@
 }
 
 .landing-snake__energy {
-  color: #ffd06f;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: landing-snake-energy 920ms ease-in-out infinite alternate;
+  color: #ff896f;
 }
 
-.landing-snake__energy polygon {
+.landing-snake__energy-fruit {
   fill: currentColor;
-  stroke: #fff4c8;
-  stroke-width: 0.045;
-  filter: drop-shadow(0 0 0.16px #ffd06f);
+  stroke: #ffd7b8;
+  stroke-width: 0.05;
+  filter: drop-shadow(0 0 0.12px rgba(255, 137, 111, 0.7));
 }
 
-.landing-snake__energy-core {
-  fill: #fffbe7;
+.landing-snake__energy-leaf {
+  fill: #8ff3c5;
+  stroke: #e8fff6;
+  stroke-width: 0.035;
+  vector-effect: non-scaling-stroke;
 }
 
 .landing-snake__falling-star {
@@ -291,7 +305,9 @@
 .landing-snake__powerup {
   transform-box: fill-box;
   transform-origin: center;
-  animation: landing-snake-powerup 1.4s ease-in-out infinite alternate;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 
 .landing-snake__powerup-halo {
@@ -350,7 +366,7 @@
 }
 
 .landing-snake__echo rect {
-  fill: rgba(88, 220, 255, 0.24);
+  fill: rgba(88, 220, 255, 0.16);
   stroke: #58dcff;
   stroke-dasharray: 0.12 0.08;
   stroke-width: 0.045;
@@ -359,7 +375,7 @@
 }
 
 .landing-snake__segment rect {
-  fill: #2eaf7b;
+  fill: #38b982;
   stroke: #8ff3c5;
   stroke-width: 0.045;
   vector-effect: non-scaling-stroke;
@@ -370,18 +386,19 @@
 }
 
 .landing-snake__head rect {
-  fill: #6be7aa;
+  fill: #73dc79;
   stroke: #e8fff6;
   stroke-width: 0.06;
   filter: drop-shadow(0 0 0.13px #6be7aa);
   vector-effect: non-scaling-stroke;
 }
 
-.landing-snake__head-label {
-  fill: #042015;
-  font: 900 0.28px var(--font-mono);
-  letter-spacing: -0.04em;
+.landing-snake__head-eye {
+  fill: #082418;
+  stroke: #eafff2;
+  stroke-width: 0.018;
   pointer-events: none;
+  vector-effect: non-scaling-stroke;
 }
 
 .landing-snake[data-snake-effect="split-phase"] .landing-snake__head rect {
@@ -395,8 +412,8 @@
   stroke-width: 0.12;
 }
 
-.landing-snake[data-snake-combo="2"] .landing-snake__energy polygon,
-.landing-snake[data-snake-combo="3"] .landing-snake__energy polygon {
+.landing-snake[data-snake-combo="2"] .landing-snake__energy-fruit,
+.landing-snake[data-snake-combo="3"] .landing-snake__energy-fruit {
   stroke: #6be7aa;
   filter: drop-shadow(0 0 0.22px #6be7aa);
 }
@@ -428,10 +445,11 @@
 
 .landing-snake__controls {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 12px;
+  margin: 0;
 }
 
 .landing-snake__actions {
@@ -441,7 +459,7 @@
 }
 
 .landing-snake__actions .button {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 12px;
   border-color: rgba(148, 168, 192, 0.34);
   font-size: 0.68rem;
@@ -525,7 +543,7 @@
 }
 
 .landing-snake__instructions {
-  margin: 9px 0 0;
+  margin: 0;
   color: var(--snake-muted);
   font: 0.55rem/1.5 var(--font-mono);
   text-align: right;
@@ -539,25 +557,6 @@
   from {
     opacity: 0;
     transform: translateY(16px) scale(0.98);
-  }
-}
-
-@keyframes landing-snake-rock {
-  to {
-    rotate: 360deg;
-  }
-}
-
-@keyframes landing-snake-energy {
-  to {
-    scale: 1.16;
-  }
-}
-
-@keyframes landing-snake-powerup {
-  to {
-    opacity: 0.72;
-    scale: 1.08;
   }
 }
 
@@ -598,7 +597,8 @@
 
 @media (max-width: 620px) {
   .landing-snake {
-    padding: 14px 10px;
+    gap: 7px;
+    padding: 9px 8px;
     border-radius: var(--radius-lg);
   }
 
@@ -609,7 +609,7 @@
 
   .landing-snake__hud {
     width: 100%;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1.3fr 0.9fr 0.75fr 0.9fr;
   }
 
   .landing-snake__hud div {
@@ -618,7 +618,88 @@
   }
 
   .landing-snake__mission {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto minmax(80px, 1fr);
+  }
+
+  .landing-snake__mission-copy {
+    grid-row: span 2;
+  }
+
+  .landing-snake__controls {
+    align-items: center;
+  }
+
+  .landing-snake__actions {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(68px, 1fr));
+    align-items: stretch;
+    flex: 1;
+  }
+
+  .landing-snake__actions .button {
+    min-width: 0;
+    padding-inline: 6px;
+    justify-content: center;
+    font-size: 0.61rem;
+  }
+
+  .landing-snake__heading p:last-child {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
+
+@media (max-width: 410px) {
+  .landing-snake__heading h2 {
+    font-size: 0.94rem;
+  }
+
+  .landing-snake__hud div {
+    padding-inline: 5px;
+  }
+
+  .landing-snake__hud dt {
+    font-size: 0.43rem;
+  }
+
+  .landing-snake__hud dd {
+    font-size: 0.58rem;
+  }
+
+  .landing-snake__mission-meta {
+    gap: 3px 8px;
+  }
+
+  .landing-snake__actions .button {
+    font-size: 0.57rem;
+  }
+}
+
+@media (max-height: 520px) and (min-width: 521px) {
+  .landing-snake {
+    gap: 5px;
+    padding: 7px;
+  }
+
+  .landing-snake__heading {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .landing-snake__heading .eyebrow,
+  .landing-snake__heading p:last-child,
+  .landing-snake__mission-kicker,
+  .landing-snake__mission-meta {
+    display: none;
+  }
+
+  .landing-snake__mission {
+    grid-template-columns: auto minmax(100px, 1fr);
+    gap: 8px;
+    padding: 5px 8px;
   }
 
   .landing-snake__mission-copy {
@@ -626,32 +707,7 @@
   }
 
   .landing-snake__controls {
-    align-items: flex-end;
-  }
-
-  .landing-snake__actions {
-    align-items: stretch;
-    flex: 1;
-    flex-direction: column;
-  }
-
-  .landing-snake__actions .button {
-    justify-content: center;
-  }
-
-  .landing-snake__instructions {
-    font-size: 0.51rem;
-  }
-}
-
-@media (max-width: 410px) {
-  .landing-snake__controls {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .landing-snake__dpad {
-    align-self: center;
+    min-height: 44px;
   }
 }
 
@@ -711,12 +767,12 @@
     filter: none;
   }
 
-  .landing-snake__head-label {
+  .landing-snake__head-eye {
     fill: HighlightText;
   }
 
-  .landing-snake__energy polygon,
-  .landing-snake__energy-core,
+  .landing-snake__energy-fruit,
+  .landing-snake__energy-leaf,
   .landing-snake__powerup-core,
   .landing-snake__powerup-halo {
     fill: LinkText;

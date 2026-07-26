@@ -123,7 +123,7 @@ test("reduced motion disables the new ambient and reward animations", async ({
 
   await page.getByRole("button", { name: /Launch Python Snake/u }).click();
   const snakeDialog = page.getByRole("dialog", {
-    name: /snake\.py \/\/ orbital loop/u,
+    name: /Python Snake/u,
   });
   const snake = snakeDialog.locator("[data-landing-snake]");
   await expect(snakeDialog).toBeVisible();

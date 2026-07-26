@@ -22,11 +22,7 @@
   var DEFAULT_ASTEROIDS = Object.freeze([
     Object.freeze([4, 2]),
     Object.freeze([17, 2]),
-    Object.freeze([13, 4]),
-    Object.freeze([20, 5]),
     Object.freeze([15, 9]),
-    Object.freeze([3, 10]),
-    Object.freeze([10, 11]),
     Object.freeze([21, 12]),
   ]);
   var SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -35,7 +31,7 @@
   var BASE_CORE_POINTS = 10;
   var MAX_SPLITS = 3;
   var SPLIT_PHASE_TICKS = 10;
-  var DEFAULT_ASTEROID_CADENCE = 18;
+  var DEFAULT_ASTEROID_CADENCE = 24;
   var POWER_UP_LIFETIME = 72;
   var FALLING_STAR_LIFETIME = 14;
   var COMBO_WINDOW_TICKS = 36;
@@ -885,13 +881,13 @@
   function createEnergyNode() {
     var group = svgElement("g", "landing-snake__energy");
     group.append(
-      setAttributes(svgElement("polygon"), {
-        points: "0.5,0.02 0.64,0.35 0.98,0.5 0.64,0.65 0.5,0.98 0.36,0.65 0.02,0.5 0.36,0.35",
-      }),
-      setAttributes(svgElement("circle", "landing-snake__energy-core"), {
+      setAttributes(svgElement("circle", "landing-snake__energy-fruit"), {
         cx: 0.5,
-        cy: 0.5,
-        r: 0.13,
+        cy: 0.57,
+        r: 0.29,
+      }),
+      setAttributes(svgElement("path", "landing-snake__energy-leaf"), {
+        d: "M 0.48 0.3 C 0.56 0.13 0.73 0.13 0.78 0.19 C 0.7 0.31 0.59 0.34 0.48 0.3",
       })
     );
     return group;
@@ -952,16 +948,21 @@
       y: 0.08,
       width: 0.84,
       height: 0.84,
-      rx: isHead ? 0.25 : 0.18,
+      rx: isHead ? 0.34 : 0.28,
     }));
     if (isHead) {
-      var label = setAttributes(svgElement("text", "landing-snake__head-label"), {
-        x: 0.5,
-        y: 0.62,
-        "text-anchor": "middle",
-      });
-      label.textContent = "PY";
-      group.append(label);
+      group.append(
+        setAttributes(svgElement("circle", "landing-snake__head-eye"), {
+          cx: 0.72,
+          cy: 0.34,
+          r: 0.075,
+        }),
+        setAttributes(svgElement("circle", "landing-snake__head-eye"), {
+          cx: 0.72,
+          cy: 0.66,
+          r: 0.075,
+        })
+      );
     }
     return group;
   }
@@ -1185,6 +1186,18 @@
         node.setAttribute("data-snake-segment", cell);
         if (index === 0) {
           node.setAttribute("data-snake-head", cell);
+          var eyes = node.querySelectorAll(".landing-snake__head-eye");
+          var eyePositions = state.queuedDirection === "up"
+            ? [[0.34, 0.28], [0.66, 0.28]]
+            : state.queuedDirection === "down"
+              ? [[0.34, 0.72], [0.66, 0.72]]
+              : state.queuedDirection === "left"
+                ? [[0.28, 0.34], [0.28, 0.66]]
+                : [[0.72, 0.34], [0.72, 0.66]];
+          eyes.forEach(function (eye, eyeIndex) {
+            eye.setAttribute("cx", eyePositions[eyeIndex][0]);
+            eye.setAttribute("cy", eyePositions[eyeIndex][1]);
+          });
         }
       }
     });
@@ -1306,6 +1319,17 @@
           announcement.textContent = message;
         }
       });
+    }
+
+    function focusPlayfield() {
+      if (!playfield) {
+        return;
+      }
+      try {
+        playfield.focus({ preventScroll: true });
+      } catch (_error) {
+        playfield.focus();
+      }
     }
 
     function phaseCopy() {
@@ -1665,7 +1689,7 @@
     }
     root.querySelectorAll("[data-snake-direction]").forEach(function (button) {
       button.addEventListener("click", function () {
-        if (playfield) playfield.focus();
+        focusPlayfield();
         steer(button.dataset.snakeDirection);
       }, listenerOptions);
     });

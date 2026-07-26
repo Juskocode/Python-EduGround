@@ -326,8 +326,8 @@
     var arcade = el("section", "landing-snake");
     var heading = el("header", "landing-snake__heading");
     var headingCopy = el("div");
-    var title = el("h2", null, "snake.py // orbital loop");
-    var description = el("p", null, "Reach 1000 by collecting cores. Fast routes build a score chain; splitting creates a safe escape but resets the chain.");
+    var title = el("h2", null, "Python Snake");
+    var description = el("p", null, "Collect warm cores, build a chain, and split the trail when you need a clean escape.");
     var hud = el("dl", "landing-snake__hud");
     var mission = el("section", "landing-snake__mission");
     var missionCopy = el("div", "landing-snake__mission-copy");
@@ -338,7 +338,7 @@
     var controls = el("div", "landing-snake__controls");
     var actions = el("div", "landing-snake__actions");
     var dpad = el("div", "landing-snake__dpad");
-    var instructions = el("p", "landing-snake__instructions");
+    var instructions = el("p", "landing-snake__instructions visually-hidden");
     var liveStatus = el("p", "visually-hidden");
 
     arcade.dataset.landingSnake = "";
@@ -347,7 +347,7 @@
     description.id = "landing-snake-dialog-description";
     arcade.setAttribute("aria-labelledby", title.id);
     headingCopy.append(
-      el("p", "eyebrow", "Playable Python preview"),
+      el("p", "eyebrow", "Playable logic lab"),
       title,
       description
     );
@@ -377,7 +377,7 @@
     var effect = el("span", null, "No active effect");
     effect.dataset.snakeEffectStatus = "";
     missionCopy.append(
-      el("span", "landing-snake__mission-kicker", "Mission 01"),
+      el("span", "landing-snake__mission-kicker", "Goal"),
       el("strong", null, "Collect cores · reach 1000")
     );
     missionMeta.append(
@@ -457,8 +457,8 @@
     close.dataset.snakeClose = "";
     close.setAttribute("aria-label", "Close Python Snake");
     topbarCopy.append(
-      el("span", "eyebrow", "Python logic lab"),
-      el("strong", null, "Optional arcade")
+      el("span", "eyebrow", "Mini game"),
+      el("strong", null, "Learn movement, state, and collision")
     );
     topbar.append(topbarCopy, close);
     frame.append(topbar, renderSnakeArcade());

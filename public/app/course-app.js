@@ -184,6 +184,7 @@
   var activeLandingSnake = null;
   var activeLandingSnakeDialog = null;
   var activeLandingSnakeLauncher = null;
+  var landingSnakeScrollLock = null;
   var currentRoute = null;
   var selectedBadgeId = null;
   var signOutInProgress = false;
@@ -529,6 +530,7 @@
       disposeLandingSnake(false);
     }
     if (!dialog.open) {
+      lockLandingSnakePage();
       if (typeof dialog.showModal === "function") {
         dialog.showModal();
       } else {
@@ -555,6 +557,56 @@
     announce("Opened Python Snake. The mission is idle until you press Start.");
   }
 
+  function lockLandingSnakePage() {
+    if (landingSnakeScrollLock) {
+      return;
+    }
+    var body = document.body;
+    landingSnakeScrollLock = {
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      position: body.style.position,
+      top: body.style.top,
+      right: body.style.right,
+      bottom: body.style.bottom,
+      left: body.style.left,
+      width: body.style.width,
+      overflow: body.style.overflow
+    };
+    body.style.position = "fixed";
+    body.style.top = "-" + landingSnakeScrollLock.scrollY + "px";
+    body.style.right = "0";
+    body.style.bottom = "0";
+    body.style.left = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+  }
+
+  function unlockLandingSnakePage() {
+    if (!landingSnakeScrollLock) {
+      return;
+    }
+    var lock = landingSnakeScrollLock;
+    var body = document.body;
+    landingSnakeScrollLock = null;
+    body.style.position = lock.position;
+    body.style.top = lock.top;
+    body.style.right = lock.right;
+    body.style.bottom = lock.bottom;
+    body.style.left = lock.left;
+    body.style.width = lock.width;
+    body.style.overflow = lock.overflow;
+    restoreLandingPageScroll(lock.scrollX, lock.scrollY);
+  }
+
+  function restoreLandingPageScroll(scrollX, scrollY) {
+    var rootStyle = document.documentElement.style;
+    var previousScrollBehavior = rootStyle.scrollBehavior;
+    rootStyle.scrollBehavior = "auto";
+    window.scrollTo(scrollX, scrollY);
+    rootStyle.scrollBehavior = previousScrollBehavior;
+  }
+
   function closeLandingSnakeDialog() {
     var dialog = activeLandingSnakeDialog ||
       elements.main.querySelector("[data-snake-dialog][open]");
@@ -572,6 +624,12 @@
 
   function disposeLandingSnake(restoreFocus) {
     var launcher = activeLandingSnakeLauncher;
+    var restoreScrollX = landingSnakeScrollLock
+      ? landingSnakeScrollLock.scrollX
+      : window.scrollX;
+    var restoreScrollY = landingSnakeScrollLock
+      ? landingSnakeScrollLock.scrollY
+      : window.scrollY;
     if (activeLandingSnake) {
       activeLandingSnake.destroy();
       activeLandingSnake = null;
@@ -581,10 +639,16 @@
     }
     activeLandingSnakeDialog = null;
     activeLandingSnakeLauncher = null;
+    unlockLandingSnakePage();
     if (restoreFocus && launcher && launcher.isConnected) {
       window.requestAnimationFrame(function () {
         if (launcher.isConnected) {
-          launcher.focus();
+          try {
+            launcher.focus({ preventScroll: true });
+          } catch (error) {
+            launcher.focus();
+            restoreLandingPageScroll(restoreScrollX, restoreScrollY);
+          }
         }
       });
     }

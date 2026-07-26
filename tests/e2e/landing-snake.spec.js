@@ -5,7 +5,7 @@ let unexpectedBrowserErrors;
 
 async function openSnakeDialog(page) {
   const launcher = page.getByRole("button", { name: /Launch Python Snake/u });
-  const dialog = page.getByRole("dialog", { name: /snake\.py \/\/ orbital loop/u });
+  const dialog = page.getByRole("dialog", { name: /Python Snake/u });
 
   await launcher.click();
   await expect(dialog).toBeVisible();
@@ -424,6 +424,114 @@ test("the Snake dialog is touch-sized, motion-aware, and accessible on mobile", 
     )
     .join("\n");
   expect(accessibility.violations, summary).toEqual([]);
+});
+
+[
+  { width: 360, height: 740 },
+  { width: 390, height: 844 },
+  { width: 844, height: 390 },
+  { width: 1366, height: 768 },
+].forEach((viewport) => {
+  test(`Snake stays fixed without internal scrolling at ${viewport.width}×${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/#welcome");
+
+    const { arcade, dialog, playfield } = await openSnakeDialog(page);
+    const frame = dialog.locator(".landing-snake-dialog__frame");
+    const close = dialog.getByRole("button", { name: "Close Python Snake" });
+    const before = await page.evaluate(() => ({
+      frameScrollTop: document.querySelector(".landing-snake-dialog__frame").scrollTop,
+      windowScrollY: window.scrollY,
+    }));
+
+    const direction = arcade.locator("[data-snake-direction]").first();
+    if (await direction.isVisible()) {
+      await direction.click();
+    } else {
+      await arcade.getByRole("button", { name: "Start mission" }).click();
+    }
+    await arcade.getByRole("button", { name: "Pause" }).click();
+
+    const geometry = await page.evaluate(() => {
+      const frameElement = document.querySelector(".landing-snake-dialog__frame");
+      const visibleElements = [
+        document.querySelector("[data-snake-playfield]"),
+        document.querySelector(".landing-snake__controls"),
+        document.querySelector("[data-snake-close]"),
+      ];
+      return {
+        frameClientHeight: frameElement.clientHeight,
+        frameScrollHeight: frameElement.scrollHeight,
+        frameScrollTop: frameElement.scrollTop,
+        windowScrollY: window.scrollY,
+        playfieldHeight: visibleElements[0].getBoundingClientRect().height,
+        allInsideViewport: visibleElements.every((element) => {
+          const box = element.getBoundingClientRect();
+          return (
+            box.top >= -1 &&
+            box.left >= -1 &&
+            box.right <= window.innerWidth + 1 &&
+            box.bottom <= window.innerHeight + 1
+          );
+        }),
+      };
+    });
+
+    expect(geometry.frameScrollHeight).toBeLessThanOrEqual(
+      geometry.frameClientHeight + 1
+    );
+    expect(geometry.frameScrollTop).toBe(before.frameScrollTop);
+    expect(geometry.windowScrollY).toBe(before.windowScrollY);
+    expect(geometry.playfieldHeight).toBeGreaterThanOrEqual(120);
+    expect(geometry.allInsideViewport).toBe(true);
+    await expect(frame).toBeVisible();
+    await expect(playfield).toBeVisible();
+    await expect(close).toBeVisible();
+  });
+});
+
+test("Snake restores page scroll and body styles after button and Escape closes", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#welcome");
+  const launcher = page.getByRole("button", { name: /Launch Python Snake/u });
+  await page.evaluate(() => {
+    document.body.style.position = "relative";
+    document.body.style.top = "0px";
+    document.body.style.right = "auto";
+    document.body.style.bottom = "auto";
+    document.body.style.left = "auto";
+    document.body.style.width = "auto";
+    document.body.style.overflow = "visible";
+  });
+  await launcher.evaluate((element) => {
+    element.scrollIntoView({ behavior: "instant", block: "center" });
+  });
+  await expect(launcher).toBeInViewport();
+  const initial = await page.evaluate(() => ({
+    scrollY: window.scrollY,
+    style: document.body.getAttribute("style"),
+  }));
+  expect(initial.scrollY).toBeGreaterThan(0);
+
+  let opened = await openSnakeDialog(page);
+  await opened.dialog.getByRole("button", { name: "Close Python Snake" }).click();
+  await expect(opened.dialog).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(initial.scrollY);
+  await expect.poll(
+    () => page.evaluate(() => document.body.getAttribute("style")),
+  ).toBe(initial.style);
+
+  opened = await openSnakeDialog(page);
+  await page.keyboard.press("Escape");
+  await expect(opened.dialog).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(initial.scrollY);
+  await expect.poll(
+    () => page.evaluate(() => document.body.getAttribute("style")),
+  ).toBe(initial.style);
 });
 
 test("leaving the welcome page destroys the running dialog arcade cleanly", async ({
