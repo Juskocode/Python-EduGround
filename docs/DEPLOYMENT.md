@@ -30,6 +30,76 @@ budget, and 10–20 learner capacity plan are documented in
 [AI_CLASSROOM_OPERATIONS.md](AI_CLASSROOM_OPERATIONS.md). Never publish Ollama's
 unauthenticated port.
 
+## Temporary private phone preview
+
+Use the authenticated preview gateway when a learner needs to inspect a local
+checkout from a phone that is not on the same network. The temporary topology is:
+
+```text
+phone -> Cloudflare HTTPS Quick Tunnel -> token gateway:8002 -> app:8001
+                                          loopback only       loopback only
+```
+
+This is a short-lived development preview, not a production deployment. A random
+Quick Tunnel URL is not authentication; the repository gateway adds the access
+boundary. For an ongoing classroom deployment, use a named tunnel with
+[Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/access-controls/)
+or another identity-aware reverse proxy.
+
+Install `cloudflared` from Cloudflare's
+[official downloads](https://developers.cloudflare.com/tunnel/downloads/), then
+build and start the gateway:
+
+```bash
+npm run build:server
+PREVIEW_UPSTREAM=http://127.0.0.1:8001 \
+PREVIEW_GATEWAY_HOST=127.0.0.1 \
+PREVIEW_GATEWAY_PORT=8002 \
+PREVIEW_LIFETIME_SECONDS=14400 \
+  node dist/server/preview-main.js
+```
+
+The gateway creates a 256-bit token and writes it to a process-specific file in
+the operating-system temporary directory with mode `0600`. It prints the file path
+but never places the token in an argument, URL, repository file, or console log.
+In a second terminal, create the HTTPS URL:
+
+```bash
+cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8002
+```
+
+Copy the generated `https://*.trycloudflare.com` origin into the app process in a
+third terminal:
+
+```bash
+NODE_ENV=production \
+APP_ORIGIN=https://generated-name.trycloudflare.com \
+TRUST_PROXY_HOPS=1 \
+ALLOW_BEARER_SESSION_TOKENS=false \
+HOST=127.0.0.1 \
+PORT=8001 \
+  node dist/server/main.js
+```
+
+Open the HTTPS URL on the phone and enter the token from the protected temporary
+file. The gateway:
+
+- gates every route, including health endpoints;
+- stores only token/session hashes in its live authentication state;
+- issues a separate `Secure`, `HttpOnly`, `SameSite=Strict`, host-only cookie;
+- limits failed attempts and strips tunnel/proxy headers before rebuilding the
+  single trusted forwarding hop;
+- strips its own cookie before forwarding to the learning app;
+- expires and closes automatically after at most 12 hours (four hours by default).
+
+Stop the app, tunnel, and gateway to revoke access immediately. Never bind either
+Node process to `0.0.0.0`, add router port forwarding, paste the token into a URL,
+or commit it. Cloudflare documents Quick Tunnels as a
+[testing and development feature](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)
+without an SLA. A new random tunnel origin also has separate browser-local storage;
+use the same PostgreSQL-backed learner account when progress must follow the learner
+between origins.
+
 ## First Compose deployment
 
 Requirements:

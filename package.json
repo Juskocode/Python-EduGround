@@ -16,6 +16,7 @@
     "clean": "node scripts/maintenance/clean-workspace.js",
     "start": "node dist/server/main.js",
     "serve": "npm run build:server && node dist/server/main.js",
+    "preview:secure": "npm run build:server && node dist/server/preview-main.js",
     "migrate": "node scripts/database/migrate.js",
     "migrate:build": "npm run build:server && npm run migrate",
     "secrets:init": "sh scripts/database/init-secrets.sh",

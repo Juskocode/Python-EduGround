@@ -33,6 +33,8 @@ const [
   backupScript,
   restoreScript,
   releaseWorkflow,
+  previewGateway,
+  previewMain,
 ] = await Promise.all([
   read("Dockerfile"),
   read(".dockerignore"),
@@ -52,6 +54,8 @@ const [
   read("scripts/database/backup-postgres.sh"),
   read("scripts/database/restore-postgres.sh"),
   read(".github/workflows/release.yml"),
+  read("src/server/security/secure-preview-gateway.ts"),
+  read("src/server/preview-main.ts"),
 ]);
 
 const fromLines = dockerfile.match(/^FROM .+$/gmu) || [];
@@ -230,6 +234,24 @@ check(
   releaseWorkflow.includes("playwright install --with-deps chromium") &&
     releaseWorkflow.includes("npm run validate:browser"),
   "Release candidates must pass the browser and accessibility gate before publication."
+);
+check(
+  previewGateway.includes('PREVIEW_COOKIE_NAME = "__Host-eduground_preview"') &&
+    previewGateway.includes("HttpOnly; Secure; ") &&
+    previewGateway.includes("SameSite=Strict") &&
+    previewGateway.includes("timingSafeEqual") &&
+    previewGateway.includes('name.startsWith("cf-")') &&
+    previewGateway.includes('headers["x-forwarded-proto"] = "https"') &&
+    previewGateway.includes("maximumFailedAttempts") &&
+    previewGateway.includes("server.close()"),
+  "The temporary preview must remain host-cookie protected, rate-limited, proxy-sanitized, and expiring."
+);
+check(
+  previewMain.includes("loopbackAddress(host)") &&
+    previewMain.includes("mode: 0o600") &&
+    !previewMain.includes("console.log(gateway.accessToken)") &&
+    !previewMain.includes("PREVIEW_ACCESS_TOKEN"),
+  "The preview launcher must bind to loopback and keep its generated token out of arguments and logs."
 );
 
 const workflowDirectory = resolve(REPOSITORY_ROOT, ".github/workflows");
