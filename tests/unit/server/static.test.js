@@ -153,6 +153,50 @@ test("the dashboard stylesheet can refine the shared course UI", async () => {
   assert.ok(workbenchModePosition > landingSnakePosition, "the route-specific workbench shell should remain the final layout refinement");
 });
 
+test("the shared precision tokens remain compact and interaction-specific", async () => {
+  const [courseUi, geospaceUi] = await Promise.all([
+    readFile(resolve(PUBLIC_ROOT, "styles/course-ui.css"), "utf8"),
+    readFile(resolve(PUBLIC_ROOT, "styles/geospace-ui.css"), "utf8"),
+  ]);
+
+  for (const token of [
+    "--surface-raised: #ffffff",
+    "--shadow-soft: 0 1px 3px",
+    "--radius-sm: 6px",
+    "--radius-md: 9px",
+    "--radius-lg: 12px",
+    "--radius-xl: 16px",
+  ]) {
+    assert.ok(courseUi.includes(token), `course UI should define ${token}`);
+  }
+
+  assert.match(
+    courseUi,
+    /\.button\s*\{[\s\S]*?min-height:\s*44px;[\s\S]*?border-radius:\s*8px;/u,
+    "primary controls should keep a 44px target with crisp corners",
+  );
+  assert.match(
+    geospaceUi,
+    /Precision surface grammar[\s\S]*?\.exercise-workbench__code,[\s\S]*?border-radius:\s*10px;/u,
+    "the late shared layer should normalize structural surfaces",
+  );
+  assert.doesNotMatch(
+    geospaceUi,
+    /translate3d\(650%,\s*0,\s*0\)/u,
+    "generic controls should not use a decorative shimmer affordance",
+  );
+  assert.doesNotMatch(
+    geospaceUi,
+    /\.landing-terminal:hover\s*\{/u,
+    "the noninteractive terminal should not lift on hover",
+  );
+  assert.doesNotMatch(
+    geospaceUi,
+    /\.landing-loop li:hover\s*\{/u,
+    "noninteractive learning-loop cards should not lift on hover",
+  );
+});
+
 test("the production image copies the complete explicit public boundary", async () => {
   const [dockerfile, dockerignore] = await Promise.all([
     readFile(resolve(REPOSITORY_ROOT, "Dockerfile"), "utf8"),

@@ -128,6 +128,24 @@ without rendering a page.
 `public/styles/` contains styles that cross feature boundaries. A selector used
 only by one feature belongs beside that feature instead.
 
+The shared visual contract is deliberately narrow:
+
+- structural corners use the `6 / 9 / 12 / 16px` radius tokens, with `8px`
+  controls and fully rounded geometry reserved for status pills and circular
+  progress nodes;
+- borders establish hierarchy, while `--shadow-soft` through `--shadow-lg`
+  represent four explicit elevation levels;
+- `geospace-ui.css` loads after the feature styles and normalizes shared
+  structural surfaces without changing feature layout, focus indicators, or
+  touch-target sizes;
+- hover lift belongs only to interactive elements. Static diagrams, console
+  previews, and explanatory cards do not imitate buttons.
+
+The Snake game and compact exercise workbench load after that shared layer
+because they have intentional route-specific rendering constraints. Any new
+cross-route surface must extend the tokens or the precision-surface selector
+group instead of introducing another independent radius and shadow scale.
+
 ### TypeScript and JavaScript convention
 
 The server has an incremental strict TypeScript lane. `tsconfig.server.json`
