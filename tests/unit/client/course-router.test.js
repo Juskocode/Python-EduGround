@@ -23,11 +23,16 @@ const assessment = {
   id: "py10-py12",
   title: "Algorithms and Problem Solving",
 };
+const onboarding = {
+  id: "py00",
+  title: "Launch Python",
+};
 const registries = {
   chapterById: new Map([[chapter.id, chapter]]),
   exerciseById: new Map([[exercise.id, exercise]]),
   chapterForExercise: new Map([[exercise.id, chapter]]),
   assessmentById: new Map([[assessment.id, assessment]]),
+  onboardingChapter: onboarding,
 };
 
 function plain(value) {
@@ -58,6 +63,13 @@ test("landing, dashboard, and legacy chapter routes preserve their contracts", (
     plain(router.parseRoute("#py13", registries)),
     { redirect: "#chapter/py13" },
   );
+  for (const alias of ["#start", "#py00", "#chapter/py00"]) {
+    assert.deepEqual(
+      plain(router.parseRoute(alias, registries)),
+      { redirect: "#chapter/py00/tutorials" },
+      alias,
+    );
+  }
 });
 
 test("chapter and exercise routes retain registry object identity", () => {
@@ -77,6 +89,30 @@ test("chapter and exercise routes retain registry object identity", () => {
   assert.equal(route.name, "exercise");
   assert.equal(route.exercise, exercise);
   assert.equal(route.chapter, chapter);
+});
+
+test("Chapter 0 has one canonical, ungraded class route", () => {
+  for (const hash of [
+    "#chapter/py00/tutorials",
+    "#chapter/py00/tutorial",
+    "#chapter/py00/runbook",
+  ]) {
+    const route = router.parseRoute(hash, registries);
+    assert.equal(route.name, "onboarding", hash);
+    assert.equal(route.chapter, onboarding, hash);
+  }
+
+  for (const hash of [
+    "#chapter/py00/exercises",
+    "#chapter/py00/tutorials/answers",
+    "#chapter/py00/assessment",
+  ]) {
+    assert.deepEqual(
+      plain(router.parseRoute(hash, registries)),
+      { redirect: "#home" },
+      hash,
+    );
+  }
 });
 
 test("assessment, badge, and recap routes preserve exact mode data", () => {
@@ -123,6 +159,10 @@ test("route announcements remain learner-facing and route specific", () => {
   assert.equal(
     router.getRouteAnnouncement({ name: "landing" }),
     "Opened the Python EduGround welcome page.",
+  );
+  assert.equal(
+    router.getRouteAnnouncement({ name: "onboarding", chapter: onboarding }),
+    "Opened Chapter 0, Launch Python.",
   );
   assert.equal(
     router.getRouteAnnouncement({ name: "tutorial", chapter }),

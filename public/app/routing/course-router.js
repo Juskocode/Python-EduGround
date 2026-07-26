@@ -27,6 +27,7 @@
     var exerciseById = source.exerciseById;
     var chapterForExercise = source.chapterForExercise;
     var assessmentById = source.assessmentById;
+    var onboardingChapter = source.onboardingChapter;
     var rawHash = String(hash || "").replace(/^#/, "");
     var decoded;
 
@@ -44,11 +45,38 @@
       return { name: "home" };
     }
 
+    var parts = decoded.split("/");
+    var onboardingId = onboardingChapter && String(onboardingChapter.id || "");
+    if (
+      onboardingId &&
+      (
+        decoded === "start" ||
+        decoded === onboardingId ||
+        decoded === "chapter/" + onboardingId
+      )
+    ) {
+      return {
+        redirect: "#chapter/" + encodeURIComponent(onboardingId) + "/tutorials"
+      };
+    }
+    if (
+      onboardingId &&
+      parts[0] === "chapter" &&
+      parts[1] === onboardingId &&
+      (
+        parts[2] === "tutorials" ||
+        parts[2] === "tutorial" ||
+        parts[2] === "runbook"
+      ) &&
+      !parts[3]
+    ) {
+      return { name: "onboarding", chapter: onboardingChapter };
+    }
+
     if (has(chapterById, decoded)) {
       return { redirect: "#chapter/" + encodeURIComponent(decoded) };
     }
 
-    var parts = decoded.split("/");
     if (parts[0] === "chapter" && has(chapterById, parts[1])) {
       var chapter = get(chapterById, parts[1]);
       if (!parts[2]) {
@@ -114,6 +142,9 @@
     var current = route && typeof route === "object" ? route : {};
     if (current.name === "landing") {
       return "Opened the Python EduGround welcome page.";
+    }
+    if (current.name === "onboarding") {
+      return "Opened Chapter 0, Launch Python.";
     }
     if (current.name === "chapter") {
       return "Opened " + current.chapter.title + ".";

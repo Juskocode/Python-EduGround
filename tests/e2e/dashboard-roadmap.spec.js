@@ -33,30 +33,30 @@ test("a clean mobile dashboard keeps the first learning action above the fold", 
   await page.reload();
 
   const primaryAction = page.locator(
-    ".home-resume__actions .button--primary"
+    ".home-onboarding .button--primary"
   );
   await expect(primaryAction).toBeVisible();
-  await expect(primaryAction).toHaveText("Start learning");
+  await expect(primaryAction).toHaveText("Start Chapter 0");
   await expect(primaryAction).toHaveAttribute(
     "href",
-    "#chapter/py01/tutorials"
+    "#chapter/py00/tutorials"
   );
 
   const geometry = await page.evaluate(() => {
     const action = document.querySelector(
-      ".home-resume__actions .button--primary"
+      ".home-onboarding .button--primary"
     );
-    const body = document.querySelector(".home-resume__body");
-    const art = document.querySelector(".home-resume__art");
+    const onboarding = document.querySelector(".home-onboarding");
+    const resume = document.querySelector(".home-resume");
     const actionBox = action.getBoundingClientRect();
-    const bodyBox = body.getBoundingClientRect();
-    const artBox = art.getBoundingClientRect();
+    const onboardingBox = onboarding.getBoundingClientRect();
+    const resumeBox = resume.getBoundingClientRect();
     return {
       actionTop: actionBox.top,
       actionBottom: actionBox.bottom,
       actionHeight: actionBox.height,
-      bodyTop: bodyBox.top,
-      artTop: artBox.top,
+      onboardingTop: onboardingBox.top,
+      resumeTop: resumeBox.top,
       pageScrollWidth: document.documentElement.scrollWidth,
       viewportHeight: window.innerHeight,
       viewportWidth: window.innerWidth,
@@ -68,7 +68,7 @@ test("a clean mobile dashboard keeps the first learning action above the fold", 
     geometry.viewportHeight
   );
   expect(geometry.actionHeight).toBeGreaterThanOrEqual(44);
-  expect(geometry.bodyTop).toBeLessThan(geometry.artTop);
+  expect(geometry.onboardingTop).toBeLessThan(geometry.resumeTop);
   expect(geometry.pageScrollWidth).toBeLessThanOrEqual(
     geometry.viewportWidth + 1
   );

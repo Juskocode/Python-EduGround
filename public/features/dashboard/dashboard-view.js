@@ -36,7 +36,12 @@
   function render(model) {
     var wrapper = el("div", "page-shell dashboard-page home-page");
     wrapper.append(
-      renderHeader(model),
+      renderHeader(model)
+    );
+    if (model.onboarding) {
+      wrapper.append(renderOnboarding(model.onboarding));
+    }
+    wrapper.append(
       renderResume(model.resume),
       renderMilestones(model.milestones),
       renderOverview(model.overview),
@@ -46,6 +51,56 @@
       wrapper.append(renderSourceDisclosure(model.note));
     }
     return wrapper;
+  }
+
+  function renderOnboarding(onboarding) {
+    var section = el(
+      "section",
+      "home-onboarding" + (onboarding.complete ? " is-complete" : "")
+    );
+    var marker = el("div", "home-onboarding__marker");
+    var copy = el("div", "home-onboarding__copy");
+    var progressBlock = el("div", "home-onboarding__progress");
+    var actionLabel = onboarding.complete
+      ? "Review Chapter 0"
+      : onboarding.started
+        ? "Continue setup"
+        : "Start Chapter 0";
+
+    section.setAttribute("aria-labelledby", "home-onboarding-title");
+    marker.setAttribute("aria-hidden", "true");
+    marker.append(
+      el("span", null, onboarding.complete ? "✓" : "00"),
+      el("small", null, onboarding.complete ? "Ready" : "Start")
+    );
+    copy.append(
+      el("p", "eyebrow", onboarding.complete ? "Launch room complete" : "Before Chapter 1"),
+      el("h2", null, onboarding.title),
+      el("p", null, onboarding.summary),
+      el(
+        "small",
+        "home-onboarding__meta",
+        onboarding.duration + " min · ungraded · no stars · progress saves"
+      )
+    );
+    copy.querySelector("h2").id = "home-onboarding-title";
+    progressBlock.append(
+      el(
+        "span",
+        null,
+        onboarding.complete
+          ? "All setup checkpoints complete"
+          : onboarding.progress.done + " of " + onboarding.progress.total + " checkpoints"
+      ),
+      progress(
+        onboarding.progress.done,
+        onboarding.progress.total,
+        "Chapter 0 setup progress"
+      ),
+      link(onboarding.href, "button button--primary", actionLabel)
+    );
+    section.append(marker, copy, progressBlock);
+    return section;
   }
 
   function renderHeader(model) {

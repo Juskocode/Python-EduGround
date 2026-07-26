@@ -57,6 +57,10 @@
   var conceptClinicView = window.CONCEPT_CLINIC || null;
   var classMaterials = window.CLASS_MATERIALS || {};
   var classPageView = window.CLASS_PAGE || null;
+  var onboardingContent = window.ONBOARDING_CONTENT || null;
+  var onboardingChapter = onboardingContent && onboardingContent.chapter
+    ? onboardingContent.chapter
+    : null;
   var pygameLabsController = window.PYGAME_LABS
     ? window.PYGAME_LABS.create({
         announce: announce,
@@ -117,7 +121,8 @@
     assessmentById: assessmentById,
     chapterById: chapterById,
     chapterForExercise: chapterForExercise,
-    exerciseById: exerciseById
+    exerciseById: exerciseById,
+    onboardingChapter: onboardingChapter
   });
 
   var deliberateLocalSignOut = safeRead(STORAGE_KEYS.authSignedOut) === "1";
@@ -241,6 +246,9 @@
     if (parsed.name === "landing") {
       view = renderLanding();
       document.title = "Learn Python · Python EduGround";
+    } else if (parsed.name === "onboarding") {
+      view = renderTutorial(parsed.chapter);
+      document.title = "Chapter 0 · Launch Python · Python EduGround";
     } else if (parsed.name === "chapter") {
       view = renderChapterHub(parsed.chapter);
       document.title = parsed.chapter.title + " · Python EduGround";
@@ -329,6 +337,7 @@
     var chapterRoute = route && [
       "home",
       "stage-recap",
+      "onboarding",
       "chapter",
       "exercises",
       "tutorial",
@@ -366,7 +375,7 @@
       return null;
     }
 
-    return dashboardModel.build({
+    var snapshot = dashboardModel.build({
       chapters: chapters.map(function (chapter) {
         var classMaterial = classMaterials[String(chapter.id)] || {};
         return {
@@ -413,6 +422,40 @@
       lastExerciseId: workspaceRead(STORAGE_KEYS.lastExercise),
       note: course.note
     });
+    snapshot.onboarding = buildOnboardingSnapshot();
+    return snapshot;
+  }
+
+  function buildOnboardingSnapshot() {
+    if (!onboardingChapter) {
+      return null;
+    }
+    var progress = getChapterLearningProgress(onboardingChapter);
+    var courseStarted = chapters.some(function (chapter) {
+      return getChapterProgress(chapter).done > 0 ||
+        getChapterLearningProgress(chapter).done > 0;
+    }) || Boolean(workspaceRead(STORAGE_KEYS.lastExercise));
+    return {
+      id: String(onboardingChapter.id),
+      number: String(onboardingChapter.number || "00"),
+      title: String(onboardingChapter.title || "Launch Python"),
+      summary: String(onboardingChapter.summary || ""),
+      duration: Number(
+        onboardingContent &&
+        onboardingContent.material &&
+        onboardingContent.material.estimatedMinutes
+      ) || 40,
+      href: "#chapter/" + encodeURIComponent(String(onboardingChapter.id)) + "/tutorials",
+      nextHref: onboardingContent &&
+        onboardingContent.handoff &&
+        onboardingContent.handoff.href
+        ? String(onboardingContent.handoff.href)
+        : "#chapter/py01/tutorials",
+      progress: progress,
+      started: progress.done > 0,
+      complete: progress.total > 0 && progress.done === progress.total,
+      shouldPrompt: !courseStarted && progress.done < progress.total
+    };
   }
 
   function renderUnavailablePage(title, message) {
@@ -795,7 +838,10 @@
 
   function renderTutorial(chapter) {
     var chapterId = String(chapter.id);
-    var material = classMaterials[chapterId] || null;
+    var isOnboarding = Boolean(
+      onboardingChapter && String(onboardingChapter.id) === chapterId
+    );
+    var material = getClassMaterial(chapterId);
     if (!material || !classPageView || typeof classPageView.render !== "function") {
       return renderLegacyTutorial(chapter);
     }
@@ -804,7 +850,9 @@
     var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
     var runbook = content && Array.isArray(content.runbook) ? content.runbook : [];
     var deepDive = content && content.deepDive && typeof content.deepDive === "object" ? content.deepDive : null;
-    var clinic = conceptClinicView && typeof conceptClinicView.render === "function"
+    var clinic = !isOnboarding &&
+      conceptClinicView &&
+      typeof conceptClinicView.render === "function"
       ? clinicsByChapter[chapterId] || null
       : null;
     var lessonNodes = tutorials.length
@@ -828,10 +876,13 @@
           deepDive && deepDive.interactiveLab
         )
       : null;
-    var chapterIndex = chapters.findIndex(function (candidate) {
+    var classChapters = onboardingChapter
+      ? [onboardingChapter].concat(chapters)
+      : chapters.slice();
+    var chapterIndex = classChapters.findIndex(function (candidate) {
       return String(candidate.id) === chapterId;
     });
-    var navigationChapters = chapters.map(function (candidate) {
+    var navigationChapters = classChapters.map(function (candidate) {
       var stats = getChapterLearningProgress(candidate);
       return Object.assign({}, candidate, {
         href: "#chapter/" + encodeURIComponent(String(candidate.id)) + "/tutorials",
@@ -856,9 +907,17 @@
       deepDiveNode: deepDiveNode,
       runbookNode: runbookNode,
       officialDocsNode: officialDocsNode,
-      exerciseHref: "#chapter/" + encodeURIComponent(chapterId) + "/exercises",
-      previousChapter: chapterIndex > 0 ? chapters[chapterIndex - 1] : null,
-      nextChapter: chapterIndex >= 0 && chapterIndex < chapters.length - 1 ? chapters[chapterIndex + 1] : null
+      exerciseHref: isOnboarding && onboardingContent.handoff
+        ? onboardingContent.handoff.href
+        : "#chapter/" + encodeURIComponent(chapterId) + "/exercises",
+      completionActionLabel: isOnboarding ? "Start Chapter 1" : "Open chapter exercises",
+      handoff: isOnboarding ? onboardingContent.handoff : null,
+      showTutor: !isOnboarding,
+      variant: isOnboarding ? "onboarding" : "",
+      previousChapter: chapterIndex > 0 ? classChapters[chapterIndex - 1] : null,
+      nextChapter: chapterIndex >= 0 && chapterIndex < classChapters.length - 1
+        ? classChapters[chapterIndex + 1]
+        : null
     });
   }
 
@@ -3358,7 +3417,7 @@
   }
 
   function toggleLearningItem(button) {
-    var chapter = chapterById.get(String(button.dataset.chapterId));
+    var chapter = getLearningChapter(String(button.dataset.chapterId));
     var itemId = button.dataset.learningToggle;
     if (!chapter || !itemId) {
       return;
@@ -3398,7 +3457,7 @@
     elements.main.querySelectorAll("[data-learning-toc]").forEach(function (tocButton) {
       tocButton.classList.toggle("is-understood", isLearningUnderstood(chapter, tocButton.dataset.learningToc));
     });
-    var roomTasks = getClassRoomTasks(classMaterials[chapterId]);
+    var roomTasks = getClassRoomTasks(getClassMaterial(chapterId));
     var roomTaskStates = roomTasks.map(function (task) {
       return isLearningUnderstood(chapter, getClassRoomProgressId(task.id));
     });
@@ -3509,7 +3568,9 @@
           startAction.setAttribute("aria-controls", nextTaskCard.id);
         }
       } else {
-        startAction.textContent = "Open chapter exercises";
+        startAction.textContent =
+          startAction.dataset.classStartCompletionLabel ||
+          "Open chapter exercises";
         delete startAction.dataset.scrollTarget;
         startAction.removeAttribute("aria-controls");
         startAction.dataset.routeTarget = startAction.dataset.classStartExerciseHref;
@@ -3560,7 +3621,9 @@
     if (!checkpoint) {
       return;
     }
-    var checkpointChapter = chapterById.get(String(checkpoint.dataset.checkpoint || ""));
+    var checkpointChapter = getLearningChapter(
+      String(checkpoint.dataset.checkpoint || "")
+    );
     var checkpointContent = checkpointChapter ? getChapterLearning(checkpointChapter) : null;
     var checkpointDefinition = checkpointContent &&
       checkpointContent.deepDive &&
@@ -3599,12 +3662,35 @@
       : [];
   }
 
+  function getLearningChapter(chapterId) {
+    var normalizedId = String(chapterId || "");
+    if (
+      onboardingChapter &&
+      String(onboardingChapter.id) === normalizedId
+    ) {
+      return onboardingChapter;
+    }
+    return chapterById.get(normalizedId) || null;
+  }
+
+  function getClassMaterial(chapterId) {
+    var normalizedId = String(chapterId || "");
+    if (
+      onboardingChapter &&
+      String(onboardingChapter.id) === normalizedId &&
+      onboardingContent.material
+    ) {
+      return onboardingContent.material;
+    }
+    return classMaterials[normalizedId] || null;
+  }
+
   function getClassRoomProgressId(taskId) {
     return "room:" + String(taskId || "");
   }
 
   function findClassRoomTask(chapterId, taskId) {
-    var material = classMaterials[String(chapterId)] || null;
+    var material = getClassMaterial(chapterId);
     return getClassRoomTasks(material).find(function (task) {
       return String(task.id) === String(taskId);
     }) || null;
@@ -3621,7 +3707,7 @@
   function checkClassRoomAnswer(form) {
     var chapterId = String(form.dataset.classChapter || "");
     var taskId = String(form.dataset.classRoomForm || "");
-    var chapter = chapterById.get(chapterId);
+    var chapter = getLearningChapter(chapterId);
     var task = findClassRoomTask(chapterId, taskId);
     var input = form.querySelector("input[data-class-answer]");
     var feedback = form.querySelector("[data-class-feedback]");
@@ -3675,7 +3761,7 @@
   }
 
   function getClassLabDefinition(chapterId, labId) {
-    var material = classMaterials[String(chapterId)] || null;
+    var material = getClassMaterial(chapterId);
     if (!material) {
       return null;
     }
@@ -3688,7 +3774,7 @@
       };
     }
     if (labId.startsWith("lesson-")) {
-      var chapter = chapterById.get(String(chapterId));
+      var chapter = getLearningChapter(chapterId);
       var content = chapter ? getChapterLearning(chapter) : null;
       var tutorials = content && Array.isArray(content.tutorial) ? content.tutorial : [];
       var tutorial = tutorials.find(function (candidate, index) {
@@ -3869,7 +3955,7 @@
           : "Check complete. The terminal matches the expected output.";
         var newlyCompleted = false;
         if (definition.task) {
-          var chapter = chapterById.get(chapterId);
+          var chapter = getLearningChapter(chapterId);
           newlyCompleted = completeLearningItem(
             chapter,
             getClassRoomProgressId(definition.task.id)
@@ -6129,6 +6215,14 @@
   }
 
   function getChapterLearning(chapter) {
+    if (
+      onboardingChapter &&
+      chapter &&
+      String(chapter.id) === String(onboardingChapter.id) &&
+      onboardingContent.learning
+    ) {
+      return onboardingContent.learning;
+    }
     return learning.chapters && learning.chapters[String(chapter.id)]
       ? learning.chapters[String(chapter.id)]
       : null;
@@ -6140,7 +6234,7 @@
     var itemIds = tutorials.map(function (tutorial, index) {
       return getTutorialItemId(tutorial, index);
     });
-    var material = classMaterials[String(chapter.id)] || null;
+    var material = getClassMaterial(chapter.id);
     getClassRoomTasks(material).forEach(function (task) {
       itemIds.push(getClassRoomProgressId(task.id));
     });
@@ -6163,7 +6257,7 @@
 
   function migrateLearningItemId(chapterId, itemId) {
     var match = /^tutorial-(\d+)$/u.exec(String(itemId));
-    var chapter = chapterById.get(String(chapterId));
+    var chapter = getLearningChapter(chapterId);
     if (!match || !chapter) {
       return String(itemId);
     }

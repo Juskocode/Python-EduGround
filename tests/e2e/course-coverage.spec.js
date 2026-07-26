@@ -101,6 +101,7 @@ test("the main learning surfaces remain free of horizontal overflow on mobile", 
   await page.setViewportSize({ width: 390, height: 844 });
   const routes = [
     "/#home",
+    "/#chapter/py00/tutorials",
     "/#chapter/py01",
     "/#chapter/py01/exercises",
     "/#exercise/py01-fixme",

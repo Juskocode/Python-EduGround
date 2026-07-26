@@ -13,13 +13,19 @@ const [index, courseApp] = await Promise.all([
 test("classic runtime dependencies load before the course composition root", () => {
   const routerIndex = index.indexOf('src="/app/routing/course-router.js"');
   const runnerIndex = index.indexOf('src="/workers/python-runner-client.js"');
+  const onboardingIndex = index.indexOf('src="/content/onboarding-content.js"');
   const appIndex = index.indexOf('src="/app/course-app.js"');
 
   assert.ok(routerIndex >= 0, "course router script is missing");
   assert.ok(runnerIndex >= 0, "Python runner client script is missing");
+  assert.ok(onboardingIndex >= 0, "Chapter 0 content script is missing");
   assert.ok(appIndex >= 0, "course app script is missing");
   assert.ok(routerIndex < appIndex, "router must load before the composition root");
   assert.ok(runnerIndex < appIndex, "runner client must load before the composition root");
+  assert.ok(
+    onboardingIndex < appIndex,
+    "Chapter 0 content must load before the composition root",
+  );
   assert.match(
     index.slice(routerIndex, appIndex),
     /\bdefer\b/gu,

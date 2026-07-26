@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 
 const routes = [
   ["welcome", "/#welcome"],
+  ["Chapter 0 launch room", "/#chapter/py00/tutorials"],
   ["dashboard", "/#home"],
   ["stage recap", "/#stage/py01-py03/recap"],
   ["chapter", "/#chapter/py01"],

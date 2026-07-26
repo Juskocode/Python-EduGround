@@ -35,6 +35,103 @@
   font-size: clamp(0.9rem, 1.25vw, 1.02rem);
 }
 
+.home-onboarding {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(220px, 300px);
+  gap: clamp(18px, 3vw, 34px);
+  align-items: center;
+  padding: clamp(20px, 3vw, 30px);
+  border: 1px solid color-mix(in srgb, var(--primary) 36%, var(--border));
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(120deg, var(--primary-softer), transparent 66%),
+    var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.home-onboarding__marker {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-content: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 55%, var(--border));
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--primary) 16%, transparent), transparent),
+    var(--surface-raised);
+  color: var(--primary-strong);
+  text-align: center;
+}
+
+.home-onboarding__marker span {
+  font-family: var(--font-mono);
+  font-size: 1.18rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.home-onboarding__marker small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-onboarding__copy {
+  display: grid;
+  gap: 5px;
+}
+
+.home-onboarding__copy .eyebrow {
+  margin: 0;
+}
+
+.home-onboarding__copy h2,
+.home-onboarding__copy p {
+  margin: 0;
+}
+
+.home-onboarding__copy h2 {
+  color: var(--text-strong);
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+}
+
+.home-onboarding__copy p:not(.eyebrow) {
+  max-width: 68ch;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.home-onboarding__meta {
+  color: var(--primary-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.home-onboarding__progress {
+  display: grid;
+  gap: 10px;
+}
+
+.home-onboarding__progress > span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.home-onboarding__progress .button {
+  min-height: 44px;
+}
+
+.home-onboarding.is-complete {
+  border-color: color-mix(in srgb, var(--success) 38%, var(--border));
+  background:
+    linear-gradient(120deg, color-mix(in srgb, var(--success) 10%, transparent), transparent 66%),
+    var(--surface);
+}
+
 .home-header__meta {
   display: flex;
   flex-wrap: wrap;
@@ -1399,6 +1496,14 @@
 }
 
 @media (max-width: 760px) {
+  .home-onboarding {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .home-onboarding__progress {
+    grid-column: 1 / -1;
+  }
+
   .home-header {
     padding-top: 2px;
   }
@@ -1449,6 +1554,16 @@
 }
 
 @media (max-width: 500px) {
+  .home-onboarding {
+    grid-template-columns: 1fr;
+  }
+
+  .home-onboarding__marker {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+  }
+
   .home-header h1 {
     font-size: clamp(1.72rem, 10.5vw, 2.25rem);
   }

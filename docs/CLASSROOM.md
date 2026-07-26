@@ -7,10 +7,18 @@ borrows the useful teaching rhythm of the
 notes, short examples, stable course navigation, and an explicit exercise
 handoff—without copying its wording, branding, code, or visual chrome.
 
+Chapter 0 is a 40-minute, ungraded launch room that sits outside the 13 graded
+chapter, star, rank, badge, and assessment contracts. It introduces motivation,
+browser versus optional local setup, the editor/interpreter/terminal model, one
+editable first run, traceback recovery, and a sustainable practice rhythm. Its
+six guided tasks and embedded drafts use the normal classroom persistence keys,
+then hand off directly to Chapter 1 without exposing an exercise catalogue or
+chapter tutor.
+
 Chapters 1–3 also use a guided-room rhythm inspired by interactive learning rooms:
 read a small piece of theory, answer or modify code, receive specific feedback, and
-continue with a visible completion marker. There are 11 of these room tasks: five
-in Chapter 1 and three each in Chapters 2 and 3.
+continue with a visible completion marker. There are 14 of these graded-chapter
+room tasks: eight in Chapter 1 and three each in Chapters 2 and 3.
 
 ## Learner-facing class sequence
 
@@ -19,7 +27,7 @@ Every chapter uses the same predictable sequence:
 1. **In this class** — audience, duration, format, summary, prerequisites, and preparation.
 2. **Lesson plan** — five timed blocks totalling 90 minutes.
 3. **Lecture demonstration** — independently authored, editable Python with a separate sample-input panel, real terminal output, teaching points, and prediction questions.
-4. **Guided room tasks, when supplied** — concise theory followed by an answer check or incomplete program. Chapters 1–3 currently provide 11 tasks in total.
+4. **Guided room tasks, when supplied** — concise theory followed by an answer check or incomplete program. Chapter 0 provides six launch tasks; Chapters 1–3 provide 14 tasks in total.
 5. **Lesson notes** — concept explanations, analogous examples, checks, takeaways, and common mistakes. Python examples are editable and runnable from the same embedded workspace.
 6. **Class activities** — collaborative tasks that end with inspectable evidence.
 7. **Independent practice** — ordered transfer prompts completed without copying the lecture example.
@@ -287,6 +295,8 @@ git diff --check
 
 The classroom checks cover:
 
+- the deeply frozen, ungraded Chapter 0 contract, its executable first run,
+  official links, stable setup tasks, canonical route, and Chapter 1 handoff;
 - all 13 chapters, 1,170 planned minutes, stable IDs, and deeply frozen content;
 - complete preparation, schedules, activities, practice, recap, and homework;
 - Python compilation, execution with authored input, and exact output for every

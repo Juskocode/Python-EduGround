@@ -3,6 +3,43 @@
   animation: view-in 280ms ease-out both;
 }
 
+.class-page--onboarding .class-page__header {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(24px, 4vw, 42px);
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 88% 14%, color-mix(in srgb, var(--primary) 16%, transparent) 0 8%, transparent 9%),
+    linear-gradient(130deg, var(--primary-softer), transparent 54%),
+    var(--surface);
+}
+
+.class-page--onboarding .class-page__header::after {
+  position: absolute;
+  right: clamp(20px, 5vw, 56px);
+  bottom: clamp(18px, 4vw, 42px);
+  color: color-mix(in srgb, var(--primary) 22%, transparent);
+  content: "00";
+  font-family: var(--font-mono);
+  font-size: clamp(3.5rem, 9vw, 7rem);
+  font-weight: 900;
+  line-height: 0.8;
+  pointer-events: none;
+}
+
+.class-page--onboarding .class-page__header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.class-page--onboarding .class-page__start-panel {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background:
+    linear-gradient(120deg, var(--primary-softer), transparent 70%),
+    var(--surface);
+}
+
 .class-page__mobile-navigation {
   display: none;
   max-width: 760px;

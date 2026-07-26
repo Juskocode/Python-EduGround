@@ -418,3 +418,50 @@ test("render supplies useful class defaults when optional instructional arrays a
     true,
   );
 });
+
+test("onboarding variant removes the tutor and hands off directly to Chapter 1", () => {
+  const material = canonicalMaterial();
+  material.title = "Launch Python";
+  material.nextSteps = [
+    "I can locate the editor and terminal.",
+    "I have changed and run one Python program.",
+  ];
+  const page = classPage.render({
+    chapter: { id: "py00", number: "00", title: "Launch Python" },
+    chapters: [
+      { id: "py00", number: "00", title: "Launch Python" },
+      { id: "py01", number: "01", title: "First Programs" },
+    ],
+    material,
+    lessonNodes: [],
+    showTutor: false,
+    variant: "onboarding",
+    exerciseHref: "#chapter/py01/tutorials",
+    completionActionLabel: "Start Chapter 1",
+    handoff: {
+      eyebrow: "Ready for code",
+      title: "Continue to Chapter 1 · First Programs",
+      description: "The setup room is complete.",
+      action: "Start Chapter 1",
+      tocLabel: "Chapter 1 handoff",
+    },
+  });
+  const nodes = walk(page);
+  const startAction = nodes.find((node) => (
+    node.dataset && node.dataset.classStartAction === "py00"
+  ));
+
+  assert.match(page.className, /\bclass-page--onboarding\b/u);
+  assert.equal(findByText(page, "H2", "Ask the chapter tutor"), undefined);
+  assert.ok(findByText(page, "H2", "Continue to Chapter 1 · First Programs"));
+  assert.ok(findByText(page, "STRONG", "Chapter 1 handoff"));
+  assert.equal(startAction.dataset.classStartCompletionLabel, "Start Chapter 1");
+  assert.equal(
+    nodes.some((node) => (
+      node.tagName === "A" &&
+      node.href === "#chapter/py01/tutorials" &&
+      node.textContent === "Start Chapter 1"
+    )),
+    true,
+  );
+});

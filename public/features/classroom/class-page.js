@@ -386,8 +386,10 @@
     if (state.hasInteractiveLabs) {
       sections.push({ key: "interactive-labs", label: "Interactive game labs" });
     }
+    if (state.hasTutor !== false) {
+      sections.push({ key: "tutor", label: "Ask the chapter tutor" });
+    }
     sections.push(
-      { key: "tutor", label: "Ask the chapter tutor" },
       { key: "class-activities", label: "Class activities" },
       { key: "independent-practice", label: "Independent practice" },
     );
@@ -404,7 +406,10 @@
     if (state.hasOfficialDocs) {
       sections.push({ key: "official-docs", label: "Official references" });
     }
-    sections.push({ key: "exercises", label: "Exercise handoff" });
+    sections.push({
+      key: "exercises",
+      label: asText(state.handoffLabel, "Exercise handoff"),
+    });
     return sections.map((section) => ({
       ...section,
       id: `${state.scope || "class-chapter"}-${section.key}`,
@@ -459,6 +464,8 @@
       hasDeepDive: Boolean(deepDiveNode),
       hasRunbook: Boolean(runbookNode),
       hasOfficialDocs: Boolean(officialDocsNode),
+      hasTutor: settings.showTutor !== false,
+      handoffLabel: settings.handoff && settings.handoff.tocLabel,
     });
     const sectionByKey = new Map(sections.map((section) => [section.key, section]));
     const lessonEntries = lessonNodes.map((node, index) => ({
@@ -475,7 +482,10 @@
       return section;
     });
 
-    const page = createElement("div", "page-shell class-page");
+    const page = createElement(
+      "div",
+      `page-shell class-page${settings.variant ? ` class-page--${slugify(settings.variant)}` : ""}`,
+    );
     const mobileNavigation = createElement("div", "class-page__mobile-navigation");
     const layout = createElement("div", "class-page__layout");
     const courseRail = createElement("aside", "class-page__course-rail");
@@ -519,6 +529,10 @@
         exerciseHref: asText(
           settings.exerciseHref,
           `#chapter/${encodeURIComponent(String(chapter.id || ""))}/exercises`,
+        ),
+        completionLabel: asText(
+          settings.completionActionLabel,
+          "Open chapter exercises",
         ),
         roomTaskEntries,
       }),
@@ -564,8 +578,10 @@
       ));
     }
 
+    if (settings.showTutor !== false) {
+      article.append(renderChapterTutor(sectionByKey.get("tutor"), chapter, material));
+    }
     article.append(
-      renderChapterTutor(sectionByKey.get("tutor"), chapter, material),
       renderClassActivities(sectionByKey.get("class-activities"), material.classActivities),
       renderIndependentPractice(
         sectionByKey.get("independent-practice"),
@@ -615,6 +631,7 @@
           settings.exerciseHref,
           `#chapter/${encodeURIComponent(String(chapter.id || ""))}/exercises`,
         ),
+        settings.handoff,
       ),
       renderChapterPager(settings.previousChapter, settings.nextChapter),
     );
@@ -894,6 +911,7 @@
     primary.dataset.classStartLectureTarget = settings.lectureTarget;
     primary.dataset.classStartExerciseTarget = settings.exerciseTarget;
     primary.dataset.classStartExerciseHref = settings.exerciseHref;
+    primary.dataset.classStartCompletionLabel = settings.completionLabel;
     if (completeCount === 0 || !material.roomTasks.length) {
       primary.textContent = "Open the first example";
       primary.dataset.scrollTarget = settings.lectureTarget;
@@ -903,7 +921,7 @@
       primary.dataset.scrollTarget = entries[nextTaskIndex].id;
       primary.setAttribute("aria-controls", entries[nextTaskIndex].id);
     } else {
-      primary.textContent = "Open chapter exercises";
+      primary.textContent = settings.completionLabel;
       primary.dataset.routeTarget = settings.exerciseHref;
     }
 
@@ -1633,15 +1651,23 @@
     return section;
   }
 
-  function renderExerciseHandoff(section, material, exerciseHref) {
+  function renderExerciseHandoff(section, material, exerciseHref, handoff) {
+    const settings = handoff && typeof handoff === "object" ? handoff : {};
     const block = renderSectionHeader(
       section,
-      "End of class",
-      "Turn the lesson into working code",
-      "The exercises use different scenarios from the class notes. Transfer the model yourself, run the visible checks, and use failures as evidence.",
+      asText(settings.eyebrow, "End of class"),
+      asText(settings.title, "Turn the lesson into working code"),
+      asText(
+        settings.description,
+        "The exercises use different scenarios from the class notes. Transfer the model yourself, run the visible checks, and use failures as evidence.",
+      ),
     );
     const nextSteps = createElement("ul", "class-page__next-steps");
-    const action = createElement("a", "button button--primary", "Open chapter exercises");
+    const action = createElement(
+      "a",
+      "button button--primary",
+      asText(settings.action, "Open chapter exercises"),
+    );
     material.nextSteps.forEach((step) => nextSteps.append(createElement("li", null, step)));
     action.href = exerciseHref;
     block.classList.add("class-page__exercise-handoff");

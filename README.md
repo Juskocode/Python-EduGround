@@ -132,6 +132,14 @@ bounded draft store and do not create canonical chapter `exNN.py` files. The
 desktop class view includes a course rail and an on-page contents rail; both
 collapse into keyboard-accessible disclosures on smaller screens.
 
+Before those 13 graded chapters, **Chapter 0 · Launch Python** provides a
+40-minute ungraded setup and motivation room. A completely new learner chooses a
+reason to learn, compares browser and optional local Python, maps the editor /
+interpreter / terminal workflow, edits and runs a first program, practises
+traceback recovery, and then hands off directly to Chapter 1. Its learning
+markers and classroom drafts use the normal local/account persistence path, but
+it never changes exercise totals, stars, ranks, badges, or timed assessments.
+
 The assessment map groups chapters 1–3, 4–6, 7–9, and a final chapters 10–12 capstone. Chapter 13 remains an untimed project studio rather than changing those four assessment contracts. Each room keeps its own active deadline, drafts, recent attempts, and best score; assessment results do not award exercise stars. See [docs/ASSESSMENTS.md](docs/ASSESSMENTS.md) for the room rules, source transparency, scoring, official references, and client-side security limitations.
 
 ## Run locally
@@ -233,6 +241,7 @@ The app uses bookmarkable hash routes:
 | --- | --- |
 | `/` or `#welcome` | Course welcome, learning loop, stage previews, and saved-progress continue action |
 | `#home` | Chapter dashboard and current-learning cue |
+| `#chapter/py00/tutorials` | Ungraded Chapter 0 setup, motivation, editable first run, recovery habits, and Chapter 1 handoff |
 | `#stage/py01-py03/recap` | Three-chapter synthesis, retrieval prompts, checkpoint evidence, and official references |
 | `#chapter/py01` | Chapter hub |
 | `#chapter/py01/exercises` | Exercise catalogue |
@@ -244,7 +253,8 @@ The app uses bookmarkable hash routes:
 | `#assessment/py01-py03/practical` | Practical room landing, active coding attempt, or latest result |
 | `#profile/badges` | Rank ladder and badge gallery |
 
-Legacy routes such as `#py01` redirect to the corresponding chapter hub.
+Short routes such as `#start` and `#py00` redirect to Chapter 0; legacy routes
+such as `#py01` redirect to the corresponding graded chapter hub.
 
 ## Editor controls
 

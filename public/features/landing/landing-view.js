@@ -45,9 +45,20 @@
     var title = el("h1", null, "Learn Python by understanding what every line does.");
     var actions = el("div", "landing-hero__actions");
     var resume = model.resume || {};
-    var primaryLabel = resume.kind === "achievement"
+    var onboarding = model.onboarding && typeof model.onboarding === "object"
+      ? model.onboarding
+      : null;
+    var startWithOnboarding = Boolean(onboarding && onboarding.shouldPrompt);
+    var primaryLabel = startWithOnboarding
+      ? onboarding.started
+        ? "Continue Chapter 0"
+        : "Set up and run Python"
+      : resume.kind === "achievement"
       ? "Review your achievements"
       : resume.action || "Start learning";
+    var primaryHref = startWithOnboarding
+      ? onboarding.href
+      : resume.href || "#chapter/py01/tutorials";
 
     title.id = "landing-title";
     section.setAttribute("aria-labelledby", title.id);
@@ -62,10 +73,14 @@
       )
     );
     actions.append(
-      link(resume.href || "#chapter/py01/tutorials", "button button--primary", primaryLabel),
+      link(primaryHref, "button button--primary", primaryLabel),
       link("#home", "button button--quiet", "Explore the roadmap")
     );
-    copy.append(actions, renderHeroMetrics(metrics));
+    copy.append(actions);
+    if (startWithOnboarding) {
+      copy.append(renderOnboardingCue(onboarding));
+    }
+    copy.append(renderHeroMetrics(metrics));
     demo.append(renderTerminalPreview(), renderSnakeLauncher());
     section.append(copy, demo);
     if (progressSnakeView && typeof progressSnakeView.render === "function") {
@@ -77,6 +92,25 @@
       }
     }
     return section;
+  }
+
+  function renderOnboardingCue(onboarding) {
+    var cue = link(onboarding.href, "landing-onboarding-cue");
+    var copy = el("span");
+    copy.append(
+      el("strong", null, onboarding.started ? "Continue your launch room" : "New here? Begin with Chapter 0"),
+      el(
+        "small",
+        null,
+        onboarding.duration + " min · no grades · progress saves"
+      )
+    );
+    cue.append(
+      el("span", "landing-onboarding-cue__number", "00"),
+      copy,
+      el("span", "landing-onboarding-cue__action", "Open room →")
+    );
+    return cue;
   }
 
   function renderHeroGeometry(metrics) {
