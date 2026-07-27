@@ -179,17 +179,58 @@
 }
 
 .landing-snake__mission-meta [data-snake-powerup-status] {
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 217, 129, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 217, 129, 0.08);
   color: #ffd981;
+  font-weight: 750;
 }
 
 .landing-snake__mission-meta [data-snake-effect-status] {
+  padding: 2px 6px;
+  border: 1px solid rgba(169, 233, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(88, 220, 255, 0.07);
   color: #a9e9ff;
+}
+
+.landing-snake__mission-meta [data-snake-hazard-status] {
+  padding: 2px 6px;
+  border: 1px solid rgba(148, 168, 192, 0.2);
+  border-radius: 999px;
+  background: rgba(148, 168, 192, 0.07);
+  color: #b7c7da;
+  font-weight: 800;
+}
+
+.landing-snake__mission-meta [data-hazard-type="warning"] {
+  border-color: rgba(255, 101, 112, 0.58);
+  background: rgba(255, 70, 84, 0.13);
+  color: #ff9ba3;
+}
+
+.landing-snake__mission-meta [data-powerup-type="shield"] {
+  border-color: rgba(125, 202, 255, 0.46);
+  color: #a9dcff;
+}
+
+.landing-snake__mission-meta [data-powerup-type="boost"] {
+  border-color: rgba(255, 224, 127, 0.5);
+  color: #ffe69a;
+}
+
+.landing-snake__mission-meta [data-powerup-type="stasis"] {
+  border-color: rgba(170, 161, 255, 0.5);
+  color: #c9c3ff;
 }
 
 .landing-snake__playfield {
   position: relative;
+  display: grid;
   min-height: 0;
   overflow: hidden;
+  place-items: center;
   border: 1px solid rgba(88, 220, 255, 0.28);
   border-radius: 12px;
   background:
@@ -206,7 +247,10 @@
     0 0 0 3px rgba(88, 220, 255, 0.035);
   cursor: default;
   outline: 0;
+  overscroll-behavior: contain;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .landing-snake__playfield:focus-visible {
@@ -302,6 +346,91 @@
   vector-effect: non-scaling-stroke;
 }
 
+.landing-snake__meteor-warning {
+  color: #ff5f6d;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: landing-snake-meteor-warning 1s ease-in-out infinite;
+}
+
+.landing-snake__meteor-warning-ring {
+  fill: rgba(255, 48, 66, 0.12);
+  stroke: currentColor;
+  stroke-dasharray: 0.14 0.08;
+  stroke-width: 0.075;
+  filter: drop-shadow(0 0 0.15px rgba(255, 71, 86, 0.95));
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__meteor-warning-cross {
+  fill: none;
+  stroke: #ffd4d7;
+  stroke-linecap: round;
+  stroke-width: 0.065;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__meteor-warning-count {
+  fill: #fff4f5;
+  font: 950 0.31px var(--font-mono);
+  pointer-events: none;
+}
+
+.landing-snake__meteor {
+  color: #ff5b47;
+  pointer-events: none;
+  transition: transform 120ms linear;
+}
+
+.landing-snake__meteor-trail {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 0.22;
+  filter: drop-shadow(0 0 0.2px #ff3d32);
+  opacity: 0.76;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__meteor-rock {
+  fill: #a03a32;
+  stroke: #ffc0a8;
+  stroke-width: 0.07;
+  filter: drop-shadow(0 0 0.18px rgba(255, 72, 50, 0.9));
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__meteor-crater {
+  fill: #4c2023;
+  stroke: #ff8c78;
+  stroke-width: 0.035;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__meteor-impact {
+  color: #ff715f;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: landing-snake-meteor-impact 720ms ease-out both;
+}
+
+.landing-snake__meteor-impact-ring {
+  fill: rgba(255, 88, 67, 0.18);
+  stroke: currentColor;
+  stroke-width: 0.09;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-snake__meteor-impact-burst {
+  fill: none;
+  stroke: #ffd1a3;
+  stroke-linecap: round;
+  stroke-width: 0.075;
+  vector-effect: non-scaling-stroke;
+}
+
 .landing-snake__powerup {
   transform-box: fill-box;
   transform-origin: center;
@@ -346,7 +475,7 @@
 
 .landing-snake__powerup-label {
   fill: #eefcff;
-  font: 950 0.28px var(--font-mono);
+  font: 950 0.32px var(--font-mono);
   pointer-events: none;
 }
 
@@ -441,6 +570,72 @@
 
 .landing-snake__overlay[hidden] {
   display: none;
+}
+
+.landing-snake__event-toast,
+.landing-snake__swipe-cue {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.landing-snake__event-toast {
+  top: 10px;
+  left: 50%;
+  max-width: calc(100% - 24px);
+  padding: 6px 9px;
+  margin: 0;
+  border: 1px solid rgba(88, 220, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(3, 8, 23, 0.9);
+  color: #e7f8ff;
+  font: 900 0.56rem var(--font-mono);
+  letter-spacing: 0.03em;
+  text-align: center;
+  transform: translateX(-50%);
+  animation: landing-snake-toast 220ms ease-out both;
+  backdrop-filter: blur(8px);
+}
+
+.landing-snake__event-toast[data-snake-event-kind="warning"],
+.landing-snake__event-toast[data-snake-event-kind="impact"] {
+  border-color: rgba(255, 95, 109, 0.7);
+  background: rgba(73, 9, 18, 0.92);
+  color: #ffdadd;
+}
+
+.landing-snake__event-toast[data-snake-event-kind="shield"] {
+  border-color: rgba(125, 202, 255, 0.68);
+  color: #bde4ff;
+}
+
+.landing-snake__event-toast[data-snake-event-kind="boost"],
+.landing-snake__event-toast[data-snake-event-kind="core"] {
+  border-color: rgba(255, 224, 127, 0.68);
+  color: #ffebaa;
+}
+
+.landing-snake__event-toast[data-snake-event-kind="stasis"] {
+  border-color: rgba(170, 161, 255, 0.7);
+  color: #d7d2ff;
+}
+
+.landing-snake__event-toast[hidden],
+.landing-snake__swipe-cue[hidden] {
+  display: none;
+}
+
+.landing-snake__swipe-cue {
+  right: 12px;
+  bottom: 12px;
+  padding: 5px 8px;
+  border: 1px solid rgba(107, 231, 170, 0.55);
+  border-radius: 7px;
+  background: rgba(4, 29, 20, 0.88);
+  color: #a9f5ce;
+  font: 900 0.62rem var(--font-mono);
+  text-transform: capitalize;
+  animation: landing-snake-swipe-cue 360ms ease-out both;
 }
 
 .landing-snake__controls {
@@ -570,6 +765,39 @@
   }
 }
 
+@keyframes landing-snake-meteor-warning {
+  50% {
+    opacity: 0.72;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes landing-snake-meteor-impact {
+  from {
+    opacity: 1;
+    transform: scale(0.55);
+  }
+
+  to {
+    opacity: 0.2;
+    transform: scale(1.35);
+  }
+}
+
+@keyframes landing-snake-toast {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -5px);
+  }
+}
+
+@keyframes landing-snake-swipe-cue {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
 @media (pointer: coarse), (max-width: 760px) {
   .landing-snake__dpad {
     display: grid;
@@ -597,6 +825,8 @@
 
 @media (max-width: 620px) {
   .landing-snake {
+    align-content: start;
+    grid-template-rows: auto auto auto auto;
     gap: 7px;
     padding: 9px 8px;
     border-radius: var(--radius-lg);
@@ -605,6 +835,12 @@
   .landing-snake__heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .landing-snake__board {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 24 / 14;
   }
 
   .landing-snake__hud {
@@ -618,11 +854,23 @@
   }
 
   .landing-snake__mission {
-    grid-template-columns: auto minmax(80px, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
   }
 
   .landing-snake__mission-copy {
-    grid-row: span 2;
+    display: flex;
+    grid-row: auto;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .landing-snake__playfield {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 24 / 14;
+    align-self: start;
   }
 
   .landing-snake__controls {
@@ -680,6 +928,8 @@
 
 @media (max-height: 520px) and (min-width: 521px) {
   .landing-snake {
+    align-content: stretch;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     gap: 5px;
     padding: 7px;
   }
@@ -709,6 +959,12 @@
   .landing-snake__controls {
     min-height: 44px;
   }
+
+  .landing-snake__playfield,
+  .landing-snake__board {
+    height: 100%;
+    aspect-ratio: auto;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -718,6 +974,10 @@
   .landing-snake__asteroid polygon,
   .landing-snake__energy,
   .landing-snake__powerup,
+  .landing-snake__meteor-warning,
+  .landing-snake__meteor-impact,
+  .landing-snake__event-toast,
+  .landing-snake__swipe-cue,
   .landing-snake__progress::-webkit-progress-value,
   .landing-snake__echo rect {
     animation: none;
@@ -725,11 +985,13 @@
   }
 
   .landing-snake__asteroid,
-  .landing-snake__falling-star {
+  .landing-snake__falling-star,
+  .landing-snake__meteor {
     transition: none;
   }
 
-  .landing-snake__falling-star {
+  .landing-snake__falling-star,
+  .landing-snake__meteor {
     display: none !important;
   }
 }
@@ -778,5 +1040,18 @@
     fill: LinkText;
     stroke: Canvas;
     filter: none;
+  }
+
+  .landing-snake__meteor-warning-ring,
+  .landing-snake__meteor-warning-cross,
+  .landing-snake__meteor-impact-ring,
+  .landing-snake__meteor-impact-burst {
+    fill: Canvas;
+    stroke: Highlight;
+    filter: none;
+  }
+
+  .landing-snake__meteor-warning-count {
+    fill: CanvasText;
   }
 }

@@ -304,6 +304,7 @@
       grid,
       stars,
       svgAttributes(svgEl("g"), { "data-snake-falling-star-layer": "" }),
+      svgAttributes(svgEl("g"), { "data-snake-meteor-layer": "" }),
       svgAttributes(svgEl("g"), { "data-snake-asteroid-layer": "" }),
       svgAttributes(svgEl("g"), { "data-snake-energy-layer": "" }),
       svgAttributes(svgEl("g"), { "data-snake-powerup-layer": "" }),
@@ -327,7 +328,7 @@
     var heading = el("header", "landing-snake__heading");
     var headingCopy = el("div");
     var title = el("h2", null, "Python Snake");
-    var description = el("p", null, "Collect warm cores, build a chain, and split the trail when you need a clean escape.");
+    var description = el("p", null, "Swipe across the grid to steer. Collect cores, grab readable power-ups, and dodge warned meteor landings.");
     var hud = el("dl", "landing-snake__hud");
     var mission = el("section", "landing-snake__mission");
     var missionCopy = el("div", "landing-snake__mission-copy");
@@ -335,11 +336,14 @@
     var missionProgress = el("progress", "landing-snake__progress");
     var playfield = el("div", "landing-snake__playfield");
     var overlay = el("p", "landing-snake__overlay", "Press Start, Enter, or a direction");
+    var eventToast = el("p", "landing-snake__event-toast");
+    var swipeCue = el("span", "landing-snake__swipe-cue");
     var controls = el("div", "landing-snake__controls");
     var actions = el("div", "landing-snake__actions");
     var dpad = el("div", "landing-snake__dpad");
     var instructions = el("p", "landing-snake__instructions visually-hidden");
     var liveStatus = el("p", "visually-hidden");
+    var hazardLiveStatus = el("p", "visually-hidden");
 
     arcade.dataset.landingSnake = "";
     arcade.dataset.geoMotion = "snake-arcade";
@@ -376,6 +380,8 @@
     pickup.dataset.snakePowerupStatus = "";
     var effect = el("span", null, "No active effect");
     effect.dataset.snakeEffectStatus = "";
+    var hazard = el("span", null, "Sky clear");
+    hazard.dataset.snakeHazardStatus = "";
     missionCopy.append(
       el("span", "landing-snake__mission-kicker", "Goal"),
       el("strong", null, "Collect cores · reach 1000")
@@ -384,7 +390,8 @@
       el("span", null, "Best "),
       best,
       pickup,
-      effect
+      effect,
+      hazard
     );
     mission.append(missionCopy, missionProgress, missionMeta);
 
@@ -396,7 +403,13 @@
       "aria-keyshortcuts",
       "ArrowUp ArrowRight ArrowDown ArrowLeft W A S D Space P X R"
     );
-    playfield.append(renderSnakeBoard(), overlay);
+    eventToast.dataset.snakeEventToast = "";
+    eventToast.hidden = true;
+    eventToast.setAttribute("aria-hidden", "true");
+    swipeCue.dataset.snakeSwipeCue = "";
+    swipeCue.hidden = true;
+    swipeCue.setAttribute("aria-hidden", "true");
+    playfield.append(renderSnakeBoard(), eventToast, swipeCue, overlay);
     overlay.dataset.snakeOverlay = "";
 
     var toggle = snakeControl("Start mission", "button button--primary", "snakeAction", "toggle");
@@ -437,8 +450,20 @@
     liveStatus.setAttribute("role", "status");
     liveStatus.setAttribute("aria-live", "polite");
     liveStatus.setAttribute("aria-atomic", "true");
+    hazardLiveStatus.dataset.snakeHazardAnnouncement = "";
+    hazardLiveStatus.setAttribute("role", "alert");
+    hazardLiveStatus.setAttribute("aria-live", "assertive");
+    hazardLiveStatus.setAttribute("aria-atomic", "true");
     controls.append(actions, dpad);
-    arcade.append(heading, mission, playfield, controls, instructions, liveStatus);
+    arcade.append(
+      heading,
+      mission,
+      playfield,
+      controls,
+      instructions,
+      liveStatus,
+      hazardLiveStatus
+    );
     return arcade;
   }
 

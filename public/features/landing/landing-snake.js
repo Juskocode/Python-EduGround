@@ -18,7 +18,24 @@
     down: "up",
     left: "right",
   });
-  var POWER_UP_TYPES = Object.freeze(["shield", "boost", "stasis"]);
+  var POWER_UP_DETAILS = Object.freeze({
+    shield: Object.freeze({
+      name: "Shield",
+      effect: "blocks 1 asteroid",
+      glyph: "S",
+    }),
+    boost: Object.freeze({
+      name: "2× Core",
+      effect: "doubles the next 3 cores",
+      glyph: "2×",
+    }),
+    stasis: Object.freeze({
+      name: "Freeze",
+      effect: "stops rocks and meteors for 40 moves",
+      glyph: "F",
+    }),
+  });
+  var POWER_UP_TYPES = Object.freeze(Object.keys(POWER_UP_DETAILS));
   var DEFAULT_ASTEROIDS = Object.freeze([
     Object.freeze([4, 2]),
     Object.freeze([17, 2]),
@@ -32,11 +49,20 @@
   var MAX_SPLITS = 3;
   var SPLIT_PHASE_TICKS = 10;
   var DEFAULT_ASTEROID_CADENCE = 24;
+  var MAX_ASTEROIDS = 8;
+  var METEOR_WARNING_TICKS = 12;
+  var METEOR_DESCENT_TICKS = 7;
+  var METEOR_IMPACT_TICKS = 6;
+  var METEOR_RETRY_TICKS = 24;
+  var METEOR_MIN_GAP = 52;
+  var METEOR_GAP_JITTER = 36;
   var POWER_UP_LIFETIME = 72;
+  var POWER_UP_TIMER_CIRCUMFERENCE = 3.08;
   var FALLING_STAR_LIFETIME = 14;
   var COMBO_WINDOW_TICKS = 36;
   var MAX_COMBO_MULTIPLIER = 3;
   var SEGMENT_POOL_SIZE = 3 + MAX_SCORE / BASE_CORE_POINTS;
+  var SWIPE_THRESHOLD = 18;
 
   function clampInteger(value, fallback, minimum, maximum) {
     var parsed = Number(value);
@@ -78,11 +104,37 @@
     return (Math.imul(seed >>> 0, 1664525) + 1013904223) >>> 0;
   }
 
+  function resolveSwipeDirection(startPoint, currentPoint, threshold) {
+    if (!startPoint || !currentPoint) {
+      return null;
+    }
+    var horizontal = Number(currentPoint.x) - Number(startPoint.x);
+    var vertical = Number(currentPoint.y) - Number(startPoint.y);
+    if (!Number.isFinite(horizontal) || !Number.isFinite(vertical)) {
+      return null;
+    }
+    var minimum = clampInteger(threshold, SWIPE_THRESHOLD, 8, 80);
+    if (Math.max(Math.abs(horizontal), Math.abs(vertical)) < minimum) {
+      return null;
+    }
+    if (Math.abs(horizontal) > Math.abs(vertical)) {
+      return horizontal > 0 ? "right" : "left";
+    }
+    return vertical > 0 ? "down" : "up";
+  }
+
   function powerUpLabel(type) {
-    if (type === "shield") return "shield";
-    if (type === "boost") return "double-core boost";
-    if (type === "stasis") return "asteroid stasis";
-    return "power-up";
+    return POWER_UP_DETAILS[type] ? POWER_UP_DETAILS[type].name : "Power-up";
+  }
+
+  function powerUpEffect(type) {
+    return POWER_UP_DETAILS[type]
+      ? POWER_UP_DETAILS[type].effect
+      : "adds a temporary effect";
+  }
+
+  function powerUpGlyph(type) {
+    return POWER_UP_DETAILS[type] ? POWER_UP_DETAILS[type].glyph : "?";
   }
 
   function toroidalDistance(first, second, width, height) {
@@ -122,6 +174,12 @@
     }
     if (Number.isInteger(excludedCell)) {
       occupied.add(excludedCell);
+    }
+    if (
+      state.meteorWarning &&
+      Number.isInteger(state.meteorWarning.cell)
+    ) {
+      occupied.add(state.meteorWarning.cell);
     }
     var available = [];
     for (var cell = 0; cell < state.width * state.height; cell += 1) {
@@ -217,6 +275,12 @@
       0,
       0xffffffff
     ) >>> 0;
+    var hazardSeed = clampInteger(
+      settings.hazardSeed,
+      nextSeed(seed ^ 0xc0ffee11),
+      0,
+      0xffffffff
+    ) >>> 0;
     var direction = Object.prototype.hasOwnProperty.call(DIRECTIONS, settings.direction)
       ? settings.direction
       : "right";
@@ -246,6 +310,7 @@
       seed: seed,
       worldSeed: worldSeed,
       eventSeed: eventSeed,
+      hazardSeed: hazardSeed,
       phase: score >= MAX_SCORE ? "won" : "idle",
       segments: segments,
       initialSegments: segments.slice(),
@@ -256,6 +321,15 @@
       initialEnergy: null,
       asteroids: asteroids,
       initialAsteroids: asteroids.slice(),
+      maxAsteroids: Math.max(
+        asteroids.length,
+        clampInteger(
+          settings.maxAsteroids,
+          Math.max(MAX_ASTEROIDS, asteroids.length),
+          0,
+          width * height
+        )
+      ),
       asteroidCadence: clampInteger(
         settings.asteroidCadence,
         DEFAULT_ASTEROID_CADENCE,
@@ -295,6 +369,15 @@
       nextFallingStarTick: clampInteger(
         settings.nextFallingStarTick,
         ticks + 58 + (worldSeed % 34),
+        0,
+        Number.MAX_SAFE_INTEGER
+      ),
+      meteorWarning: null,
+      meteorImpact: null,
+      hazardEvent: null,
+      nextMeteorTick: clampInteger(
+        settings.nextMeteorTick,
+        ticks + 30 + (hazardSeed % 18),
         0,
         Number.MAX_SAFE_INTEGER
       ),
@@ -377,6 +460,45 @@
         ),
       };
       state.fallingStars = [state.fallingStar];
+    }
+
+    if (settings.meteorWarning && typeof settings.meteorWarning === "object") {
+      var warningCell = normalizeCell(settings.meteorWarning.cell, width, height);
+      var warningOccupied = new Set(state.segments.concat(state.asteroids));
+      if (Number.isInteger(state.energy)) warningOccupied.add(state.energy);
+      if (state.powerUp) warningOccupied.add(state.powerUp.cell);
+      if (warningCell !== null && !warningOccupied.has(warningCell)) {
+        state.meteorWarning = {
+          cell: warningCell,
+          warnedAt: clampInteger(
+            settings.meteorWarning.warnedAt,
+            ticks,
+            0,
+            ticks
+          ),
+          impactsAt: clampInteger(
+            settings.meteorWarning.impactsAt,
+            ticks + METEOR_WARNING_TICKS,
+            ticks + 1,
+            Number.MAX_SAFE_INTEGER
+          ),
+        };
+      }
+    }
+
+    if (settings.meteorImpact && typeof settings.meteorImpact === "object") {
+      var impactCell = normalizeCell(settings.meteorImpact.cell, width, height);
+      if (impactCell !== null) {
+        state.meteorImpact = {
+          cell: impactCell,
+          expiresAt: clampInteger(
+            settings.meteorImpact.expiresAt,
+            ticks + METEOR_IMPACT_TICKS,
+            ticks + 1,
+            Number.MAX_SAFE_INTEGER
+          ),
+        };
+      }
     }
 
     if (score >= MAX_SCORE) {
@@ -497,6 +619,7 @@
     var blocked = new Set(state.segments);
     if (Number.isInteger(state.energy)) blocked.add(state.energy);
     if (state.powerUp) blocked.add(state.powerUp.cell);
+    if (state.meteorWarning) blocked.add(state.meteorWarning.cell);
     var occupied = new Set(state.asteroids);
     var seed = state.worldSeed;
     var moved = state.asteroids.map(function (cell, index) {
@@ -517,6 +640,122 @@
       asteroids: moved,
       worldSeed: seed,
       lastEvent: state.lastEvent === "moved" ? "asteroids-moved" : state.lastEvent,
+    });
+  }
+
+  function meteorSpawnCells(state) {
+    var powerUpCell = state.powerUp ? state.powerUp.cell : null;
+    return availableCells(
+      state,
+      state.segments,
+      state.energy,
+      powerUpCell
+    ).filter(function (candidate) {
+      if (
+        toroidalDistance(
+          candidate,
+          state.segments[0],
+          state.width,
+          state.height
+        ) <= 3
+      ) {
+        return false;
+      }
+      return state.asteroids.every(function (asteroid) {
+        return toroidalDistance(
+          candidate,
+          asteroid,
+          state.width,
+          state.height
+        ) > 1;
+      });
+    });
+  }
+
+  function advanceMeteor(state, tick) {
+    if (!state) {
+      return state;
+    }
+    var next = state.hazardEvent
+      ? Object.assign({}, state, { hazardEvent: null })
+      : state;
+    if (next.meteorImpact && tick >= next.meteorImpact.expiresAt) {
+      next = Object.assign({}, next, {
+        meteorImpact: null,
+      });
+    }
+    if (next.effects.stasisTicks > 0) {
+      return Object.assign({}, next, {
+        meteorWarning: next.meteorWarning
+          ? Object.assign({}, next.meteorWarning, {
+              warnedAt: next.meteorWarning.warnedAt + 1,
+              impactsAt: next.meteorWarning.impactsAt + 1,
+            })
+          : null,
+        nextMeteorTick: next.nextMeteorTick + 1,
+        hazardEvent: null,
+      });
+    }
+
+    if (next.meteorWarning && tick >= next.meteorWarning.impactsAt) {
+      var target = next.meteorWarning.cell;
+      var occupied = new Set(next.segments.concat(next.asteroids));
+      if (Number.isInteger(next.energy)) occupied.add(next.energy);
+      if (next.powerUp) occupied.add(next.powerUp.cell);
+      var canLand =
+        !occupied.has(target) &&
+        next.asteroids.length < next.maxAsteroids;
+      var landedAsteroids = canLand
+        ? next.asteroids.concat(target)
+        : next.asteroids;
+      var playerDodged = !canLand && next.segments.includes(target);
+      var impactSeed = nextSeed(next.hazardSeed ^ tick);
+      return Object.assign({}, next, {
+        asteroids: landedAsteroids,
+        hazardSeed: impactSeed,
+        meteorWarning: null,
+        meteorImpact: canLand
+          ? {
+              cell: target,
+              expiresAt: tick + METEOR_IMPACT_TICKS,
+            }
+          : null,
+        nextMeteorTick: canLand
+          ? tick + METEOR_MIN_GAP + (impactSeed % METEOR_GAP_JITTER)
+          : tick + METEOR_RETRY_TICKS,
+        hazardEvent: canLand
+          ? "meteor-impact"
+          : playerDodged
+            ? "meteor-dodged"
+            : "meteor-delayed",
+      });
+    }
+
+    if (
+      next.meteorWarning ||
+      tick < next.nextMeteorTick ||
+      next.asteroids.length >= next.maxAsteroids
+    ) {
+      return next;
+    }
+
+    var candidates = meteorSpawnCells(next);
+    var warningSeed = nextSeed(next.hazardSeed);
+    if (!candidates.length) {
+      return Object.assign({}, next, {
+        hazardSeed: warningSeed,
+        nextMeteorTick: tick + METEOR_RETRY_TICKS,
+        hazardEvent: "meteor-delayed",
+      });
+    }
+    return Object.assign({}, next, {
+      hazardSeed: warningSeed,
+      meteorWarning: {
+        cell: candidates[warningSeed % candidates.length],
+        warnedAt: tick,
+        impactsAt: tick + METEOR_WARNING_TICKS,
+      },
+      hazardEvent: "meteor-warning",
     });
   }
 
@@ -587,6 +826,7 @@
 
   function advanceWorldEvents(state, tick) {
     var next = moveAsteroids(state, tick);
+    next = advanceMeteor(next, tick);
     next = advancePowerUp(next, tick);
     return advanceFallingStar(next, tick);
   }
@@ -747,13 +987,24 @@
       effects: {
         shield: effects.shield,
         boostCores: effects.boostCores,
-        stasisTicks: Math.max(0, effects.stasisTicks - 1),
+        stasisTicks: effects.stasisTicks,
       },
       powerUp: powerUp,
+      hazardEvent: null,
     });
 
     if (next.phase === "running") {
       next = advanceWorldEvents(next, tick);
+      if (
+        next.effects.stasisTicks > 0 &&
+        !(collectedPowerUp && collectedPowerUp.type === "stasis")
+      ) {
+        next = Object.assign({}, next, {
+          effects: Object.assign({}, next.effects, {
+            stasisTicks: next.effects.stasisTicks - 1,
+          }),
+        });
+      }
     }
     return next;
   }
@@ -766,6 +1017,7 @@
       seed: settings.seed === undefined ? state && state.initialSeed : settings.seed,
       segments: state && state.initialSegments,
       asteroids: state && state.initialAsteroids,
+      maxAsteroids: state && state.maxAsteroids,
       asteroidCadence: state && state.asteroidCadence,
       energy: state && state.initialEnergy,
       direction: "right",
@@ -804,9 +1056,15 @@
         }).join("; ") + "."
       : "No asteroids are within five grid moves.";
     var powerCopy = state.powerUp
-      ? " A " + powerUpLabel(state.powerUp.type) + " power-up is at " +
+      ? " The " + powerUpLabel(state.powerUp.type) + " power-up, which " +
+        powerUpEffect(state.powerUp.type) + ", is at " +
         cellLabel(state.powerUp.cell, state.width) + " for " +
         Math.max(0, state.powerUp.expiresAt - state.ticks) + " more moves."
+      : "";
+    var meteorCopy = state.meteorWarning
+      ? " Red meteor warning at " +
+        cellLabel(state.meteorWarning.cell, state.width) + "; impact in " +
+        Math.max(0, state.meteorWarning.impactsAt - state.ticks) + " moves."
       : "";
     var effectCopy = state.phaseTicks > 0
       ? " Split phase is active for " + state.phaseTicks + " more moves."
@@ -816,7 +1074,7 @@
         Math.max(0, state.comboExpiresAt - state.ticks) + " moves left."
       : " Collect the next core to start a score chain.";
     return "Python Snake is at " + head + ", facing " + state.direction + "; " +
-      energy + ". " + asteroidCopy + powerCopy + effectCopy + " " +
+      energy + ". " + asteroidCopy + powerCopy + meteorCopy + effectCopy + " " +
       state.splitsRemaining + " of " + MAX_SPLITS + " splits remain." + comboCopy;
   }
 
@@ -899,19 +1157,19 @@
       setAttributes(svgElement("circle", "landing-snake__powerup-halo"), {
         cx: 0.5,
         cy: 0.5,
-        r: 0.43,
+        r: 0.47,
       }),
       setAttributes(svgElement("circle", "landing-snake__powerup-timer"), {
         cx: 0.5,
         cy: 0.5,
-        r: 0.46,
-        "stroke-dasharray": 2.89,
+        r: 0.49,
+        "stroke-dasharray": POWER_UP_TIMER_CIRCUMFERENCE,
         "stroke-dashoffset": 0,
       }),
       setAttributes(svgElement("circle", "landing-snake__powerup-core"), {
         cx: 0.5,
         cy: 0.5,
-        r: 0.27,
+        r: 0.32,
       }),
       setAttributes(svgElement("text", "landing-snake__powerup-label"), {
         x: 0.5,
@@ -932,6 +1190,59 @@
         cx: 0,
         cy: 1,
         r: 0.11,
+      })
+    );
+    return group;
+  }
+
+  function createMeteorWarningNode() {
+    var group = svgElement("g", "landing-snake__meteor-warning");
+    group.append(
+      setAttributes(svgElement("circle", "landing-snake__meteor-warning-ring"), {
+        cx: 0.5,
+        cy: 0.5,
+        r: 0.43,
+      }),
+      setAttributes(svgElement("path", "landing-snake__meteor-warning-cross"), {
+        d: "M 0.5 0.08 V 0.24 M 0.5 0.76 V 0.92 M 0.08 0.5 H 0.24 M 0.76 0.5 H 0.92",
+      }),
+      setAttributes(svgElement("text", "landing-snake__meteor-warning-count"), {
+        x: 0.5,
+        y: 0.63,
+        "text-anchor": "middle",
+      })
+    );
+    return group;
+  }
+
+  function createMeteorNode() {
+    var group = svgElement("g", "landing-snake__meteor");
+    group.append(
+      setAttributes(svgElement("path", "landing-snake__meteor-trail"), {
+        d: "M 0.5 -1.15 L 0.5 -0.18",
+      }),
+      setAttributes(svgElement("polygon", "landing-snake__meteor-rock"), {
+        points: "0.2,0.18 0.62,0.05 0.9,0.33 0.82,0.77 0.42,0.94 0.1,0.64",
+      }),
+      setAttributes(svgElement("circle", "landing-snake__meteor-crater"), {
+        cx: 0.55,
+        cy: 0.43,
+        r: 0.12,
+      })
+    );
+    return group;
+  }
+
+  function createMeteorImpactNode() {
+    var group = svgElement("g", "landing-snake__meteor-impact");
+    group.append(
+      setAttributes(svgElement("circle", "landing-snake__meteor-impact-ring"), {
+        cx: 0.5,
+        cy: 0.5,
+        r: 0.34,
+      }),
+      setAttributes(svgElement("path", "landing-snake__meteor-impact-burst"), {
+        d: "M 0.5 0.02 V 0.2 M 0.5 0.8 V 0.98 M 0.02 0.5 H 0.2 M 0.8 0.5 H 0.98 M 0.16 0.16 L 0.29 0.29 M 0.71 0.71 L 0.84 0.84 M 0.84 0.16 L 0.71 0.29 M 0.29 0.71 L 0.16 0.84",
       })
     );
     return group;
@@ -1015,12 +1326,29 @@
       "data-snake-falling-star-layer",
       asteroidLayer
     );
-    if (!asteroidLayer || !energyLayer || !powerUpLayer || !echoLayer || !fallingStarLayer) {
+    var meteorLayer = ensureLayer(
+      root,
+      "[data-snake-meteor-layer]",
+      "data-snake-meteor-layer",
+      asteroidLayer
+    );
+    if (
+      !asteroidLayer ||
+      !energyLayer ||
+      !powerUpLayer ||
+      !echoLayer ||
+      !fallingStarLayer ||
+      !meteorLayer
+    ) {
       return null;
     }
 
     var asteroidNodes = [];
-    for (var asteroidIndex = 0; asteroidIndex < state.asteroids.length; asteroidIndex += 1) {
+    var asteroidPoolSize = Math.max(
+      state.maxAsteroids || 0,
+      state.asteroids.length
+    );
+    for (var asteroidIndex = 0; asteroidIndex < asteroidPoolSize; asteroidIndex += 1) {
       var asteroidNode = createAsteroidNode(asteroidIndex);
       asteroidNodes.push(asteroidNode);
       asteroidLayer.append(asteroidNode);
@@ -1028,9 +1356,13 @@
     var energyNode = createEnergyNode();
     var powerUpNode = createPowerUpNode();
     var fallingStarNode = createFallingStarNode();
+    var meteorWarningNode = createMeteorWarningNode();
+    var meteorNode = createMeteorNode();
+    var meteorImpactNode = createMeteorImpactNode();
     energyLayer.append(energyNode);
     powerUpLayer.append(powerUpNode);
     fallingStarLayer.append(fallingStarNode);
+    meteorLayer.append(meteorWarningNode, meteorNode, meteorImpactNode);
 
     var segmentNodes = [];
     var segmentPoolSize = Math.max(SEGMENT_POOL_SIZE, state.segments.length);
@@ -1053,6 +1385,9 @@
       energyNode: energyNode,
       powerUpNode: powerUpNode,
       fallingStarNode: fallingStarNode,
+      meteorWarningNode: meteorWarningNode,
+      meteorNode: meteorNode,
+      meteorImpactNode: meteorImpactNode,
       segmentNodes: segmentNodes,
       echoNodes: echoNodes,
     };
@@ -1126,14 +1461,13 @@
       );
       timer.setAttribute(
         "stroke-dashoffset",
-        (2.89 * (1 - powerUpRemaining / powerUpDuration)).toFixed(2)
+        (
+          POWER_UP_TIMER_CIRCUMFERENCE *
+          (1 - powerUpRemaining / powerUpDuration)
+        ).toFixed(2)
       );
       renderer.powerUpNode.querySelector("text").textContent =
-        state.powerUp.type === "shield"
-          ? "S"
-          : state.powerUp.type === "boost"
-            ? "2×"
-            : "‖";
+        powerUpGlyph(state.powerUp.type);
     } else {
       renderer.powerUpNode.removeAttribute("data-snake-powerup");
     }
@@ -1157,6 +1491,58 @@
       renderer.fallingStarNode.setAttribute("data-snake-falling-star", "");
     } else {
       renderer.fallingStarNode.removeAttribute("data-snake-falling-star");
+    }
+
+    setVisible(renderer.meteorWarningNode, Boolean(state.meteorWarning));
+    setVisible(renderer.meteorNode, false);
+    if (state.meteorWarning) {
+      var warningPoint = coordinates(state.meteorWarning.cell, state.width);
+      var meteorMoves = Math.max(
+        0,
+        state.meteorWarning.impactsAt - state.ticks
+      );
+      renderer.meteorWarningNode.setAttribute(
+        "transform",
+        "translate(" + warningPoint.x + " " + warningPoint.y + ")"
+      );
+      renderer.meteorWarningNode.setAttribute(
+        "data-snake-meteor-warning",
+        state.meteorWarning.cell
+      );
+      renderer.meteorWarningNode.querySelector("text").textContent =
+        String(meteorMoves);
+      if (meteorMoves <= METEOR_DESCENT_TICKS) {
+        var meteorProgress = Math.min(
+          1,
+          Math.max(0, (METEOR_DESCENT_TICKS - meteorMoves) / METEOR_DESCENT_TICKS)
+        );
+        var meteorY =
+          -1.2 + (warningPoint.y + 1.2) * meteorProgress;
+        setVisible(renderer.meteorNode, true);
+        renderer.meteorNode.setAttribute(
+          "transform",
+          "translate(" + warningPoint.x + " " + meteorY.toFixed(2) + ")"
+        );
+        renderer.meteorNode.setAttribute("data-snake-meteor", "falling");
+      }
+    } else {
+      renderer.meteorWarningNode.removeAttribute("data-snake-meteor-warning");
+      renderer.meteorNode.removeAttribute("data-snake-meteor");
+    }
+
+    setVisible(renderer.meteorImpactNode, Boolean(state.meteorImpact));
+    if (state.meteorImpact) {
+      var impactPoint = coordinates(state.meteorImpact.cell, state.width);
+      renderer.meteorImpactNode.setAttribute(
+        "transform",
+        "translate(" + impactPoint.x + " " + impactPoint.y + ")"
+      );
+      renderer.meteorImpactNode.setAttribute(
+        "data-snake-meteor-impact",
+        state.meteorImpact.cell
+      );
+    } else {
+      renderer.meteorImpactNode.removeAttribute("data-snake-meteor-impact");
     }
 
     renderer.echoNodes.forEach(function (node, index) {
@@ -1219,6 +1605,14 @@
       state.powerUp.expiresAt - state.ticks <= 16
       ? "expiring"
       : "steady";
+    root.dataset.snakeMeteor = state.meteorWarning
+      ? "warning"
+      : state.meteorImpact
+        ? "impact"
+        : "none";
+    root.dataset.snakeMeteorMoves = state.meteorWarning
+      ? String(Math.max(0, state.meteorWarning.impactsAt - state.ticks))
+      : "0";
     root.dataset.snakeEffect = state.phaseTicks > 0
       ? "split-phase"
       : state.effects.shield
@@ -1259,6 +1653,12 @@
       effects: Object.assign({}, state.effects),
       powerUp: state.powerUp ? Object.assign({}, state.powerUp) : null,
       fallingStar: state.fallingStar ? Object.assign({}, state.fallingStar) : null,
+      meteorWarning: state.meteorWarning
+        ? Object.assign({}, state.meteorWarning)
+        : null,
+      meteorImpact: state.meteorImpact
+        ? Object.assign({}, state.meteorImpact)
+        : null,
       fallingStars: state.fallingStars.map(function (star) {
         return Object.assign({}, star);
       }),
@@ -1291,8 +1691,14 @@
     var progressOutput = root.querySelector("[data-snake-progress]");
     var powerUpOutput = root.querySelector("[data-snake-powerup-status]");
     var effectOutput = root.querySelector("[data-snake-effect-status]");
+    var hazardOutput = root.querySelector("[data-snake-hazard-status]");
     var overlay = root.querySelector("[data-snake-overlay]");
+    var eventToast = root.querySelector("[data-snake-event-toast]");
+    var swipeCue = root.querySelector("[data-snake-swipe-cue]");
     var announcement = root.querySelector("[data-snake-announcement]");
+    var hazardAnnouncement = root.querySelector(
+      "[data-snake-hazard-announcement]"
+    );
     var reducedMotionQuery = typeof global.matchMedia === "function"
       ? global.matchMedia("(prefers-reduced-motion: reduce)")
       : null;
@@ -1302,6 +1708,8 @@
     var listenerOptions = abortController ? { signal: abortController.signal } : undefined;
     var observer = null;
     var pointerStart = null;
+    var eventToastTimer = 0;
+    var swipeCueTimer = 0;
 
     function callAudio(name) {
       if (audio && typeof audio[name] === "function") {
@@ -1321,6 +1729,60 @@
       });
     }
 
+    function announceHazard(message) {
+      if (!hazardAnnouncement) {
+        return;
+      }
+      hazardAnnouncement.textContent = "";
+      global.requestAnimationFrame(function () {
+        if (!destroyed) {
+          hazardAnnouncement.textContent = message;
+        }
+      });
+    }
+
+    function showEventToast(message, kind) {
+      if (!eventToast) {
+        return;
+      }
+      if (eventToastTimer) {
+        global.clearTimeout(eventToastTimer);
+      }
+      eventToast.textContent = message;
+      eventToast.dataset.snakeEventKind = kind || "info";
+      eventToast.hidden = false;
+      eventToastTimer = global.setTimeout(function () {
+        if (!destroyed) {
+          eventToast.hidden = true;
+        }
+      }, 1450);
+    }
+
+    function showSwipeCue(direction) {
+      if (!swipeCue) {
+        return;
+      }
+      if (swipeCueTimer) {
+        global.clearTimeout(swipeCueTimer);
+      }
+      var arrows = {
+        up: "↑",
+        right: "→",
+        down: "↓",
+        left: "←",
+      };
+      swipeCue.textContent = arrows[direction] + " " + direction;
+      swipeCue.dataset.snakeSwipeDirection = direction;
+      swipeCue.hidden = false;
+      root.dataset.snakeSwipe = direction;
+      swipeCueTimer = global.setTimeout(function () {
+        if (!destroyed) {
+          swipeCue.hidden = true;
+          root.dataset.snakeSwipe = "none";
+        }
+      }, 440);
+    }
+
     function focusPlayfield() {
       if (!playfield) {
         return;
@@ -1334,6 +1796,10 @@
 
     function phaseCopy() {
       if (state.phase === "running") {
+        if (state.meteorWarning) {
+          return "Meteor inbound · " +
+            Math.max(0, state.meteorWarning.impactsAt - state.ticks);
+        }
         if (state.phaseTicks > 0) return "Split phase";
         if (state.effects.stasisTicks > 0) return "Stasis field";
         if (state.effects.shield > 0) return "Shield ready";
@@ -1371,10 +1837,12 @@
     function powerUpCopy() {
       if (state.powerUp) {
         return powerUpLabel(state.powerUp.type) + " · " +
+          powerUpEffect(state.powerUp.type) + " · " +
           Math.max(0, state.powerUp.expiresAt - state.ticks) + " moves";
       }
-      return "next pickup in " +
-        Math.max(0, state.nextPowerUpTick - state.ticks) + " moves";
+      return "Power-up in " +
+        Math.max(0, state.nextPowerUpTick - state.ticks) +
+        " · S Shield · 2× Core · F Freeze";
     }
 
     function effectCopy() {
@@ -1389,6 +1857,19 @@
         return "Stasis · " + state.effects.stasisTicks + " moves";
       }
       return "No active effect";
+    }
+
+    function hazardCopy() {
+      if (state.meteorWarning) {
+        return "RED ZONE · impact in " +
+          Math.max(0, state.meteorWarning.impactsAt - state.ticks) +
+          " moves";
+      }
+      if (state.meteorImpact) {
+        return "Meteor landed · " + state.asteroids.length + " rocks";
+      }
+      return "Sky clear · " + state.asteroids.length + " / " +
+        state.maxAsteroids + " rocks";
     }
 
     function syncView(message) {
@@ -1411,8 +1892,24 @@
         progressOutput.value = state.score;
         progressOutput.setAttribute("aria-valuetext", state.score + " of " + MAX_SCORE);
       }
-      if (powerUpOutput) powerUpOutput.textContent = powerUpCopy();
-      if (effectOutput) effectOutput.textContent = effectCopy();
+      if (powerUpOutput) {
+        powerUpOutput.textContent = powerUpCopy();
+        powerUpOutput.dataset.powerupType = state.powerUp
+          ? state.powerUp.type
+          : "waiting";
+      }
+      if (effectOutput) {
+        effectOutput.textContent = effectCopy();
+        effectOutput.dataset.effectType = root.dataset.snakeEffect || "none";
+      }
+      if (hazardOutput) {
+        hazardOutput.textContent = hazardCopy();
+        hazardOutput.dataset.hazardType = state.meteorWarning
+          ? "warning"
+          : state.meteorImpact
+            ? "impact"
+            : "clear";
+      }
       if (toggleButton) {
         toggleButton.textContent = buttonCopy();
         toggleButton.setAttribute("aria-pressed", String(state.phase === "running"));
@@ -1434,7 +1931,7 @@
           "Python Snake orbital grid. " + phaseCopy() + ". Score " +
           state.score + " of " + MAX_SCORE + ". " +
           state.splitsRemaining + " splits remain. Chain " +
-          comboCopy() + "."
+          comboCopy() + ". " + hazardCopy() + "."
         );
       }
       if (message) {
@@ -1461,12 +1958,21 @@
         previousPowerUp
       ) {
         callAudio("playAchievement");
+        showEventToast(
+          powerUpLabel(previousPowerUp.type).toUpperCase() + " READY · " +
+          powerUpEffect(previousPowerUp.type),
+          previousPowerUp.type
+        );
         syncView(
           powerUpLabel(previousPowerUp.type) +
           " collected. " + phaseCopy() + "."
         );
       } else if (state.lastEvent === "collected" && state.score > previousScore) {
         callAudio("playRunComplete");
+        showEventToast(
+          "+" + state.lastAward + " · " + state.comboMultiplier + "× CORE CHAIN",
+          "core"
+        );
         syncView(
           "Energy collected. " + state.comboMultiplier + " times chain. Plus " +
           state.lastAward + " points. Score " + state.score + " of " +
@@ -1478,6 +1984,11 @@
         state.powerUp
       ) {
         callAudio("playCheck");
+        showEventToast(
+          powerUpLabel(state.powerUp.type).toUpperCase() + " · " +
+          powerUpEffect(state.powerUp.type),
+          state.powerUp.type
+        );
         syncView(
           powerUpLabel(state.powerUp.type) + " available for " +
           (state.powerUp.expiresAt - state.ticks) + " moves."
@@ -1497,8 +2008,37 @@
       } else if (previousEffect > 0 && state.lastEvent.indexOf("phase-") === 0) {
         callAudio("playCheck");
         syncView("Split phase carried the snake safely through the collision.");
+      } else if (state.hazardEvent === "meteor-warning") {
+        callAudio("playCheck");
+        syncView();
+      } else if (state.hazardEvent === "meteor-impact") {
+        callAudio("playClick");
+        syncView("Meteor landed. The asteroid field now has " +
+          state.asteroids.length + " rocks.");
+      } else if (state.hazardEvent === "meteor-dodged") {
+        callAudio("playCheck");
+        syncView("Nice dodge. The meteor landing zone was safely cleared.");
+      } else if (state.hazardEvent === "meteor-delayed") {
+        syncView("Meteor flight path delayed until a fair landing zone opens.");
       } else {
         syncView();
+      }
+      if (state.hazardEvent === "meteor-warning" && state.meteorWarning) {
+        var warningMessage =
+          "Meteor warning. Avoid the red zone for " +
+          (state.meteorWarning.impactsAt - state.ticks) + " moves.";
+        showEventToast(
+          "⚠ RED ZONE · meteor lands in " +
+          (state.meteorWarning.impactsAt - state.ticks) + " moves",
+          "warning"
+        );
+        announceHazard(warningMessage);
+      } else if (state.hazardEvent === "meteor-impact" && state.meteorImpact) {
+        showEventToast("METEOR LANDED · asteroid field grew", "impact");
+      } else if (state.hazardEvent === "meteor-dodged") {
+        showEventToast("NICE DODGE · landing zone cleared", "success");
+      } else if (state.hazardEvent === "meteor-delayed") {
+        showEventToast("METEOR DELAYED · waiting for a fair zone", "info");
       }
     }
 
@@ -1566,14 +2106,19 @@
 
     function steer(direction) {
       if (state.phase === "lost" || state.phase === "won") {
-        return;
+        return false;
       }
-      state = queueTurn(state, direction);
+      var queued = queueTurn(state, direction);
+      if (queued === state) {
+        return false;
+      }
+      state = queued;
       if (state.phase === "idle" || state.phase === "paused") {
         begin();
       } else {
         syncView();
       }
+      return true;
     }
 
     function useSplit() {
@@ -1603,7 +2148,10 @@
         id: event.pointerId,
         x: event.clientX,
         y: event.clientY,
+        consumed: false,
+        rejectedDirection: null,
       };
+      root.dataset.snakeTouch = "tracking";
       if (playfield && typeof playfield.setPointerCapture === "function") {
         try {
           playfield.setPointerCapture(event.pointerId);
@@ -1613,22 +2161,51 @@
       }
     }
 
+    function commitSwipe(event) {
+      if (!pointerStart || pointerStart.id !== event.pointerId) {
+        return false;
+      }
+      if (pointerStart.consumed) {
+        return true;
+      }
+      var direction = resolveSwipeDirection(
+        pointerStart,
+        { x: event.clientX, y: event.clientY },
+        SWIPE_THRESHOLD
+      );
+      if (!direction) {
+        return false;
+      }
+      event.preventDefault();
+      focusPlayfield();
+      if (!steer(direction)) {
+        if (pointerStart.rejectedDirection !== direction) {
+          pointerStart.rejectedDirection = direction;
+          showEventToast("NO REVERSE · swipe up or down", "info");
+          announce("The snake cannot reverse directly. Choose a side turn.");
+        }
+        return false;
+      }
+      pointerStart.consumed = true;
+      showSwipeCue(direction);
+      return true;
+    }
+
+    function handlePointerMove(event) {
+      commitSwipe(event);
+    }
+
+    function clearPointer() {
+      pointerStart = null;
+      root.dataset.snakeTouch = "idle";
+    }
+
     function handlePointerUp(event) {
       if (!pointerStart || pointerStart.id !== event.pointerId) {
         return;
       }
-      var horizontal = event.clientX - pointerStart.x;
-      var vertical = event.clientY - pointerStart.y;
-      pointerStart = null;
-      if (Math.max(Math.abs(horizontal), Math.abs(vertical)) < 18) {
-        return;
-      }
-      event.preventDefault();
-      steer(
-        Math.abs(horizontal) > Math.abs(vertical)
-          ? horizontal > 0 ? "right" : "left"
-          : vertical > 0 ? "down" : "up"
-      );
+      commitSwipe(event);
+      clearPointer();
     }
 
     function handleKeydown(event) {
@@ -1667,10 +2244,10 @@
     if (playfield) {
       playfield.addEventListener("keydown", handleKeydown, listenerOptions);
       playfield.addEventListener("pointerdown", handlePointerDown, listenerOptions);
+      playfield.addEventListener("pointermove", handlePointerMove, listenerOptions);
       playfield.addEventListener("pointerup", handlePointerUp, listenerOptions);
-      playfield.addEventListener("pointercancel", function () {
-        pointerStart = null;
-      }, listenerOptions);
+      playfield.addEventListener("pointercancel", clearPointer, listenerOptions);
+      playfield.addEventListener("lostpointercapture", clearPointer, listenerOptions);
     }
     if (toggleButton) {
       toggleButton.addEventListener("click", toggleGame, listenerOptions);
@@ -1690,7 +2267,9 @@
     root.querySelectorAll("[data-snake-direction]").forEach(function (button) {
       button.addEventListener("click", function () {
         focusPlayfield();
-        steer(button.dataset.snakeDirection);
+        if (steer(button.dataset.snakeDirection)) {
+          showSwipeCue(button.dataset.snakeDirection);
+        }
       }, listenerOptions);
     });
     global.document.addEventListener("visibilitychange", function () {
@@ -1724,6 +2303,8 @@
       destroy: function () {
         destroyed = true;
         stopLoop();
+        if (eventToastTimer) global.clearTimeout(eventToastTimer);
+        if (swipeCueTimer) global.clearTimeout(swipeCueTimer);
         if (observer) observer.disconnect();
         if (abortController) abortController.abort();
       },
@@ -1738,13 +2319,16 @@
   global.LANDING_SNAKE = Object.freeze({
     MAX_SCORE: MAX_SCORE,
     MAX_SPLITS: MAX_SPLITS,
+    MAX_ASTEROIDS: MAX_ASTEROIDS,
     createState: createState,
     start: start,
     pause: pause,
     queueTurn: queueTurn,
     splitTrail: splitTrail,
     split: splitTrail,
+    resolveSwipeDirection: resolveSwipeDirection,
     moveAsteroids: moveAsteroids,
+    advanceMeteor: advanceMeteor,
     advanceWorldEvents: advanceWorldEvents,
     step: step,
     reset: reset,
