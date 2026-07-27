@@ -131,6 +131,19 @@ test("the public Snake model is frozen and deterministic", () => {
   assert.deepEqual(plain(first), plain(second));
 });
 
+test("touch swipes resolve on their dominant axis after a deliberate move", () => {
+  const resolveSwipe = snake.resolveSwipeDirection;
+  assert.equal(typeof resolveSwipe, "function");
+  const start = { x: 100, y: 100 };
+
+  assert.equal(resolveSwipe(start, { x: 100, y: 83 }, 18), null);
+  assert.equal(resolveSwipe(start, { x: 100, y: 80 }, 18), "up");
+  assert.equal(resolveSwipe(start, { x: 122, y: 104 }, 18), "right");
+  assert.equal(resolveSwipe(start, { x: 96, y: 124 }, 18), "down");
+  assert.equal(resolveSwipe(start, { x: 76, y: 95 }, 18), "left");
+  assert.equal(resolveSwipe(null, { x: 80, y: 80 }, 18), null);
+});
+
 test("the initial ship, data core, and asteroid field never overlap", () => {
   const state = snake.createState();
   const occupied = new Set([...state.segments, ...state.asteroids]);
@@ -481,6 +494,155 @@ test("asteroid drift is slow, fair, and deterministic for an equal seed", () => 
 
   assert.ok(changes > 0, "the asteroid field should eventually move");
   assert.ok(changes < 27, "asteroids should move substantially slower than the snake");
+});
+
+test("warned meteors land deterministically on fair cells and grow the field once", () => {
+  function firstImpact(seed) {
+    let state = running({
+      seed,
+      nextMeteorTick: 1,
+      maxAsteroids: 8,
+    });
+    const initialAsteroids = asteroidCells(state);
+    state = snake.advanceMeteor(state, 1);
+    assert.equal(state.hazardEvent, "meteor-warning");
+    assert.ok(state.meteorWarning);
+    assert.equal(state.meteorWarning.impactsAt - state.meteorWarning.warnedAt, 12);
+
+    const target = state.meteorWarning.cell;
+    assert.equal(state.segments.includes(target), false);
+    assert.notEqual(state.energy, target);
+    assert.ok(
+      wrappedDistance(target, state.segments[0], state.width, state.height) > 3,
+      "the warning should leave the player a meaningful escape route",
+    );
+    assert.ok(
+      initialAsteroids.every((asteroid) =>
+        wrappedDistance(target, asteroid, state.width, state.height) > 1
+      ),
+      "the landing cell should not create an overlapping asteroid cluster",
+    );
+
+    for (let tick = 2; tick < state.meteorWarning.impactsAt; tick += 1) {
+      const priorCount = state.asteroids.length;
+      state = snake.advanceMeteor(state, tick);
+      assert.equal(state.asteroids.length, priorCount);
+      assert.ok(state.meteorWarning, "the red warning should persist until impact");
+    }
+    state = snake.advanceMeteor(state, state.meteorWarning.impactsAt);
+    assert.equal(state.hazardEvent, "meteor-impact");
+    assert.equal(state.asteroids.length, initialAsteroids.length + 1);
+    assert.ok(state.meteorImpact);
+    assert.equal(state.meteorWarning, null);
+    return state;
+  }
+
+  const first = firstImpact(7719);
+  const second = firstImpact(7719);
+  assert.deepEqual(plain(first.asteroids), plain(second.asteroids));
+  assert.deepEqual(plain(first.meteorImpact), plain(second.meteorImpact));
+});
+
+test("meteor impacts reward a safe dodge when their warned cell becomes occupied", () => {
+  let state = running({
+    seed: 8211,
+    asteroids: [],
+    maxAsteroids: 2,
+    nextMeteorTick: 1,
+  });
+  state = snake.advanceMeteor(state, 1);
+  const target = state.meteorWarning.cell;
+  const impactsAt = state.meteorWarning.impactsAt;
+  state = Object.assign({}, state, {
+    segments: [target].concat(state.segments.slice(0, 2)),
+  });
+
+  const dodged = snake.advanceMeteor(state, impactsAt);
+  assert.equal(dodged.phase, "running");
+  assert.equal(dodged.hazardEvent, "meteor-dodged");
+  assert.equal(dodged.meteorWarning, null);
+  assert.equal(dodged.meteorImpact, null);
+  assert.equal(dodged.asteroids.length, 0);
+  assert.equal(dodged.nextMeteorTick, impactsAt + 24);
+});
+
+test("freeze pauses meteor deadlines and the asteroid cap remains strict", () => {
+  const collectedFreeze = snake.step(running({
+    width: 12,
+    height: 10,
+    asteroids: [],
+    maxAsteroids: 2,
+    segments: [[3, 4], [2, 4], [1, 4]],
+    direction: "right",
+    energy: [9, 9],
+    powerUp: {
+      type: "stasis",
+      cell: [4, 4],
+      expiresAt: 20,
+    },
+  }));
+  assert.equal(collectedFreeze.effects.stasisTicks, 40);
+
+  const frozen = running({
+    asteroids: [],
+    maxAsteroids: 2,
+    meteorWarning: {
+      cell: [9, 2],
+      warnedAt: 2,
+      impactsAt: 14,
+    },
+    nextMeteorTick: 50,
+    effects: { stasisTicks: 10 },
+  });
+  const paused = snake.advanceMeteor(frozen, 7);
+  assert.equal(
+    paused.meteorWarning.warnedAt,
+    frozen.meteorWarning.warnedAt + 1
+  );
+  assert.equal(paused.meteorWarning.impactsAt, 15);
+  assert.equal(paused.nextMeteorTick, 51);
+  assert.equal(paused.asteroids.length, 0);
+
+  const finalFrozenMove = snake.step(running({
+    width: 12,
+    height: 10,
+    ticks: 5,
+    asteroidCadence: 6,
+    asteroids: [[8, 1]],
+    maxAsteroids: 1,
+    segments: [[3, 4], [2, 4], [1, 4]],
+    direction: "right",
+    energy: [9, 9],
+    effects: { stasisTicks: 1 },
+  }));
+  assert.deepEqual(plain(finalFrozenMove.asteroids), [
+    cell(8, 1, finalFrozenMove.width),
+  ]);
+  assert.equal(finalFrozenMove.effects.stasisTicks, 0);
+
+  const expiredImpact = snake.advanceMeteor(running({
+    ticks: 4,
+    asteroids: [],
+    maxAsteroids: 2,
+    effects: { stasisTicks: 10 },
+    meteorImpact: {
+      cell: [8, 2],
+      expiresAt: 5,
+    },
+  }), 5);
+  assert.equal(expiredImpact.meteorImpact, null);
+
+  const capped = running({
+    width: 10,
+    height: 8,
+    asteroids: [[4, 1], [7, 5]],
+    maxAsteroids: 2,
+    nextMeteorTick: 0,
+  });
+  const afterCap = snake.advanceMeteor(capped, 20);
+  assert.equal(afterCap.meteorWarning, null);
+  assert.equal(afterCap.asteroids.length, 2);
+  assert.equal(afterCap.asteroids.length, afterCap.maxAsteroids);
 });
 
 test("power-up spawning and placement remain deterministic and collectible", () => {

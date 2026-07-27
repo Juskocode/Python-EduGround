@@ -109,7 +109,7 @@ test("Snake supports keyboard play, pausing, restart, and field narration", asyn
   );
   await expect(arcade.locator("[data-snake-combo]")).toHaveText("Ready");
   await expect(arcade.locator("[data-snake-powerup-status]")).toContainText(
-    /next pickup in \d+ moves/u
+    /Power-up in \d+ · S Shield · 2× Core · F Freeze/u
   );
   await expect(
     arcade.getByRole("button", { name: "Start mission" })
@@ -163,6 +163,7 @@ test("ordinary ticks reuse renderer nodes and asteroids move on their cadence", 
   const initialAsteroidTransforms = await arcade.evaluate((root) => {
     const layers = [
       "[data-snake-falling-star-layer]",
+      "[data-snake-meteor-layer]",
       "[data-snake-asteroid-layer]",
       "[data-snake-energy-layer]",
       "[data-snake-powerup-layer]",
@@ -267,6 +268,7 @@ test("the split button and X consume the visible three-use HUD", async ({ page }
     const replacement = root.cloneNode(true);
     [
       "[data-snake-falling-star-layer]",
+      "[data-snake-meteor-layer]",
       "[data-snake-asteroid-layer]",
       "[data-snake-energy-layer]",
       "[data-snake-powerup-layer]",
@@ -330,6 +332,116 @@ test("the split button and X consume the visible three-use HUD", async ({ page }
   });
 });
 
+test("red-zone meteors warn clearly, land once, and keep renderer nodes stable", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/#welcome");
+
+  const opened = await openSnakeDialog(page);
+  await opened.arcade.evaluate((root) => {
+    const replacement = root.cloneNode(true);
+    [
+      "[data-snake-falling-star-layer]",
+      "[data-snake-meteor-layer]",
+      "[data-snake-asteroid-layer]",
+      "[data-snake-energy-layer]",
+      "[data-snake-powerup-layer]",
+      "[data-snake-echo-layer]",
+      "[data-snake-segment-layer]",
+    ].forEach((selector) => replacement.querySelector(selector).replaceChildren());
+    root.replaceWith(replacement);
+    window.__snakeMeteorController = window.LANDING_SNAKE.mount(replacement, {
+      state: {
+        asteroids: [],
+        direction: "right",
+        energy: [23, 13],
+        maxAsteroids: 2,
+        nextMeteorTick: 1,
+        seed: 7_719,
+        segments: [[5, 7], [4, 7], [3, 7]],
+      },
+      stepDuration: 160,
+    });
+    window.__snakeMeteorChildChanges = 0;
+    window.__snakeMeteorObserver = new MutationObserver((records) => {
+      window.__snakeMeteorChildChanges += records.filter(
+        (record) => record.type === "childList"
+      ).length;
+    });
+    [
+      replacement.querySelector("[data-snake-meteor-layer]"),
+      replacement.querySelector("[data-snake-asteroid-layer]"),
+    ].forEach((layer) => {
+      window.__snakeMeteorObserver.observe(layer, { childList: true });
+    });
+  });
+
+  const arcade = opened.dialog.locator("[data-landing-snake]");
+  await expect(arcade.locator(".landing-snake__asteroid")).toHaveCount(2);
+  await expect(arcade.locator("[data-snake-asteroid]")).toHaveCount(0);
+  await arcade.getByRole("button", { name: "Start mission" }).click();
+  await expect(arcade).toHaveAttribute("data-snake-meteor", "warning");
+  await expect(arcade).toHaveAttribute(
+    "data-snake-meteor-moves",
+    /^(?:[1-9]|1[0-2])$/u
+  );
+  await expect(arcade.locator("[data-snake-hazard-status]")).toContainText(
+    "RED ZONE · impact in"
+  );
+  await expect(
+    arcade.locator("[data-snake-hazard-announcement]")
+  ).toContainText("Meteor warning. Avoid the red zone");
+  await expect(arcade.locator("[data-snake-meteor-warning]")).toBeVisible();
+  await expect(
+    arcade.locator(".landing-snake__meteor-warning-count")
+  ).toHaveText(
+    /^(?:[1-9]|1[0-2])$/u
+  );
+
+  const reducedWarning = await arcade.evaluate((root) => ({
+    meteorDisplay: getComputedStyle(
+      root.querySelector(".landing-snake__meteor")
+    ).display,
+    warningAnimation: getComputedStyle(
+      root.querySelector(".landing-snake__meteor-warning")
+    ).animationName,
+    warningVisible: getComputedStyle(
+      root.querySelector(".landing-snake__meteor-warning")
+    ).display !== "none",
+  }));
+  expect(reducedWarning).toEqual({
+    meteorDisplay: "none",
+    warningAnimation: "none",
+    warningVisible: true,
+  });
+
+  await expect(arcade).toHaveAttribute("data-snake-meteor", "impact", {
+    timeout: 3_500,
+  });
+  await expect(arcade.locator("[data-snake-asteroid]")).toHaveCount(1);
+  await expect(arcade.locator("[data-snake-hazard-status]")).toContainText(
+    "Meteor landed · 1 rocks"
+  );
+
+  const renderer = await arcade.evaluate(() => ({
+    childListChanges: window.__snakeMeteorChildChanges,
+    state: window.__snakeMeteorController.getState(),
+  }));
+  expect(renderer.childListChanges).toBe(0);
+  expect(renderer.state.asteroids).toHaveLength(1);
+  expect(renderer.state.meteorWarning).toBeNull();
+  expect(renderer.state.meteorImpact).not.toBeNull();
+
+  await arcade.evaluate(() => {
+    window.__snakeMeteorObserver.disconnect();
+    window.__snakeMeteorController.destroy();
+    delete window.__snakeMeteorObserver;
+    delete window.__snakeMeteorController;
+    delete window.__snakeMeteorChildChanges;
+  });
+});
+
 test("the Snake dialog is touch-sized, motion-aware, and accessible on mobile", async ({
   page,
 }, testInfo) => {
@@ -373,8 +485,14 @@ test("the Snake dialog is touch-sized, motion-aware, and accessible on mobile", 
     powerUp: getComputedStyle(
       element.querySelector(".landing-snake__powerup")
     ).animationName,
+    meteorWarning: getComputedStyle(
+      element.querySelector(".landing-snake__meteor-warning")
+    ).animationName,
+    meteorTransition: getComputedStyle(
+      element.querySelector(".landing-snake__meteor")
+    ).transitionDuration,
   }));
-  expect(motion).toEqual({
+  expect(motion).toMatchObject({
     arcade: "none",
     accent: "none",
     asteroid: "none",
@@ -382,7 +500,9 @@ test("the Snake dialog is touch-sized, motion-aware, and accessible on mobile", 
     energy: "none",
     fallingStarDisplay: "none",
     powerUp: "none",
+    meteorWarning: "none",
   });
+  expect(Number.parseFloat(motion.meteorTransition)).toBeLessThan(0.001);
   await expect(arcade).toHaveAttribute("data-snake-motion", "reduced");
 
   const playfieldBox = await playfield.boundingBox();
@@ -394,6 +514,18 @@ test("the Snake dialog is touch-sized, motion-aware, and accessible on mobile", 
     pointerId: 7,
     pointerType: "touch",
   });
+  await playfield.dispatchEvent("pointermove", {
+    button: 0,
+    clientX: playfieldBox.x + playfieldBox.width / 2,
+    clientY: playfieldBox.y + playfieldBox.height * 0.25,
+    isPrimary: true,
+    pointerId: 7,
+    pointerType: "touch",
+  });
+  await expect(arcade).toHaveAttribute("data-snake-phase", "running");
+  await expect(arcade).toHaveAttribute("data-snake-direction", "up");
+  await expect(arcade).toHaveAttribute("data-snake-swipe", "up");
+  await expect(arcade.locator("[data-snake-swipe-cue]")).toContainText("↑ up");
   await playfield.dispatchEvent("pointerup", {
     button: 0,
     clientX: playfieldBox.x + playfieldBox.width / 2,
@@ -405,10 +537,65 @@ test("the Snake dialog is touch-sized, motion-aware, and accessible on mobile", 
   await expect(arcade).toHaveAttribute("data-snake-phase", "running");
   await expect(arcade).toHaveAttribute("data-snake-direction", "up");
 
-  const geometry = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    viewportWidth: window.innerWidth,
-  }));
+  const acceptedTurnTick = Number(
+    await arcade.getAttribute("data-snake-ticks")
+  );
+  await expect
+    .poll(async () => Number(await arcade.getAttribute("data-snake-ticks")))
+    .toBeGreaterThan(acceptedTurnTick);
+  await playfield.dispatchEvent("pointerdown", {
+    button: 0,
+    clientX: playfieldBox.x + playfieldBox.width / 2,
+    clientY: playfieldBox.y + playfieldBox.height / 2,
+    isPrimary: true,
+    pointerId: 8,
+    pointerType: "touch",
+  });
+  await playfield.dispatchEvent("pointermove", {
+    button: 0,
+    clientX: playfieldBox.x + playfieldBox.width / 2,
+    clientY: playfieldBox.y + playfieldBox.height * 0.78,
+    isPrimary: true,
+    pointerId: 8,
+    pointerType: "touch",
+  });
+  await expect(arcade).toHaveAttribute("data-snake-direction", "up");
+  await expect(arcade.locator("[data-snake-event-toast]")).toContainText(
+    "NO REVERSE"
+  );
+  await playfield.dispatchEvent("pointermove", {
+    button: 0,
+    clientX: playfieldBox.x + playfieldBox.width * 0.82,
+    clientY: playfieldBox.y + playfieldBox.height / 2,
+    isPrimary: true,
+    pointerId: 8,
+    pointerType: "touch",
+  });
+  await expect(arcade).toHaveAttribute("data-snake-direction", "right");
+  await expect(arcade).toHaveAttribute("data-snake-swipe", "right");
+  await playfield.dispatchEvent("pointerup", {
+    button: 0,
+    clientX: playfieldBox.x + playfieldBox.width * 0.82,
+    clientY: playfieldBox.y + playfieldBox.height / 2,
+    isPrimary: true,
+    pointerId: 8,
+    pointerType: "touch",
+  });
+
+  const geometry = await page.evaluate(() => {
+    const board = document.querySelector("[data-snake-board]");
+    const playfieldElement = document.querySelector("[data-snake-playfield]");
+    const boardBox = board.getBoundingClientRect();
+    const playfieldBox = playfieldElement.getBoundingClientRect();
+    return {
+      boardRatio: boardBox.width / boardBox.height,
+      playfieldRatio: playfieldBox.width / playfieldBox.height,
+      scrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  expect(geometry.boardRatio).toBeCloseTo(24 / 14, 1);
+  expect(geometry.playfieldRatio).toBeCloseTo(24 / 14, 1);
   expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
 
   const accessibility = await new AxeBuilder({ page })
