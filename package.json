@@ -40,8 +40,8 @@
     "validate": "npm run validate:structure && npm run validate:types && npm run validate:syntax && npm run validate:content && npm run validate:unit && npm run validate:security && npm run validate:ai-infra"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.12.1",
-    "@playwright/test": "1.61.1",
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1",
     "@types/node": "22.20.1",
     "ace-builds": "1.44.0",
     "typescript": "7.0.2"
