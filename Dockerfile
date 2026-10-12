@@ -1,4 +1,4 @@
-FROM node:24.18.0-alpine3.23@sha256:595398b0081eacda8e1c4c5b97b76cd1020e4d58a8ebcb4843b9bca1e79e7436 AS server-build
+FROM node:26.11.1-alpine3.23@sha256:f1394b3ffc021bc3f4aaf363e70a8d9667f7a9a63538bc824d7cc583129fffad AS server-build
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY src ./src
 RUN npm run build:server
 
-FROM node:24.18.0-alpine3.23@sha256:595398b0081eacda8e1c4c5b97b76cd1020e4d58a8ebcb4843b9bca1e79e7436 AS production-dependencies
+FROM node:26.11.1-alpine3.23@sha256:f1394b3ffc021bc3f4aaf363e70a8d9667f7a9a63538bc824d7cc583129fffad AS production-dependencies
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --omit=dev --no-audit --no-fund \
   && npm cache clean --force
 
-FROM node:24.18.0-alpine3.23@sha256:595398b0081eacda8e1c4c5b97b76cd1020e4d58a8ebcb4843b9bca1e79e7436
+FROM node:26.11.1-alpine3.23@sha256:f1394b3ffc021bc3f4aaf363e70a8d9667f7a9a63538bc824d7cc583129fffad
 
 ARG BUILD_DATE=""
 ARG VCS_REF=""
